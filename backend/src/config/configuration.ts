@@ -11,6 +11,10 @@ export default () => ({
   redis: {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
   },
+
+  // Rate Limiting
+  THROTTLE_TTL: parseInt(process.env.THROTTLE_TTL || '60', 10),
+  THROTTLE_LIMIT: parseInt(process.env.THROTTLE_LIMIT || '100', 10),
   
   // Monitoring
   sentry: {
