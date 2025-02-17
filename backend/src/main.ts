@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import * as Sentry from '@sentry/node';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -10,8 +11,8 @@ import { LoggingService } from './common/logging/logging.service';
  * Bootstrap the NestJS application with all necessary middleware and configurations.
  */
 async function bootstrap() {
-  // Create NestJS application instance
-  const application = await NestFactory.create(AppModule, {
+  // Create NestJS application instance with Express platform
+  const application = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: false,
   });
 
