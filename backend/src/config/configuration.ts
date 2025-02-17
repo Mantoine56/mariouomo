@@ -23,7 +23,9 @@ export default () => ({
   
   // Logging
   logging: {
-    level: process.env.LOG_LEVEL || 'info',
+    level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'error' : 'debug'),
+    maxFiles: process.env.LOG_MAX_FILES || (process.env.NODE_ENV === 'production' ? '14d' : '7d'),
+    maxSize: process.env.LOG_MAX_SIZE || '20m',
   },
   
   // JWT
