@@ -23,12 +23,6 @@ async function bootstrap() {
   // Setup security middleware
   application.use(helmet());
 
-  // Enable CORS for frontend
-  application.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
-    credentials: true,
-  });
-
   // Setup validation
   application.useGlobalPipes(
     new ValidationPipe({

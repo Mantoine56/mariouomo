@@ -9,6 +9,7 @@ import { RedisCacheModule } from './common/cache/cache.module';
 import { RateLimitingModule } from './common/rate-limiting/rate-limiting.module';
 import { CustomThrottlerGuard } from './common/guards/throttler.guard';
 import { CompressionModule } from './common/compression/compression.module';
+import { CorsModule } from './common/cors/cors.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { CompressionModule } from './common/compression/compression.module';
     RedisCacheModule,
     RateLimitingModule,
     CompressionModule,
+    CorsModule,
   ],
   providers: [
     {
