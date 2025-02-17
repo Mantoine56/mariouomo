@@ -1,30 +1,35 @@
-# File: backend/src/main.ts
-
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import * as helmet from 'helmet';
+import * as Sentry from '@sentry/node';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { LoggingService } from './common/logging/logging.service';
 
+/**
+ * Bootstrap the NestJS application with all necessary middleware and configurations.
+ */
 async function bootstrap() {
-  // Create the application
-  const app = await NestFactory.create(AppModule, {
-    // Use our custom logger
-    logger: new LoggingService(app.get('ConfigService')),
+  // Create NestJS application instance
+  const application = await NestFactory.create(AppModule, {
+    logger: false,
   });
 
-  // Enable security middleware
-  app.use(helmet());
-  
-  // Enable CORS
-  app.enableCors({
+  // Setup logging
+  const logger = application.get(LoggingService);
+  application.useLogger(logger);
+
+  // Setup security middleware
+  application.use(helmet());
+
+  // Enable CORS for frontend
+  application.enableCors({
     origin: process.env.FRONTEND_URL || 'http://localhost:3001',
     credentials: true,
   });
 
-  // Enable validation
-  app.useGlobalPipes(
+  // Setup validation
+  application.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       transform: true,
@@ -32,22 +37,28 @@ async function bootstrap() {
     }),
   );
 
-  // Set up Swagger documentation
+  // Setup Swagger documentation
   const config = new DocumentBuilder()
     .setTitle('Mario Uomo API')
-    .setDescription('The Mario Uomo e-commerce API documentation')
+    .setDescription('The Mario Uomo API documentation')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
-    
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  const document = SwaggerModule.createDocument(application, config);
+  SwaggerModule.setup('api', application, document);
 
-  // Start the server
+  // Initialize Sentry for error tracking
+  const dsn = process.env.SENTRY_DSN;
+  if (dsn) {
+    Sentry.init({
+      dsn,
+      environment: process.env.NODE_ENV,
+    });
+  }
+
+  // Start server
   const port = process.env.PORT || 3000;
-  await app.listen(port);
-  
-  const logger = app.get(LoggingService);
+  await application.listen(port);
   logger.log(`Application is running on: http://localhost:${port}`);
 }
 

@@ -1,5 +1,3 @@
-# File: backend/src/common/logging/logging.module.ts
-
 import { Module } from '@nestjs/common';
 import { LoggingService } from './logging.service';
 import { ConfigModule } from '@nestjs/config';

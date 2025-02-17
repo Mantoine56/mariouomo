@@ -1,0 +1,22 @@
+{
+  "name": "mario-uomo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "pnpm run -r build",
+    "start": "cd backend && pnpm run start:prod",
+    "heroku-postbuild": "cd backend && pnpm install && pnpm run build"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "cacheDirectories": [
+    "backend/node_modules",
+    "frontend/node_modules"
+  ]
+}

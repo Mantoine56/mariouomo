@@ -5,6 +5,7 @@ You are working on an enterprise-grade e-commerce platform built with NestJS and
 ## Comments
 - make sure to ALWAYS include comments in your code; it makes your code more readable and maintainable
 - Any new junior dev should be able to read and understand the codebase.
+- this project uses pnpm not npm
 
 ## Core Development Principles
 
@@ -148,5 +149,4 @@ You are working on an enterprise-grade e-commerce platform built with NestJS and
 - Any new junior dev should be able to read and understand the codebase.
 
 ## Important
-- Always include the file path and name in each file's header for example: `# File: components/transaction/new.tsx` except for test files.
 - Always check if a current function or file exists before creating a new one

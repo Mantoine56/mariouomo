@@ -1,0 +1,48 @@
+{
+  "name": "mario-uomo-backend",
+  "description": "Mario Uomo E-commerce Platform Backend",
+  "repository": "https://github.com/yourusername/mariouomo",
+  "keywords": ["node", "nestjs", "typescript", "e-commerce"],
+  "env": {
+    "NODE_ENV": {
+      "description": "Environment for Node.js application",
+      "value": "production"
+    },
+    "DATABASE_URL": {
+      "description": "URL for the PostgreSQL database",
+      "required": true
+    },
+    "REDIS_URL": {
+      "description": "URL for Redis cache (Upstash)",
+      "required": true
+    },
+    "JWT_SECRET": {
+      "description": "Secret key for JWT authentication",
+      "generator": "secret"
+    },
+    "SENTRY_DSN": {
+      "description": "Sentry DSN for error tracking",
+      "required": true
+    },
+    "FRONTEND_URL": {
+      "description": "URL of the frontend application",
+      "required": true
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql:hobby-dev"
+    }
+  ]
+}
