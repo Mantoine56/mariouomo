@@ -8,6 +8,7 @@ import { SentryInterceptor } from './common/interceptors/sentry.interceptor';
 import { RedisCacheModule } from './common/cache/cache.module';
 import { RateLimitingModule } from './common/rate-limiting/rate-limiting.module';
 import { CustomThrottlerGuard } from './common/guards/throttler.guard';
+import { CompressionModule } from './common/compression/compression.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { CustomThrottlerGuard } from './common/guards/throttler.guard';
     MonitoringModule,
     RedisCacheModule,
     RateLimitingModule,
+    CompressionModule,
   ],
   providers: [
     {
