@@ -36,20 +36,6 @@ export class CorsModule implements NestModule {
 
     // Define CORS options
     const corsOptions = {
-      origin: (origin: string, callback: (error: Error | null, allowed?: boolean) => void) => {
-        // Allow requests with no origin (like mobile apps, curl, etc.)
-        if (!origin) {
-          callback(null, true);
-          return;
-        }
-
-        // Check if origin is allowed
-        if (allowedOrigins.includes(origin)) {
-          callback(null, true);
-        } else {
-          callback(new Error('Not allowed by CORS'));
-        }
-      },
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       allowedHeaders: [
         'Authorization',
@@ -63,19 +49,31 @@ export class CorsModule implements NestModule {
         'X-RateLimit-Remaining',
         'X-RateLimit-Reset',
       ],
-      credentials: true, // Allow cookies and authentication headers
-      maxAge: 3600, // Cache preflight requests for 1 hour
+      credentials: true,
+      maxAge: 3600,
     };
 
     // Apply CORS middleware to all routes
     consumer
       .apply((req: any, res: any, next: () => void) => {
         const origin = req.headers.origin;
+
+        // Block requests from unauthorized origins
+        if (origin && !allowedOrigins.includes(origin)) {
+          res.status(403).json({ 
+            statusCode: 403,
+            message: 'Origin not allowed by CORS policy',
+            error: 'Forbidden'
+          });
+          return;
+        }
         
         // Handle preflight requests
         if (req.method === 'OPTIONS') {
           // Set CORS headers for preflight
-          res.header('Access-Control-Allow-Origin', origin);
+          if (origin) {
+            res.header('Access-Control-Allow-Origin', origin);
+          }
           res.header('Access-Control-Allow-Methods', corsOptions.methods.join(','));
           res.header('Access-Control-Allow-Headers', corsOptions.allowedHeaders.join(','));
           res.header('Access-Control-Expose-Headers', corsOptions.exposedHeaders.join(','));
@@ -85,19 +83,13 @@ export class CorsModule implements NestModule {
           return;
         }
 
-        // Handle actual requests
-        corsOptions.origin(origin, (err, allowed) => {
-          if (err || !allowed) {
-            res.status(403).json({ message: 'CORS not allowed' });
-            return;
-          }
-
-          // Set CORS headers for actual request
+        // Set CORS headers for actual requests
+        if (origin) {
           res.header('Access-Control-Allow-Origin', origin);
-          res.header('Access-Control-Allow-Credentials', 'true');
-          res.header('Access-Control-Expose-Headers', corsOptions.exposedHeaders.join(','));
-          next();
-        });
+        }
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Expose-Headers', corsOptions.exposedHeaders.join(','));
+        next();
       })
       .forRoutes('*');
   }
