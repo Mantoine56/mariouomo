@@ -44,6 +44,9 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
      - SENTRY_DSN
      - THROTTLE_TTL
      - THROTTLE_LIMIT
+     - LOG_LEVEL
+     - LOG_MAX_FILES
+     - LOG_MAX_SIZE
    - Buildpacks configured:
      - heroku/nodejs
    - Procfile setup for production
@@ -91,12 +94,25 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
    - [ ] Database query optimization
    - [ ] Connection pooling
 
+7. **Logging Layer (Completed)**
+   - [x] Environment-specific logging:
+     - [x] Development configuration:
+       - [x] Debug level enabled
+       - [x] Colorful console output
+       - [x] Human-readable format
+       - [x] Detailed metadata
+     - [x] Production configuration:
+       - [x] Error-level console logs
+       - [x] JSON formatted output
+       - [x] Separate error logs
+       - [x] Log rotation (14d/20MB)
+       - [x] Stack traces included
+   - [x] Configurable log levels
+   - [x] File rotation setup
+   - [x] Error tracking integration
+
 **Next Steps** (Prioritized):
 1. **Production Environment Enhancement**
-   - [ ] Set up logging levels per environment:
-     - [ ] Configure debug logging for development
-     - [ ] Error-only logging for production
-     - [ ] Custom log formats per environment
    - [ ] Configure cache policies:
      - [ ] Cache-Control headers
      - [ ] ETag support

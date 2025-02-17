@@ -10,6 +10,7 @@ import { RateLimitingModule } from './common/rate-limiting/rate-limiting.module'
 import { CustomThrottlerGuard } from './common/guards/throttler.guard';
 import { CompressionModule } from './common/compression/compression.module';
 import { CorsModule } from './common/cors/cors.module';
+import { CachePolicyModule } from './common/cache-policy/cache-policy.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { CorsModule } from './common/cors/cors.module';
     RateLimitingModule,
     CompressionModule,
     CorsModule,
+    CachePolicyModule,
   ],
   providers: [
     {

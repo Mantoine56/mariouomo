@@ -27,6 +27,28 @@ export default () => ({
     maxFiles: process.env.LOG_MAX_FILES || (process.env.NODE_ENV === 'production' ? '14d' : '7d'),
     maxSize: process.env.LOG_MAX_SIZE || '20m',
   },
+
+  // HTTP Caching
+  httpCache: {
+    // Default cache settings by route pattern
+    routes: {
+      products: {
+        maxAge: parseInt(process.env.CACHE_PRODUCTS_MAX_AGE || '3600', 10), // 1 hour
+        isPrivate: false,
+      },
+      categories: {
+        maxAge: parseInt(process.env.CACHE_CATEGORIES_MAX_AGE || '7200', 10), // 2 hours
+        isPrivate: false,
+      },
+      user: {
+        maxAge: 0, // No caching for user data
+        isPrivate: true,
+      },
+    },
+    // Global cache settings
+    defaultMaxAge: parseInt(process.env.CACHE_DEFAULT_MAX_AGE || '0', 10),
+    defaultIsPrivate: true,
+  },
   
   // JWT
   jwt: {
