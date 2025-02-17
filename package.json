@@ -9,11 +9,12 @@
   "scripts": {
     "build": "pnpm run -r build",
     "start": "cd backend && pnpm run start:prod",
+    "heroku-prebuild": "npm install -g pnpm",
     "heroku-postbuild": "cd backend && pnpm install && pnpm run build"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "pnpm": ">=8.0.0"
+    "node": "18.x",
+    "pnpm": "8.x"
   },
   "cacheDirectories": [
     "backend/node_modules",
