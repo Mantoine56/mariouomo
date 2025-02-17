@@ -1,4 +1,4 @@
-# File: tailwind.config.ts
+// File: tailwind.config.ts
 
 import type { Config } from 'tailwindcss'
 
