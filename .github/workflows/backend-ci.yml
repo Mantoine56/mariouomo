@@ -1,0 +1,91 @@
+# File: .github/workflows/backend-ci.yml
+#
+# Backend CI/CD Pipeline
+# This workflow handles the Continuous Integration process for the NestJS backend:
+# 1. Runs tests and builds the application
+# 2. Deploys to production on main branch push
+
+name: Backend CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+
+jobs:
+  test-and-deploy:
+    name: Test and Deploy Backend
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://api.mariouomo.com
+
+    # Service containers required for testing
+    services:
+      # Redis service for caching and session management
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # Check out the repository
+      - uses: actions/checkout@v3
+
+      # Set up Node.js environment
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      # Install pnpm package manager
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          run_install: false
+
+      # Install project dependencies
+      - name: Install dependencies
+        working-directory: backend
+        run: pnpm install
+
+      # Run ESLint for code quality checks
+      - name: Run linter
+        working-directory: backend
+        run: pnpm run lint
+
+      # Run unit and integration tests
+      - name: Run tests
+        working-directory: backend
+        run: pnpm run test
+        env:
+          NODE_ENV: test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      # Build the application
+      - name: Build
+        working-directory: backend
+        run: pnpm run build
+
+      # Deploy to production (only on main branch)
+      - name: Deploy to Production
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: echo "Add your production deployment command here"
+        env:
+          NODE_ENV: production

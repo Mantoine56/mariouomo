@@ -1,0 +1,92 @@
+# File: .github/workflows/database-ci.yml
+#
+# Database CI/CD Pipeline
+# This workflow handles database migrations:
+# 1. Validates schema changes
+# 2. Runs migrations safely
+
+name: Database CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/prisma/**'
+      - '.github/workflows/database-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'backend/prisma/**'
+      - '.github/workflows/database-ci.yml'
+
+jobs:
+  validate-and-deploy:
+    name: Validate and Deploy Database Changes
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+
+    services:
+      # Test database for migration validation
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # Check out the repository
+      - uses: actions/checkout@v3
+
+      # Set up Node.js environment
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      # Install pnpm package manager
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          run_install: false
+
+      # Install project dependencies
+      - name: Install dependencies
+        working-directory: backend
+        run: pnpm install
+
+      # Generate Prisma Client
+      - name: Generate Prisma Client
+        working-directory: backend
+        run: pnpm prisma generate
+
+      # Validate Prisma Schema
+      - name: Validate Schema
+        working-directory: backend
+        run: pnpm prisma validate
+
+      # Test migration in test database
+      - name: Test Migration
+        working-directory: backend
+        run: pnpm prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+
+      # Deploy migration to production (only on main branch)
+      - name: Deploy Migration
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        working-directory: backend
+        run: pnpm prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

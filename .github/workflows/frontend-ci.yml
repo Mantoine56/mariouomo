@@ -1,0 +1,62 @@
+# File: .github/workflows/frontend-ci.yml
+#
+# Frontend CI Pipeline
+# This workflow handles the testing process for the Next.js frontend:
+# 1. Runs linting
+# 2. Runs unit and integration tests
+# Note: Deployment is handled directly by Vercel's GitHub integration
+
+name: Frontend CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+
+jobs:
+  test:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      # Check out the repository
+      - uses: actions/checkout@v3
+
+      # Set up Node.js environment
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      # Install pnpm package manager
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          run_install: false
+
+      # Install project dependencies
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install
+
+      # Run ESLint for code quality checks
+      - name: Run linter
+        working-directory: frontend
+        run: pnpm run lint
+
+      # Run unit and integration tests
+      - name: Run tests
+        working-directory: frontend
+        run: pnpm run test
+        env:
+          NODE_ENV: test
