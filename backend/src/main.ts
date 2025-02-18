@@ -1,3 +1,4 @@
+require('dotenv').config();
 require('newrelic');
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';

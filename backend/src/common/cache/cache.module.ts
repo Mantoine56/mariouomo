@@ -20,8 +20,10 @@ import Redis from 'ioredis';
           throw new Error('Redis URL is not configured');
         }
 
+        const isLocal = redisUrl.includes('localhost') || redisUrl.includes('127.0.0.1');
+        
         return new Redis(redisUrl, {
-          tls: {
+          tls: isLocal ? undefined : {
             rejectUnauthorized: false
           },
           retryStrategy: (times: number) => {
@@ -29,7 +31,7 @@ import Redis from 'ioredis';
             return delay;
           },
           maxRetriesPerRequest: 5,
-          enableReadyCheck: false
+          enableReadyCheck: true
         });
       },
       inject: [ConfigService],

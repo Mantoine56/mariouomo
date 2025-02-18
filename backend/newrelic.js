@@ -10,7 +10,7 @@ exports.config = {
   /**
    * Array of application names.
    */
-  app_name: ['Mario Uomo Backend'],
+  app_name: [process.env.NEW_RELIC_APP_NAME || 'Mario Uomo Backend'],
   
   /**
    * Your New Relic license key.
