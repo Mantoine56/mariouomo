@@ -6,7 +6,7 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
 
 1. **Error Tracking & Monitoring**
    - [x] Set up Sentry for error tracking in both NestJS and Next.js (backend only)
-   - [ ] Configure PostgreSQL monitoring via pg_stat_statements
+   - [x] Configure PostgreSQL monitoring via pg_stat_statements
    - [x] Set up performance monitoring (implemented Winston logging)
    - [x] Implement Redis caching with monitoring
 
@@ -120,6 +120,44 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
    - [x] File rotation setup
    - [x] Error tracking integration
 
+8. **Monitoring and Observability**
+   - [x] Resource Monitoring
+     - [x] CPU Usage Monitoring
+       - [x] Warning threshold at 70%
+       - [x] Critical threshold at 85%
+       - [x] Alert configuration in New Relic
+       - [x] Continuous monitoring implementation
+     - [x] Memory Usage Monitoring
+       - [x] Warning threshold at 75%
+       - [x] Critical threshold at 90%
+       - [x] Alert configuration in New Relic
+       - [x] Memory leak detection
+     - [x] Redis Monitoring
+       - [x] Memory usage alerts
+       - [x] Eviction rate monitoring
+       - [x] Cache hit rate tracking
+       - [x] Performance metrics collection
+     - [x] Dyno Scaling
+       - [x] Auto-scaling configuration
+       - [x] Scale up/down thresholds
+       - [x] Cooldown periods
+       - [x] Min/max dyno limits
+   - [x] Implementation Details
+     - [x] TypeScript Interfaces
+       - [x] Strong typing for all configurations
+       - [x] Proper error handling
+       - [x] Comprehensive documentation
+     - [x] Testing
+       - [x] Unit tests for monitoring service
+       - [x] Alert configuration tests
+       - [x] Resource monitoring tests
+       - [x] Dyno scaling tests
+   - [x] Next Steps
+     - [x] Implement actual system metrics collection (currently using placeholders)
+     - [x] Set up Heroku API integration for dyno scaling
+     - [x] Add more granular monitoring metrics
+     - [x] Configure production-specific thresholds
+
 **Next Steps** (Prioritized):
 1. **Monitoring Enhancement**
    - [x] Set up Heroku metrics dashboard
@@ -127,7 +165,7 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
    - [x] Enable runtime metrics
    - [x] Set up threshold alerting
    - [x] Configure Redis monitoring alerts
-   - [ ] Set up resource usage alerts
+   - [x] Set up resource usage alerts
 
 2. **Performance Optimization**
    - [ ] Implement request queuing
