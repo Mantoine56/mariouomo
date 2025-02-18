@@ -1,0 +1,72 @@
+# Warning Alert Configurations
+
+alerts:
+  - name: Low Cache Hit Rate
+    description: Cache hit rate has dropped below threshold
+    condition:
+      metric: cache_hit_rate
+      threshold: 80
+      duration: 15m
+      operator: "<"
+    response:
+      priority: P3
+      runbook: /docs/monitoring/runbooks/low-cache-hit-rate.md
+      notifications:
+        - channel: slack
+          target: "#warnings"
+
+  - name: High Memory Usage Warning
+    description: System memory usage is approaching critical levels
+    condition:
+      metric: memory_usage_percent
+      threshold: 80
+      duration: 10m
+      operator: ">"
+    response:
+      priority: P3
+      runbook: /docs/monitoring/runbooks/high-memory-usage.md
+      notifications:
+        - channel: slack
+          target: "#warnings"
+
+  - name: Elevated Response Time
+    description: API endpoints are showing increased latency
+    condition:
+      metric: response_time
+      threshold: 500
+      duration: 15m
+      operator: ">"
+    response:
+      priority: P3
+      runbook: /docs/monitoring/runbooks/elevated-response-time.md
+      notifications:
+        - channel: slack
+          target: "#warnings"
+
+  - name: Database Connection Pool Warning
+    description: Database connection pool usage is high
+    condition:
+      metric: db_pool_used_percent
+      threshold: 80
+      duration: 10m
+      operator: ">"
+    response:
+      priority: P3
+      runbook: /docs/monitoring/runbooks/database-pool-warning.md
+      notifications:
+        - channel: slack
+          target: "#warnings"
+
+  - name: Redis Memory Warning
+    description: Redis memory usage is approaching limit
+    condition:
+      metric: redis_memory_used_percent
+      threshold: 80
+      duration: 10m
+      operator: ">"
+    response:
+      priority: P3
+      runbook: /docs/monitoring/runbooks/redis-memory-warning.md
+      notifications:
+        - channel: slack
+          target: "#warnings"

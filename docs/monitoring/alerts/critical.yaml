@@ -1,0 +1,80 @@
+# Critical Alert Configurations
+
+alerts:
+  - name: High Error Rate
+    description: Application is experiencing an elevated error rate
+    condition:
+      metric: error_rate
+      threshold: 5
+      duration: 5m
+      operator: ">"
+    response:
+      priority: P1
+      runbook: /docs/monitoring/runbooks/high-error-rate.md
+      notifications:
+        - channel: slack
+          target: "#incidents"
+        - channel: pagerduty
+          target: "primary-oncall"
+
+  - name: Database Connection Issues
+    description: Database connection pool has high waiting count
+    condition:
+      metric: db_pool_waiting
+      threshold: 5
+      duration: 2m
+      operator: ">"
+    response:
+      priority: P1
+      runbook: /docs/monitoring/runbooks/database-connection-issues.md
+      notifications:
+        - channel: slack
+          target: "#incidents"
+        - channel: pagerduty
+          target: "primary-oncall"
+
+  - name: High Response Time
+    description: API endpoints are experiencing high latency
+    condition:
+      metric: response_time
+      threshold: 1000
+      duration: 5m
+      operator: ">"
+    response:
+      priority: P2
+      runbook: /docs/monitoring/runbooks/high-response-time.md
+      notifications:
+        - channel: slack
+          target: "#incidents"
+
+  - name: Memory Usage Critical
+    description: System memory usage is critically high
+    condition:
+      metric: memory_usage_percent
+      threshold: 90
+      duration: 5m
+      operator: ">"
+    response:
+      priority: P1
+      runbook: /docs/monitoring/runbooks/high-memory-usage.md
+      notifications:
+        - channel: slack
+          target: "#incidents"
+        - channel: pagerduty
+          target: "primary-oncall"
+
+  - name: High CPU Usage
+    description: System CPU usage is critically high
+    condition:
+      metric: cpu_usage_percent
+      threshold: 90
+      duration: 5m
+      operator: ">"
+    response:
+      priority: P1
+      runbook: /docs/monitoring/runbooks/high-cpu-usage.md
+      notifications:
+        - channel: slack
+          target: "#incidents"
+        - channel: pagerduty
+          target: "primary-oncall"
