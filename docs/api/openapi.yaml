@@ -1,0 +1,195 @@
+openapi: 3.0.3
+info:
+  title: Mario Uomo E-commerce API
+  description: |
+    API documentation for the Mario Uomo E-commerce platform.
+    
+    This API provides endpoints for managing products, orders, users, and various e-commerce operations.
+    It includes features such as rate limiting, request queuing, and caching for optimal performance.
+  version: 1.0.0
+  contact:
+    name: Mario Uomo Development Team
+    url: https://github.com/Mantoine56/mariouomo
+
+servers:
+  - url: https://api.mariouomo.com/v1
+    description: Production server
+  - url: http://localhost:3000/v1
+    description: Local development server
+
+tags:
+  - name: Products
+    description: Product management endpoints
+  - name: Orders
+    description: Order processing and management
+  - name: Users
+    description: User account management
+  - name: Categories
+    description: Product category management
+  - name: Auth
+    description: Authentication and authorization
+  - name: Health
+    description: System health and monitoring
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Error message
+        details:
+          type: object
+          description: Additional error details
+      required:
+        - code
+        - message
+
+    RateLimit:
+      type: object
+      properties:
+        limit:
+          type: integer
+          description: Maximum requests allowed in the time window
+        remaining:
+          type: integer
+          description: Remaining requests in the current window
+        reset:
+          type: integer
+          format: int64
+          description: Unix timestamp when the rate limit resets
+
+    HealthCheck:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, error]
+        version:
+          type: string
+        uptime:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+        services:
+          type: object
+          properties:
+            database:
+              type: object
+              properties:
+                status: 
+                  type: string
+                  enum: [ok, error]
+                poolSize:
+                  type: integer
+                activeConnections:
+                  type: integer
+            redis:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [ok, error]
+                memoryUsage:
+                  type: number
+                hitRate:
+                  type: number
+
+  responses:
+    TooManyRequests:
+      description: Too many requests - rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Request limit per window
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Remaining requests in current window
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Time until rate limit reset (Unix timestamp)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: RATE_LIMIT_EXCEEDED
+            message: Too many requests, please try again later
+            details:
+              retryAfter: 60
+
+    UnauthorizedError:
+      description: Authentication information is missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: UNAUTHORIZED
+            message: Invalid or missing authentication token
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Get system health status
+      description: |
+        Returns the current health status of the system and its components.
+        Includes information about database connections, Redis cache, and system metrics.
+      operationId: getHealthStatus
+      responses:
+        '200':
+          description: System health information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheck'
+              example:
+                status: ok
+                version: 1.0.0
+                uptime: 3600
+                timestamp: "2025-02-18T22:41:06Z"
+                services:
+                  database:
+                    status: ok
+                    poolSize: 10
+                    activeConnections: 3
+                  redis:
+                    status: ok
+                    memoryUsage: 45.5
+                    hitRate: 0.95
+        '503':
+          description: System is in degraded or error state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheck'
+              example:
+                status: degraded
+                version: 1.0.0
+                uptime: 3600
+                timestamp: "2025-02-18T22:41:06Z"
+                services:
+                  database:
+                    status: error
+                    poolSize: 10
+                    activeConnections: 10
+                  redis:
+                    status: ok
+                    memoryUsage: 45.5
+                    hitRate: 0.95
