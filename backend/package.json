@@ -29,7 +29,6 @@
     "@nestjs/passport": "^10.0.0",
     "@nestjs/platform-express": "^10.4.15",
     "@nestjs/swagger": "^7.1.8",
-    "@nestjs/throttler": "^6.4.0",
     "@prisma/client": "^5.2.0",
     "@sentry/node": "^7.64.0",
     "cache-manager": "^6.4.0",
@@ -48,9 +47,12 @@
     "winston-daily-rotate-file": "^4.7.1"
   },
   "devDependencies": {
+    "@nestjs/bull": "^11.0.2",
     "@nestjs/cli": "^10.0.0",
     "@nestjs/schematics": "^10.0.0",
     "@nestjs/testing": "^10.0.0",
+    "@nestjs/throttler": "^6.4.0",
+    "@types/bull": "^4.10.4",
     "@types/compression": "^1.7.5",
     "@types/express": "^4.17.17",
     "@types/jest": "^29.5.2",
@@ -60,6 +62,7 @@
     "@types/supertest": "^2.0.12",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "bull": "^4.16.5",
     "eslint": "^8.42.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-prettier": "^5.0.0",
