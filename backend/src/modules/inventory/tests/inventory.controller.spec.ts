@@ -4,20 +4,44 @@ import { InventoryService } from '../services/inventory.service';
 import { CreateInventoryDto } from '../dtos/create-inventory.dto';
 import { UpdateInventoryDto } from '../dtos/update-inventory.dto';
 import { AdjustInventoryDto } from '../dtos/adjust-inventory.dto';
+import { ProductVariant } from '../../products/entities/product-variant.entity';
+import { Product } from '../../products/entities/product.entity';
+import { InventoryItem } from '../entities/inventory-item.entity';
 
 describe('InventoryController', () => {
   let controller: InventoryController;
   let service: InventoryService;
 
+  const mockProduct = {
+    id: '123',
+    name: 'Test Product',
+    description: 'A test product',
+    category_id: 'cat123',
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
+
+  const mockVariant = {
+    id: '456',
+    product_id: '123',
+    sku: 'TEST-SKU-1',
+    name: 'Test Variant',
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
+
   const mockInventoryItem = {
     id: '123',
-    variant_id: 'variant123',
+    variant_id: mockVariant.id,
+    variant: mockVariant as ProductVariant,
     location: 'Warehouse A',
     quantity: 100,
     reserved_quantity: 0,
     reorder_point: 10,
     reorder_quantity: 50,
     version: 1,
+    created_at: new Date('2025-02-22T13:00:00Z'),
+    updated_at: new Date('2025-02-22T13:00:00Z')
   };
 
   beforeEach(async () => {
@@ -49,7 +73,7 @@ describe('InventoryController', () => {
 
   describe('createInventoryItem', () => {
     const createDto: CreateInventoryDto = {
-      variant_id: 'variant123',
+      variant_id: '456',
       location: 'Warehouse A',
       quantity: 100,
       reorder_point: 10,
@@ -140,10 +164,10 @@ describe('InventoryController', () => {
         .spyOn(service, 'findInventoryByVariant')
         .mockResolvedValue([mockInventoryItem]);
 
-      const result = await controller.getInventoryByVariant('variant123');
+      const result = await controller.getInventoryByVariant('456');
 
       expect(result).toEqual([mockInventoryItem]);
-      expect(service.findInventoryByVariant).toHaveBeenCalledWith('variant123');
+      expect(service.findInventoryByVariant).toHaveBeenCalledWith('456');
     });
   });
 

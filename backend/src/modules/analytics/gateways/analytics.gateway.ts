@@ -4,6 +4,8 @@ import {
   SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  ConnectedSocket,
+  MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { UseGuards } from '@nestjs/common';
@@ -12,6 +14,8 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { Role } from '../../auth/enums/role.enum';
 import { OnEvent } from '@nestjs/event-emitter';
+import { RealTimeTrackingService } from '../services/real-time-tracking.service';
+import { RealTimeMetrics } from '../entities/real-time-metrics.entity';
 
 /**
  * WebSocket gateway for real-time analytics
@@ -32,6 +36,8 @@ export class AnalyticsGateway implements OnGatewayConnection, OnGatewayDisconnec
   private activeDashboards: Map<string, Socket> = new Map();
   private metricSubscriptions: Map<string, Set<string>> = new Map();
 
+  constructor(private readonly trackingService: RealTimeTrackingService) {}
+
   /**
    * Handles client connections
    * Validates authentication and authorization
@@ -41,6 +47,7 @@ export class AnalyticsGateway implements OnGatewayConnection, OnGatewayDisconnec
       // Client authentication would be handled here
       // For now, we'll just track the connection
       this.activeDashboards.set(client.id, client);
+      await this.trackingService.trackUserActivity(client.id, client.id);
       console.log(`Client connected: ${client.id}`);
     } catch (error) {
       client.disconnect();
@@ -51,9 +58,10 @@ export class AnalyticsGateway implements OnGatewayConnection, OnGatewayDisconnec
    * Handles client disconnections
    * Cleans up subscriptions
    */
-  handleDisconnect(client: Socket) {
+  async handleDisconnect(client: Socket) {
     this.activeDashboards.delete(client.id);
     this.metricSubscriptions.delete(client.id);
+    await this.trackingService.removeUser(client.id);
     console.log(`Client disconnected: ${client.id}`);
   }
 
@@ -135,6 +143,26 @@ export class AnalyticsGateway implements OnGatewayConnection, OnGatewayDisconnec
   @OnEvent('analytics.realtime.updated')
   handleRealtimeUpdate(payload: any) {
     this.broadcastToSubscribers('realtime', 'realtime_update', payload);
+  }
+
+  @SubscribeMessage('page.view')
+  async handlePageView(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { page: string },
+  ) {
+    await this.trackingService.trackPageView(data.page, client.id);
+  }
+
+  @SubscribeMessage('traffic.source')
+  async handleTrafficSource(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { source: string },
+  ) {
+    await this.trackingService.trackTrafficSource(data.source, client.id);
+  }
+
+  broadcastMetricsUpdate(metrics: RealTimeMetrics) {
+    this.server.emit('metrics.update', metrics);
   }
 
   /**

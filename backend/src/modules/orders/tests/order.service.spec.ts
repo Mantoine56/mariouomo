@@ -1,11 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
 import { OrderService } from '../services/order.service';
-import { Order, OrderStatus } from '../entities/order.entity';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
+import { Order } from '../entities/order.entity';
+import { Profile } from '../../users/entities/profile.entity';
+import { OrderStatus } from '../enums/order-status.enum';
+import { PaymentStatus } from '../../payments/enums/payment-status.enum';
+import { ShipmentStatus } from '../../shipments/enums/shipment-status.enum';
+import { PaymentMethod } from '../../payments/enums/payment-method.enum';
 import { OrderItem } from '../entities/order-item.entity';
 import { ProductVariant } from '../../products/entities/product-variant.entity';
-import { Profile } from '../../users/entities/profile.entity';
 import { CreateOrderDto } from '../dtos/create-order.dto';
 import { UpdateOrderDto } from '../dtos/update-order.dto';
 import { ConflictException, NotFoundException } from '@nestjs/common';
@@ -18,32 +22,55 @@ describe('OrderService', () => {
   let profileRepository: Repository<Profile>;
   let dataSource: DataSource;
 
-  const mockOrder = {
+  const mockProfile: Profile = {
     id: '123',
-    user_id: 'user123',
-    status: OrderStatus.PENDING,
-    subtotal: 100,
-    tax: 10,
-    shipping: 5,
-    total_amount: 115,
-    shipping_address: {
-      street: '123 Main St',
-      city: 'City',
-      state: 'State',
-      country: 'Country',
-      postal_code: '12345',
-    },
-    billing_address: {
-      street: '123 Main St',
-      city: 'City',
-      state: 'State',
-      country: 'Country',
-      postal_code: '12345',
-    },
-    items: [],
+    email: 'test@example.com',
+    full_name: 'Test User',
+    role: 'customer',
+    status: 'active',
+    orders: [],
+    addresses: [],
+    created_at: new Date(),
+    updated_at: new Date(),
   };
 
-  const mockVariant = {
+  const mockOrder: Order = {
+    id: 'order123',
+    user_id: mockProfile.id,
+    user: mockProfile,
+    status: OrderStatus.PENDING,
+    total_amount: 100,
+    subtotal: 90,
+    tax: 10,
+    items: [],
+    payments: [{
+      id: 'payment123',
+      order_id: 'order123',
+      amount: 100,
+      status: PaymentStatus.PENDING,
+      method: PaymentMethod.CREDIT_CARD,
+      transaction_id: 'tx123',
+      order: null as any,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }],
+    shipments: [{
+      id: 'shipment123',
+      order_id: 'order123',
+      status: ShipmentStatus.PENDING,
+      tracking_number: 'track123',
+      shipping_method: 'standard',
+      order: null as any,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }],
+    staff_notes: '',
+    customer_notes: '',
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
+
+  const mockVariant: ProductVariant = {
     id: 'variant123',
     name: 'Test Variant',
     price: 50,
@@ -52,51 +79,80 @@ describe('OrderService', () => {
     sku: 'TEST-123',
   };
 
-  const mockProfile = {
-    id: 'user123',
-    email: 'test@example.com',
-  };
-
   beforeEach(async () => {
+    const mockOrderRepository = {
+      find: jest.fn().mockResolvedValue([mockOrder]),
+      findOne: jest.fn().mockResolvedValue(mockOrder),
+      save: jest.fn().mockResolvedValue(mockOrder),
+      create: jest.fn().mockReturnValue(mockOrder),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+
+    const mockOrderItemRepository = {
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+
+    const mockVariantRepository = {
+      findOne: jest.fn().mockResolvedValue(mockVariant),
+      save: jest.fn(),
+      increment: jest.fn(),
+    };
+
+    const mockProfileRepository = {
+      findOne: jest.fn().mockResolvedValue(mockProfile),
+    };
+
+    const mockEntityManager = {
+      getRepository: jest.fn((entity) => {
+        if (entity === Order) return mockOrderRepository;
+        if (entity === OrderItem) return mockOrderItemRepository;
+        if (entity === ProductVariant) return mockVariantRepository;
+        if (entity === Profile) return mockProfileRepository;
+      }),
+      create: jest.fn().mockReturnValue(mockOrder),
+      findOne: jest.fn().mockResolvedValue(mockOrder),
+      save: jest.fn().mockResolvedValue(mockOrder),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrderService,
         {
           provide: getRepositoryToken(Order),
-          useValue: {
-            create: jest.fn(),
-            save: jest.fn(),
-            findOne: jest.fn(),
-            find: jest.fn(),
-            increment: jest.fn(),
-          },
+          useValue: mockOrderRepository,
         },
         {
           provide: getRepositoryToken(OrderItem),
-          useValue: {
-            create: jest.fn(),
-            save: jest.fn(),
-          },
+          useValue: mockOrderItemRepository,
         },
         {
           provide: getRepositoryToken(ProductVariant),
-          useValue: {
-            findOne: jest.fn(),
-            save: jest.fn(),
-            increment: jest.fn(),
-          },
+          useValue: mockVariantRepository,
         },
         {
           provide: getRepositoryToken(Profile),
-          useValue: {
-            findOneBy: jest.fn(),
-          },
+          useValue: mockProfileRepository,
         },
         {
           provide: DataSource,
           useValue: {
-            transaction: jest.fn(),
-            createQueryBuilder: jest.fn(),
+            createQueryRunner: jest.fn().mockReturnValue({
+              connect: jest.fn(),
+              startTransaction: jest.fn(),
+              commitTransaction: jest.fn(),
+              rollbackTransaction: jest.fn(),
+              release: jest.fn(),
+              manager: mockEntityManager,
+            }),
+            transaction: jest.fn().mockImplementation(
+              async (cb: (entityManager: EntityManager) => Promise<any>) => {
+                return cb(mockEntityManager as unknown as EntityManager);
+              },
+            ),
           },
         },
       ],
@@ -104,15 +160,9 @@ describe('OrderService', () => {
 
     service = module.get<OrderService>(OrderService);
     orderRepository = module.get<Repository<Order>>(getRepositoryToken(Order));
-    orderItemRepository = module.get<Repository<OrderItem>>(
-      getRepositoryToken(OrderItem),
-    );
-    variantRepository = module.get<Repository<ProductVariant>>(
-      getRepositoryToken(ProductVariant),
-    );
-    profileRepository = module.get<Repository<Profile>>(
-      getRepositoryToken(Profile),
-    );
+    orderItemRepository = module.get<Repository<OrderItem>>(getRepositoryToken(OrderItem));
+    variantRepository = module.get<Repository<ProductVariant>>(getRepositoryToken(ProductVariant));
+    profileRepository = module.get<Repository<Profile>>(getRepositoryToken(Profile));
     dataSource = module.get<DataSource>(DataSource);
   });
 
@@ -134,7 +184,7 @@ describe('OrderService', () => {
 
     it('should create an order successfully', async () => {
       // Mock dependencies
-      jest.spyOn(profileRepository, 'findOneBy').mockResolvedValue(mockProfile);
+      jest.spyOn(profileRepository, 'findOne').mockResolvedValue(mockProfile);
       jest.spyOn(dataSource, 'createQueryBuilder').mockReturnValue({
         setLock: jest.fn().mockReturnThis(),
         whereInIds: jest.fn().mockReturnThis(),
@@ -151,13 +201,13 @@ describe('OrderService', () => {
       const result = await service.createOrder('user123', createOrderDto);
 
       expect(result).toEqual(mockOrder);
-      expect(profileRepository.findOneBy).toHaveBeenCalledWith({
+      expect(profileRepository.findOne).toHaveBeenCalledWith({
         id: 'user123',
       });
     });
 
     it('should throw NotFoundException when user not found', async () => {
-      jest.spyOn(profileRepository, 'findOneBy').mockResolvedValue(null);
+      jest.spyOn(profileRepository, 'findOne').mockResolvedValue(null);
 
       await expect(
         service.createOrder('user123', createOrderDto),
@@ -165,7 +215,7 @@ describe('OrderService', () => {
     });
 
     it('should throw ConflictException when insufficient stock', async () => {
-      jest.spyOn(profileRepository, 'findOneBy').mockResolvedValue(mockProfile);
+      jest.spyOn(profileRepository, 'findOne').mockResolvedValue(mockProfile);
       jest.spyOn(dataSource, 'createQueryBuilder').mockReturnValue({
         setLock: jest.fn().mockReturnThis(),
         whereInIds: jest.fn().mockReturnThis(),

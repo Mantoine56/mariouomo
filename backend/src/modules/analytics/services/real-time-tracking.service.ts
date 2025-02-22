@@ -28,7 +28,7 @@ export class RealTimeTrackingService {
    * @param sessionId Session identifier
    */
   async trackUserActivity(userId: string, sessionId: string) {
-    this.activeUsers.set(sessionId, new Date());
+    this.activeUsers.set(sessionId, new Date(Date.now()));
     await this.updateRealTimeMetrics();
   }
 
@@ -39,7 +39,7 @@ export class RealTimeTrackingService {
    */
   async trackPageView(page: string, sessionId: string) {
     this.pageCounts.set(page, (this.pageCounts.get(page) || 0) + 1);
-    this.activeUsers.set(sessionId, new Date());
+    this.activeUsers.set(sessionId, new Date(Date.now()));
     await this.updateRealTimeMetrics();
   }
 
@@ -49,10 +49,28 @@ export class RealTimeTrackingService {
    * @param sessionId Session identifier
    */
   async trackTrafficSource(source: string, sessionId: string) {
+    const sessions = this.trafficSources.get(source) || new Set<string>();
     if (!this.trafficSources.has(source)) {
-      this.trafficSources.set(source, new Set());
+      this.trafficSources.set(source, sessions);
     }
-    this.trafficSources.get(source).add(sessionId);
+    sessions.add(sessionId);
+    this.activeUsers.set(sessionId, new Date(Date.now()));
+    await this.updateRealTimeMetrics();
+  }
+
+  /**
+   * Removes a user from tracking
+   * @param sessionId Session identifier
+   */
+  async removeUser(sessionId: string) {
+    this.activeUsers.delete(sessionId);
+    // Remove from traffic sources
+    for (const [source, sessions] of this.trafficSources.entries()) {
+      sessions.delete(sessionId);
+      if (sessions.size === 0) {
+        this.trafficSources.delete(source);
+      }
+    }
     await this.updateRealTimeMetrics();
   }
 
@@ -64,15 +82,22 @@ export class RealTimeTrackingService {
   private async updateRealTimeMetrics() {
     // Clean up stale sessions (inactive for more than 15 minutes)
     const staleTime = new Date(Date.now() - 15 * 60 * 1000);
+    const staleSessions = new Set<string>();
+
     for (const [sessionId, lastActive] of this.activeUsers.entries()) {
       if (lastActive < staleTime) {
-        this.activeUsers.delete(sessionId);
-        // Remove from traffic sources
-        for (const [source, sessions] of this.trafficSources.entries()) {
-          sessions.delete(sessionId);
-          if (sessions.size === 0) {
-            this.trafficSources.delete(source);
-          }
+        staleSessions.add(sessionId);
+      }
+    }
+
+    // Remove stale sessions
+    for (const sessionId of staleSessions) {
+      this.activeUsers.delete(sessionId);
+      // Remove from traffic sources
+      for (const [source, sessions] of this.trafficSources.entries()) {
+        sessions.delete(sessionId);
+        if (sessions.size === 0) {
+          this.trafficSources.delete(source);
         }
       }
     }
@@ -141,13 +166,13 @@ export class RealTimeTrackingService {
 
       // Create real-time metrics
       const metrics = manager.create(RealTimeMetrics, {
-        timestamp: new Date(),
+        timestamp: new Date(Date.now()),
         active_users: this.activeUsers.size,
         active_sessions: this.activeUsers.size,
-        cart_count: cartMetrics.cart_count || 0,
-        cart_value: cartMetrics.cart_value || 0,
-        pending_orders: orderMetrics.pending_count || 0,
-        pending_revenue: orderMetrics.pending_value || 0,
+        cart_count: cartMetrics?.cart_count || 0,
+        cart_value: cartMetrics?.cart_value || 0,
+        pending_orders: orderMetrics?.pending_count || 0,
+        pending_revenue: orderMetrics?.pending_value || 0,
         current_popular_products: popularProducts,
         traffic_sources: trafficSourceMetrics,
         page_views: pageViewMetrics,

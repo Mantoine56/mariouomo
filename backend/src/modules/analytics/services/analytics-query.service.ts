@@ -6,6 +6,22 @@ import { InventoryMetrics } from '../entities/inventory-metrics.entity';
 import { CustomerMetrics } from '../entities/customer-metrics.entity';
 import { RealTimeMetrics } from '../entities/real-time-metrics.entity';
 
+interface CustomerSegment {
+  segment: string;
+  customer_count: number;
+  total_revenue: number;
+}
+
+interface SegmentMetrics {
+  customers: number;
+  revenue: number;
+  avgOrderValue: number;
+}
+
+interface SegmentMap {
+  [key: string]: SegmentMetrics;
+}
+
 /**
  * Service for querying analytics data
  * Provides methods for dashboard data retrieval
@@ -90,6 +106,28 @@ export class AnalyticsQueryService {
   }
 
   /**
+   * Aggregates customer segments
+   */
+  private aggregateCustomerSegments(segments: CustomerSegment[]): SegmentMap {
+    return segments.reduce((acc: SegmentMap, segment) => {
+      if (!acc[segment.segment]) {
+        acc[segment.segment] = {
+          customers: 0,
+          revenue: 0,
+          avgOrderValue: 0,
+        };
+      }
+
+      acc[segment.segment].customers += segment.customer_count;
+      acc[segment.segment].revenue += segment.total_revenue;
+      acc[segment.segment].avgOrderValue =
+        acc[segment.segment].revenue / acc[segment.segment].customers;
+
+      return acc;
+    }, {});
+  }
+
+  /**
    * Gets customer insights
    */
   async getCustomerInsights(startDate: Date, endDate: Date) {
@@ -110,21 +148,11 @@ export class AnalyticsQueryService {
     }));
 
     // Aggregate customer segments
-    const segments = metrics.reduce((acc, curr) => {
-      curr.customer_segments.forEach((segment) => {
-        if (!acc[segment.segment]) {
-          acc[segment.segment] = {
-            customers: 0,
-            revenue: 0,
-            avgOrderValue: 0,
-          };
-        }
-        acc[segment.segment].customers += segment.customer_count;
-        acc[segment.segment].revenue += segment.total_revenue;
-        acc[segment.segment].avgOrderValue =
-          acc[segment.segment].revenue / acc[segment.segment].customers;
-      });
-      return acc;
+    const segments = metrics.reduce((acc: SegmentMap, curr) => {
+      const aggregatedSegments = this.aggregateCustomerSegments(
+        curr.customer_segments,
+      );
+      return { ...acc, ...aggregatedSegments };
     }, {});
 
     return {

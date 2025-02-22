@@ -4,6 +4,9 @@ import { OrderService } from '../services/order.service';
 import { CreateOrderDto } from '../dtos/create-order.dto';
 import { UpdateOrderDto } from '../dtos/update-order.dto';
 import { Order, OrderStatus } from '../entities/order.entity';
+import { PaymentStatus } from '../../payments/enums/payment-status.enum';
+import { PaymentMethod } from '../../payments/enums/payment-method.enum';
+import { ShipmentStatus } from '../../shipments/enums/shipment-status.enum';
 
 describe('OrderController', () => {
   let controller: OrderController;
@@ -11,12 +14,52 @@ describe('OrderController', () => {
 
   const mockOrder: Order = {
     id: '123',
-    user_id: 'user123',
+    user: {
+      id: '456',
+      email: 'test@example.com',
+      role: 'customer',
+      full_name: 'Test User',
+      status: 'active',
+      orders: [],
+      addresses: [],
+      created_at: new Date(),
+      updated_at: new Date(),
+    },
+    items: [],
     status: OrderStatus.PENDING,
-    subtotal: 100,
-    tax: 10,
-    shipping: 5,
-    total_amount: 115,
+    total_amount: 100,
+    payments: [{
+      id: '789',
+      order_id: '123',
+      amount: 100,
+      status: PaymentStatus.PENDING,
+      method: PaymentMethod.CREDIT_CARD,
+      transaction_id: 'tx_123',
+      order: null,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }],
+    shipments: [{
+      id: '101',
+      order_id: '123',
+      status: ShipmentStatus.PENDING,
+      tracking_number: 'track_123',
+      shipping_method: 'standard',
+      order: null,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }],
+    created_at: new Date(),
+    updated_at: new Date()
+  };
+
+  const mockCreateOrderDto: CreateOrderDto = {
+    items: [
+      {
+        variant_id: 'variant123',
+        quantity: 2,
+      },
+    ],
     shipping_address: {
       street: '123 Main St',
       city: 'City',
@@ -31,20 +74,6 @@ describe('OrderController', () => {
       country: 'Country',
       postal_code: '12345',
     },
-    items: [],
-    created_at: new Date(),
-    updated_at: new Date(),
-  };
-
-  const mockCreateOrderDto: CreateOrderDto = {
-    items: [
-      {
-        variant_id: 'variant123',
-        quantity: 2,
-      },
-    ],
-    shipping_address: mockOrder.shipping_address,
-    billing_address: mockOrder.billing_address,
   };
 
   const mockUpdateOrderDto: UpdateOrderDto = {
@@ -81,12 +110,12 @@ describe('OrderController', () => {
 
   describe('createOrder', () => {
     it('should create an order', async () => {
-      const req = { user: { id: 'user123' } };
+      const req = { user: { id: '456' } };
       const result = await controller.createOrder(req, mockCreateOrderDto);
 
       expect(result).toEqual(mockOrder);
       expect(service.createOrder).toHaveBeenCalledWith(
-        'user123',
+        '456',
         mockCreateOrderDto,
       );
     });
@@ -112,11 +141,11 @@ describe('OrderController', () => {
 
   describe('getUserOrders', () => {
     it('should return orders for user', async () => {
-      const req = { user: { id: 'user123' } };
+      const req = { user: { id: '456' } };
       const result = await controller.getUserOrders(req);
 
       expect(result).toEqual([mockOrder]);
-      expect(service.findOrdersByUser).toHaveBeenCalledWith('user123');
+      expect(service.findOrdersByUser).toHaveBeenCalledWith('456');
     });
   });
 });
