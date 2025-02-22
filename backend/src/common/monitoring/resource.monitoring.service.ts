@@ -102,7 +102,13 @@ export class ResourceMonitoringService implements OnModuleInit {
   private setupRedisAlerts(): void {
     const { redis } = monitoringConfig;
 
-    // Redis Memory Usage
+    // Add custom attributes for thresholds first
+    newrelic.addCustomAttribute('alert.High Redis Memory Usage.condition', `redis.memory.utilization > ${redis.memoryWarning}`);
+    newrelic.addCustomAttribute('alert.Critical Redis Memory Usage.condition', `redis.memory.utilization > ${redis.memoryCritical}`);
+    newrelic.addCustomAttribute('alert.High Redis Eviction Rate.condition', `redis.eviction.rate > ${redis.evictionRate}`);
+    newrelic.addCustomAttribute('alert.Low Redis Cache Hit Rate.condition', `redis.cache.hit.rate < ${redis.hitRateWarning}`);
+
+    // Redis Memory Warning Alert
     this.createNewRelicAlert({
       name: 'High Redis Memory Usage',
       condition: `redis.memory.utilization > ${redis.memoryWarning}`,
@@ -110,7 +116,15 @@ export class ResourceMonitoringService implements OnModuleInit {
       priority: 'WARNING',
     });
 
-    // Redis Eviction Rate
+    // Redis Memory Critical Alert
+    this.createNewRelicAlert({
+      name: 'Critical Redis Memory Usage',
+      condition: `redis.memory.utilization > ${redis.memoryCritical}`,
+      duration: redis.duration,
+      priority: 'CRITICAL',
+    });
+
+    // Redis Eviction Rate Alert
     this.createNewRelicAlert({
       name: 'High Redis Eviction Rate',
       condition: `redis.eviction.rate > ${redis.evictionRate}`,
@@ -118,7 +132,7 @@ export class ResourceMonitoringService implements OnModuleInit {
       priority: 'WARNING',
     });
 
-    // Redis Cache Hit Rate
+    // Redis Cache Hit Rate Alert
     this.createNewRelicAlert({
       name: 'Low Redis Cache Hit Rate',
       condition: `redis.cache.hit.rate < ${redis.hitRateWarning}`,
@@ -239,22 +253,38 @@ export class ResourceMonitoringService implements OnModuleInit {
   }
 
   /**
-   * Check if dyno scaling is needed based on resource usage
+   * Check if dyno scaling is needed based on current metrics
    */
   private async checkDynoScaling(): Promise<void> {
-    if (!this.isProduction) return;
+    // Only check scaling in production environment
+    if (!this.isProduction) {
+      this.logger.debug('Skipping dyno scaling check in non-production environment');
+      return;
+    }
 
     try {
       const metrics = await this.getSystemMetrics();
-      const { dynos } = monitoringConfig;
+      const { cpu, memory } = metrics;
+      const config = this.configService.get('monitoring');
 
-      if (metrics.cpu > dynos.scaleUpThreshold || metrics.memory > dynos.scaleUpThreshold) {
+      if (!config?.dyno) {
+        this.logger.warn('Dyno configuration not found');
+        return;
+      }
+
+      const { cpuThreshold, memoryThreshold } = config.dyno;
+
+      if (cpu > cpuThreshold || memory > memoryThreshold) {
         await this.scaleDynos('up');
-      } else if (metrics.cpu < dynos.scaleDownThreshold && metrics.memory < dynos.scaleDownThreshold) {
+      } else if (cpu < cpuThreshold / 2 && memory < memoryThreshold / 2) {
         await this.scaleDynos('down');
       }
     } catch (error) {
       this.logger.error('Error checking dyno scaling:', error);
+      // Only call New Relic if it's available
+      if (typeof newrelic !== 'undefined' && newrelic?.noticeError) {
+        newrelic.noticeError(error);
+      }
     }
   }
 

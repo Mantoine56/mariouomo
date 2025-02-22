@@ -16,22 +16,18 @@ export class LoggingService {
     this.initializeLogger();
   }
 
-  private initializeLogger() {
-    const environment = this.configService.get<string>('NODE_ENV', 'development');
-    const isProduction = environment === 'production';
-
-    // Define log levels and default level per environment
-    const defaultLevel = isProduction ? 'error' : 'debug';
-    const logLevel = this.configService.get<string>('LOG_LEVEL', defaultLevel);
+  /**
+   * Initialize the Winston logger with appropriate configuration
+   */
+  private initializeLogger(): void {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const logLevel = isProduction ? 'info' : 'debug';
 
     // Development format: Colorful, human-readable output
     const developmentFormat = winston.format.combine(
       winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
       winston.format.colorize(),
-      winston.format.printf(({ level, message, timestamp, ...meta }) => {
-        const metaStr = Object.keys(meta).length ? `\n${JSON.stringify(meta, null, 2)}` : '';
-        return `${timestamp} [${level}]: ${message}${metaStr}`;
-      })
+      winston.format.simple()
     );
 
     // Production format: JSON format with error stacks
@@ -41,59 +37,27 @@ export class LoggingService {
       winston.format.json()
     );
 
-    // Configure transports based on environment
-    const transports: winston.transport[] = [];
+    const transports = [
+      new winston.transports.Console({
+        level: logLevel,
+      }),
+    ];
 
-    if (isProduction) {
-      // Production transports
-      transports.push(
-        // Console for container logs
-        new winston.transports.Console({
-          format: productionFormat,
-          level: 'error', // Only errors to console in production
-        }),
-        // File rotation for persistent logs
-        new DailyRotateFile({
-          filename: 'logs/error-%DATE%.log',
-          datePattern: 'YYYY-MM-DD',
-          zippedArchive: true,
-          maxSize: '20m',
-          maxFiles: '14d',
-          level: 'error',
-          format: productionFormat,
-        }),
-        // Separate file for all logs
-        new DailyRotateFile({
-          filename: 'logs/combined-%DATE%.log',
-          datePattern: 'YYYY-MM-DD',
-          zippedArchive: true,
-          maxSize: '20m',
-          maxFiles: '7d',
-          format: productionFormat,
-        })
-      );
-    } else {
-      // Development transport
-      transports.push(
-        new winston.transports.Console({
-          format: developmentFormat,
-          level: 'debug', // Show all logs in development
-        })
-      );
-    }
-
-    // Create logger instance
     this.logger = winston.createLogger({
       level: logLevel,
-      levels: winston.config.npm.levels,
+      levels: {
+        error: 0,
+        warn: 1,
+        info: 2,
+        debug: 3,
+      },
       format: isProduction ? productionFormat : developmentFormat,
       transports,
-      // Exit on error in production
       exitOnError: isProduction,
     });
 
     // Initial log to verify configuration
-    this.logger.info(`Logging initialized in ${environment} mode at ${logLevel} level`);
+    this.logger.info(`Logging initialized in ${isProduction ? 'production' : 'development'} mode at ${logLevel} level`);
   }
 
   // NestJS LoggerService implementation

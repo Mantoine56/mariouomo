@@ -162,16 +162,30 @@ describe('ResourceMonitoringService', () => {
   });
 
   describe('Dyno Scaling', () => {
-    beforeEach(() => {
-      jest.useFakeTimers();
-    });
+    let scaleDynosSpy: jest.SpyInstance;
+    let getSystemMetricsSpy: jest.SpyInstance;
 
-    afterEach(() => {
-      jest.useRealTimers();
+    beforeEach(() => {
+      scaleDynosSpy = jest.spyOn(service as any, 'scaleDynos');
+      getSystemMetricsSpy = jest.spyOn(service as any, 'getSystemMetrics').mockResolvedValue({
+        cpu: 90,
+        memory: 85,
+      });
+
+      // Mock config service
+      jest.spyOn(configService, 'get').mockReturnValue({
+        dyno: {
+          cpuThreshold: 80,
+          memoryThreshold: 80,
+        },
+      });
     });
 
     it('should not attempt scaling in non-production environment', async () => {
-      const scaleDynosSpy = jest.spyOn<any, any>(service, 'scaleDynos');
+      // Set non-production environment
+      Object.defineProperty(service, 'isProduction', {
+        get: () => false,
+      });
 
       await service['checkDynoScaling']();
 
@@ -179,23 +193,12 @@ describe('ResourceMonitoringService', () => {
     });
 
     it('should attempt scaling in production environment when thresholds are exceeded', async () => {
-      // Mock production environment
-      jest.spyOn(configService, 'get').mockImplementation((key) => {
-        if (key === 'environment') return 'production';
-        return undefined;
-      });
-
-      const scaleDynosSpy = jest.spyOn<any, any>(service, 'scaleDynos')
-        .mockImplementation(async () => {});
-      
-      // Force high CPU usage
-      jest.spyOn<any, any>(service, 'getSystemMetrics').mockResolvedValue({
-        cpu: 90,
-        memory: 50,
+      // Set production environment
+      Object.defineProperty(service, 'isProduction', {
+        get: () => true,
       });
 
       await service['checkDynoScaling']();
-      await jest.runAllTimersAsync();
 
       expect(scaleDynosSpy).toHaveBeenCalledWith('up');
     });

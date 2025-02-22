@@ -102,15 +102,19 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
     try {
       await queryRunner.startTransaction();
-      
       const result = await operation(queryRunner);
       await queryRunner.commitTransaction();
       
-      this.recordTransactionMetrics('commit', startTime);
+      // Record transaction metrics in production
+      if (this.isProduction) {
+        const duration = Date.now() - startTime;
+        newrelic.recordMetric('Database/Transaction/Duration', duration);
+      }
+
       return result;
     } catch (error) {
+      this.handleTransactionError(error);
       await queryRunner.rollbackTransaction();
-      this.recordTransactionMetrics('rollback', startTime);
       throw error;
     } finally {
       await queryRunner.release();
@@ -118,60 +122,23 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Handle pool errors
-   * @param error - Error from the connection pool
+   * Handle pool errors and record metrics
+   * @param error The error that occurred
    */
-  private handlePoolError(error: Error) {
+  private handlePoolError(error: Error): void {
     this.logger.error('Database pool error:', error);
     newrelic.noticeError(error, {
-      poolTotal: this.pool.totalCount,
-      poolActive: this.pool.activeCount,
+      poolTotal: this.pool?.totalCount || 0,
+      poolActive: this.pool?.activeCount || 0,
     });
-
-    if (this.isProduction) {
-      // In production, attempt to recover from pool errors
-      this.attemptPoolRecovery();
-    }
   }
 
   /**
-   * Attempt to recover from pool errors
+   * Handle transaction errors and record metrics
+   * @param error The error that occurred
    */
-  private async attemptPoolRecovery() {
-    try {
-      // Close idle connections
-      await this.pool.drain();
-      
-      // Wait for active queries to finish (max 30 seconds)
-      await Promise.race([
-        this.pool.clear(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Pool recovery timeout')), 30000)
-        ),
-      ]);
-
-      this.logger.log('Successfully recovered database pool');
-    } catch (error) {
-      this.logger.error('Failed to recover database pool:', error);
-      newrelic.noticeError(error);
-    }
-  }
-
-  /**
-   * Record transaction metrics
-   * @param type - Type of transaction (commit/rollback)
-   * @param startTime - Start time of the transaction
-   */
-  private recordTransactionMetrics(type: 'commit' | 'rollback', startTime: number) {
-    const duration = Date.now() - startTime;
-    
-    newrelic.recordMetric(`db.transaction.${type}`, 1);
-    newrelic.recordMetric('db.transaction.duration', duration);
-    
-    if (type === 'rollback') {
-      newrelic.incrementMetric('db.transaction.rollbacks');
-    }
-
-    this.logger.debug(`Transaction ${type} completed in ${duration}ms`);
+  private handleTransactionError(error: Error): void {
+    this.logger.error('Transaction failed:', error);
+    newrelic.noticeError(error);
   }
 }
