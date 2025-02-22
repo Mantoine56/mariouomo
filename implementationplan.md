@@ -324,16 +324,19 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
        - [x] Controller unit tests
        - [x] Transaction testing
        - [x] Error handling testing
-   - [ ] Inventory Module
-     - [ ] Inventory repository
-     - [ ] Inventory DTOs
-     - [ ] Inventory service with locking
-     - [ ] Inventory controller
+   - [x] Inventory Module
+     - [x] Inventory repository
+     - [x] Inventory DTOs
+     - [x] Inventory service with locking
+     - [x] Inventory controller
    - [ ] Analytics Module
-     - [ ] Analytics repository
-     - [ ] Analytics DTOs
-     - [ ] Analytics service
-     - [ ] Analytics controller
+     - [ ] Design analytics data models
+     - [ ] Create analytics collection service
+     - [ ] Implement data aggregation pipelines
+     - [ ] Add real-time analytics tracking
+     - [ ] Create analytics dashboard endpoints
+     - [ ] Add unit tests
+     - [ ] Create documentation
 
 **Products and Orders Implementation Progress**
 
@@ -393,23 +396,27 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
    - Implement query optimization for category-based searches
 
 **Next Steps** (Prioritized):
-1. Implement Inventory Module
-   - Create inventory repository
-   - Implement inventory service with locking
-   - Add inventory controller
-   - Implement inventory tracking
+1. Implement Analytics Module
+   - Design analytics schema for:
+     - Sales metrics
+     - Inventory turnover
+     - Customer behavior
+     - Product performance
+   - Implement data collection services
+   - Create aggregation pipelines
+   - Add real-time tracking
+   - Build dashboard API
 
-2. Build Analytics Module
-   - Create analytics repository
-   - Implement analytics service
-   - Add analytics controller
-   - Implement data aggregation
-
-3. Develop Admin Dashboard
+2. Build Admin Dashboard
    - Create admin dashboard UI
    - Implement admin features
    - Add access control
    - Implement dashboard UX
+
+3. Develop Admin-Only Feature
+   - Connect NestJS to a Large Language Model (OpenAI or similar)
+   - Decide how data is queried (e.g., natural-language to structured queries or direct LLM embeddings)
+   - Implement admin-only access
 
 **Current Focus**: Products and Orders Module
 - Implementing full-text search functionality
