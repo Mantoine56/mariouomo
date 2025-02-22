@@ -173,7 +173,7 @@ export class AnalyticsGateway implements OnGatewayConnection, OnGatewayDisconnec
     if (!this.metricSubscriptions.has(clientId)) {
       this.metricSubscriptions.set(clientId, new Set());
     }
-    this.metricSubscriptions.get(clientId).add(metricType);
+    this.metricSubscriptions.get(clientId)?.add(metricType);
   }
 
   /**

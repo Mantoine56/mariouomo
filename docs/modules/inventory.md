@@ -92,12 +92,59 @@ Returns inventory items at a location
 
 ### Emitted Events
 1. `inventory.created`: New inventory item created
+   ```typescript
+   {
+     inventory_id: string;
+     variant_id: string;
+     quantity: number;
+   }
+   ```
+
 2. `inventory.updated`: Inventory settings updated
-3. `inventory.increased`: Stock level increased
-4. `inventory.decreased`: Stock level decreased
-5. `inventory.low_stock`: Item reached reorder point
-6. `inventory.reserved`: Stock reserved for order
-7. `inventory.released`: Reserved stock released
+   ```typescript
+   {
+     inventory_id: string;
+     // Updated fields
+   }
+   ```
+
+3. `inventory.adjusted`: Stock level adjusted
+   ```typescript
+   {
+     inventory_id: string;
+     quantity: number;
+     reason: string;
+     type: 'increase' | 'decrease';
+   }
+   ```
+
+4. `inventory.low_stock`: Item reached reorder point
+   ```typescript
+   {
+     inventory_id: string;
+     variant_id: string;
+     quantity: number;
+     reorder_point: number;
+   }
+   ```
+
+5. `inventory.reserved`: Stock reserved for order
+   ```typescript
+   {
+     inventory_id: string;
+     quantity: number;
+   }
+   ```
+
+### Event Handling
+- Events are emitted after successful database transactions
+- Event payloads include relevant IDs for tracking
+- Subscribers should handle events idempotently
+- Events are used for:
+  - Analytics tracking
+  - Notifications
+  - Cache invalidation
+  - Integration with external systems
 
 ## Integration Points
 
@@ -140,8 +187,69 @@ Returns inventory items at a location
 4. Transaction isolation for concurrent access
 
 ## Testing
-Comprehensive test suite covering:
-1. Unit tests for business logic
-2. Integration tests for API endpoints
-3. Concurrent access scenarios
-4. Edge cases and error conditions
+
+### Unit Tests
+The module includes comprehensive unit tests covering:
+
+1. **Inventory Service**
+   - Stock adjustments (increase/decrease)
+   - Inventory reservations
+   - Low stock detection
+   - Error handling for insufficient stock
+   - Concurrent access handling
+
+2. **Event Emission**
+   - Proper event names and payloads
+   - Event emission after successful operations
+   - No events on failed operations
+
+3. **Transaction Handling**
+   - Proper transaction isolation
+   - Rollback on errors
+   - Pessimistic locking for concurrent access
+
+### Test Implementation
+```typescript
+describe('InventoryService', () => {
+  describe('adjustInventory', () => {
+    it('should successfully adjust inventory quantity', async () => {
+      // Tests proper stock adjustment and event emission
+    });
+
+    it('should fail to adjust inventory when insufficient stock', async () => {
+      // Tests error handling for insufficient stock
+    });
+  });
+
+  describe('reserveInventory', () => {
+    it('should successfully reserve inventory', async () => {
+      // Tests proper reservation and event emission
+    });
+
+    it('should fail to reserve inventory when insufficient available stock', async () => {
+      // Tests error handling for insufficient stock
+    });
+  });
+});
+```
+
+### Testing Best Practices
+1. **Mock Data**
+   - Use complete type information
+   - Include all required fields
+   - Follow entity constraints
+
+2. **Transaction Mocking**
+   - Mock EntityManager for proper isolation
+   - Handle both transaction signatures
+   - Simulate proper locking behavior
+
+3. **Event Testing**
+   - Verify correct event names
+   - Validate event payload structure
+   - Ensure proper timing of emission
+
+4. **Error Handling**
+   - Test all error conditions
+   - Verify proper exception types
+   - Ensure proper error messages

@@ -1,3 +1,6 @@
+/**
+ * Service for handling analytics-related database queries
+ */
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
@@ -15,11 +18,80 @@ interface CustomerSegment {
 interface SegmentMetrics {
   customers: number;
   revenue: number;
-  avgOrderValue: number;
+  avg_order_value: number;
 }
 
 interface SegmentMap {
   [key: string]: SegmentMetrics;
+}
+
+interface TrafficSource {
+  source: string;
+  visits: number;
+  conversion_rate: number;
+}
+
+/**
+ * Raw sales metrics from database query
+ */
+interface RawSalesMetrics {
+  revenue: number;
+  orders: number;
+  avg_order_value: number;
+  date: Date;
+}
+
+/**
+ * Raw inventory metrics from database query
+ */
+interface RawInventoryMetrics {
+  total_items: number;
+  low_stock_items: number;
+  out_of_stock_items: number;
+  turnover_rate: number;
+  date: Date;
+}
+
+/**
+ * Raw customer metrics from database query
+ */
+interface RawCustomerMetrics {
+  retention_rate: number;
+  new_customers: number;
+  repeat_customers: number;
+  date: Date;
+}
+
+/**
+ * Raw product metrics from database query
+ */
+interface RawProductMetrics {
+  sales: number;
+  revenue: number;
+  orders: number;
+  views: number;
+  conversion_rate: number;
+  date: Date;
+}
+
+/**
+ * Raw category metrics from database query
+ */
+interface RawCategoryMetrics {
+  sales: number;
+  revenue: number;
+  orders: number;
+  products: number;
+  date: Date;
+}
+
+/**
+ * Raw traffic source metrics from database query
+ */
+interface RawTrafficSource {
+  name: string;
+  visits: number;
+  conversion_rate: number;
 }
 
 /**
@@ -40,68 +112,257 @@ export class AnalyticsQueryService {
   ) {}
 
   /**
-   * Gets sales overview for a date range
+   * Gets sales analytics overview for a date range
+   * @param startDate - Start date for the analysis period
+   * @param endDate - End date for the analysis period
    */
   async getSalesOverview(startDate: Date, endDate: Date) {
-    const metrics = await this.salesMetricsRepo.find({
-      where: {
-        date: Between(startDate, endDate),
-      },
-      order: {
-        date: 'ASC',
-      },
-    });
-
-    // Calculate trends and totals
-    const totals = metrics.reduce(
-      (acc, curr) => ({
-        revenue: acc.revenue + curr.total_revenue,
-        orders: acc.orders + curr.total_orders,
-        units: acc.units + curr.total_units_sold,
-        discounts: acc.discounts + curr.discount_amount,
-      }),
-      { revenue: 0, orders: 0, units: 0, discounts: 0 },
-    );
-
-    // Get top products across the period
-    const topProducts = await this.salesMetricsRepo
+    const metrics = await this.salesMetricsRepo
       .createQueryBuilder('sm')
-      .select('jsonb_array_elements(top_products) as product')
-      .where('date BETWEEN :startDate AND :endDate', { startDate, endDate })
-      .getRawMany();
+      .select([
+        'SUM(sm.total_revenue) as revenue',
+        'SUM(sm.total_orders) as orders',
+        'AVG(sm.average_order_value) as avg_order_value',
+        'DATE(sm.date) as date',
+      ])
+      .where('sm.date BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
+      .groupBy('DATE(sm.date)')
+      .getRawMany<RawSalesMetrics>();
+
+    const latestMetrics = metrics[metrics.length - 1];
 
     return {
-      metrics,
-      totals,
-      topProducts,
+      revenue: latestMetrics?.revenue ?? 0,
+      orders: latestMetrics?.orders ?? 0,
+      averageOrderValue: latestMetrics?.avg_order_value ?? 0,
+      trend: metrics.map((m) => ({
+        date: m.date,
+        revenue: m.revenue,
+        orders: m.orders,
+      })),
     };
   }
 
   /**
-   * Gets inventory overview
+   * Gets inventory analytics overview for a specific date
+   * @param date - Date for inventory analysis
    */
   async getInventoryOverview(date: Date) {
-    const metrics = await this.inventoryMetricsRepo.findOne({
-      where: {
-        date: LessThanOrEqual(date),
+    const metrics = await this.inventoryMetricsRepo
+      .createQueryBuilder('im')
+      .select([
+        'COUNT(*) as total_items',
+        'SUM(CASE WHEN im.low_stock_items > 0 THEN 1 ELSE 0 END) as low_stock_items',
+        'SUM(CASE WHEN im.out_of_stock_items > 0 THEN 1 ELSE 0 END) as out_of_stock_items',
+        'AVG(im.turnover_rate) as turnover_rate',
+        'DATE(im.date) as date',
+      ])
+      .where('im.date <= :date', { date })
+      .getRawOne<RawInventoryMetrics>();
+
+    return {
+      current: {
+        totalItems: metrics?.total_items ?? 0,
+        lowStockItems: metrics?.low_stock_items ?? 0,
+        outOfStockItems: metrics?.out_of_stock_items ?? 0,
+        turnoverRate: metrics?.turnover_rate ?? 0,
       },
+      turnoverTrend: [
+        {
+          date: metrics?.date ?? date,
+          turnoverRate: metrics?.turnover_rate ?? 0,
+        },
+      ],
+    };
+  }
+
+  /**
+   * Gets customer insights for a date range
+   * @param startDate - Start date for the analysis period
+   * @param endDate - End date for the analysis period
+   */
+  async getCustomerInsights(startDate: Date, endDate: Date) {
+    const metrics = await this.customerMetricsRepo
+      .createQueryBuilder('customer')
+      .select([
+        'COUNT(DISTINCT CASE WHEN customer.lastPurchaseDate BETWEEN :startDate AND :endDate THEN customer.id END) as repeat_customers',
+        'COUNT(DISTINCT CASE WHEN customer.createdAt BETWEEN :startDate AND :endDate THEN customer.id END) as new_customers',
+        'AVG(CASE WHEN customer.lastPurchaseDate >= :startDate THEN 1 ELSE 0 END) * 100 as retention_rate',
+        'DATE(customer.createdAt) as date',
+      ])
+      .where('customer.createdAt <= :endDate', { startDate, endDate })
+      .groupBy('DATE(customer.createdAt)')
+      .getRawMany<RawCustomerMetrics>();
+
+    const latestMetrics = metrics[metrics.length - 1];
+    const retention = latestMetrics?.retention_rate ?? 0;
+
+    return {
+      retention,
+      churn: 100 - retention,
+      newCustomers: latestMetrics?.new_customers ?? 0,
+      repeatCustomers: latestMetrics?.repeat_customers ?? 0,
+      trend: metrics.map((m) => ({
+        date: m.date,
+        retention: m.retention_rate,
+        churn: 100 - m.retention_rate,
+      })),
+    };
+  }
+
+  /**
+   * Gets product performance metrics for a date range
+   * @param startDate - Start date for the analysis period
+   * @param endDate - End date for the analysis period
+   */
+  async getProductPerformance(startDate: Date, endDate: Date) {
+    const metrics = await this.salesMetricsRepo
+      .createQueryBuilder('sm')
+      .select([
+        'SUM(sm.total_revenue) as revenue',
+        'SUM(sm.total_orders) as orders',
+        'AVG(sm.average_order_value) as avg_order_value',
+        'SUM(sm.views) as views',
+        'AVG(CASE WHEN sm.total_orders > 0 THEN sm.views / sm.total_orders ELSE 0 END) as conversion_rate',
+        'DATE(sm.date) as date',
+      ])
+      .where('sm.date BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
+      .groupBy('DATE(sm.date)')
+      .getRawMany<RawProductMetrics>();
+
+    const latestMetrics = metrics[metrics.length - 1];
+
+    return {
+      revenue: latestMetrics?.revenue ?? 0,
+      orders: latestMetrics?.orders ?? 0,
+      views: latestMetrics?.views ?? 0,
+      conversionRate: latestMetrics?.conversion_rate ?? 0,
+      trend: metrics.map((d) => ({
+        date: d.date,
+        revenue: d.revenue,
+        orders: d.orders,
+        views: d.views,
+        conversionRate: d.conversion_rate,
+      })),
+    };
+  }
+
+  /**
+   * Gets category performance metrics for a date range
+   * @param startDate - Start date for the analysis period
+   * @param endDate - End date for the analysis period
+   */
+  async getCategoryPerformance(startDate: Date, endDate: Date) {
+    const metrics = await this.salesMetricsRepo
+      .createQueryBuilder('sm')
+      .select([
+        'SUM(sm.total_revenue) as revenue',
+        'SUM(sm.total_orders) as orders',
+        'AVG(sm.average_order_value) as avg_order_value',
+        'COUNT(DISTINCT sm.product_id) as products',
+        'DATE(sm.date) as date',
+      ])
+      .where('sm.date BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
+      .groupBy('DATE(sm.date)')
+      .getRawMany<RawCategoryMetrics>();
+
+    const latestMetrics = metrics[metrics.length - 1];
+
+    return {
+      revenue: latestMetrics?.revenue ?? 0,
+      orders: latestMetrics?.orders ?? 0,
+      products: latestMetrics?.products ?? 0,
+      trend: metrics.map((d) => ({
+        date: d.date,
+        revenue: d.revenue,
+        orders: d.orders,
+      })),
+    };
+  }
+
+  /**
+   * Gets traffic source distribution
+   */
+  async getTrafficSourceDistribution() {
+    // Get latest traffic source data
+    const latestMetrics = await this.customerMetricsRepo.findOne({
       order: {
         date: 'DESC',
       },
     });
 
-    // Get historical turnover rates
-    const turnoverTrend = await this.inventoryMetricsRepo
-      .createQueryBuilder('im')
-      .select(['date', 'turnover_rate'])
-      .where('date <= :date', { date })
-      .orderBy('date', 'DESC')
-      .limit(30)
+    // Get traffic source metrics
+    const sources = await this.customerMetricsRepo
+      .createQueryBuilder('customer')
+      .select([
+        'customer.trafficSource as name',
+        'COUNT(*) as visits',
+        'AVG(CASE WHEN customer.lastPurchaseDate IS NOT NULL THEN 1 ELSE 0 END) * 100 as conversion_rate',
+      ])
+      .groupBy('customer.trafficSource')
+      .getRawMany<RawTrafficSource>();
+
+    return {
+      sources: sources.map((source) => ({
+        source: source.name,
+        visits: source.visits,
+        conversion_rate: source.conversion_rate,
+      })),
+    };
+  }
+
+  /**
+   * Gets real-time dashboard data including active users and trends
+   */
+  async getRealTimeDashboard() {
+    const current = await this.realTimeMetricsRepo
+      .createQueryBuilder('metrics')
+      .select([
+        'metrics.activeUsers as active_users',
+        'metrics.pageViews as page_views',
+        'metrics.trafficSources as traffic_sources',
+      ])
+      .orderBy('metrics.timestamp', 'DESC')
+      .limit(1)
+      .getRawOne();
+
+    const hourAgo = new Date(Date.now() - 3600000);
+    const trends = await this.realTimeMetricsRepo
+      .createQueryBuilder('metrics')
+      .select([
+        'metrics.timestamp as timestamp',
+        'metrics.activeUsers as active_users',
+        'metrics.pageViews as page_views',
+      ])
+      .where('metrics.timestamp >= :hourAgo', { hourAgo })
+      .orderBy('metrics.timestamp', 'ASC')
       .getRawMany();
 
     return {
-      current: metrics,
-      turnoverTrend,
+      current: {
+        activeUsers: current?.active_users ?? 0,
+        pageViews: current?.page_views ?? 0,
+        trafficSources: current?.traffic_sources ?? [],
+      },
+      trends: {
+        activeUsers: trends.map((t) => ({
+          timestamp: t.timestamp,
+          users: t.active_users,
+        })),
+        pageViews: trends.map((t) => ({
+          timestamp: t.timestamp,
+          views: t.page_views,
+        })),
+      },
     };
   }
 
@@ -114,163 +375,16 @@ export class AnalyticsQueryService {
         acc[segment.segment] = {
           customers: 0,
           revenue: 0,
-          avgOrderValue: 0,
+          avg_order_value: 0,
         };
       }
 
       acc[segment.segment].customers += segment.customer_count;
       acc[segment.segment].revenue += segment.total_revenue;
-      acc[segment.segment].avgOrderValue =
+      acc[segment.segment].avg_order_value =
         acc[segment.segment].revenue / acc[segment.segment].customers;
 
       return acc;
     }, {});
-  }
-
-  /**
-   * Gets customer insights
-   */
-  async getCustomerInsights(startDate: Date, endDate: Date) {
-    const metrics = await this.customerMetricsRepo.find({
-      where: {
-        date: Between(startDate, endDate),
-      },
-      order: {
-        date: 'ASC',
-      },
-    });
-
-    // Calculate retention trends
-    const retentionTrend = metrics.map((m) => ({
-      date: m.date,
-      retention: m.retention_rate,
-      churn: m.churn_rate,
-    }));
-
-    // Aggregate customer segments
-    const segments = metrics.reduce((acc: SegmentMap, curr) => {
-      const aggregatedSegments = this.aggregateCustomerSegments(
-        curr.customer_segments,
-      );
-      return { ...acc, ...aggregatedSegments };
-    }, {});
-
-    return {
-      metrics,
-      retentionTrend,
-      segments,
-    };
-  }
-
-  /**
-   * Gets real-time dashboard data
-   */
-  async getRealTimeDashboard() {
-    // Get latest metrics
-    const current = await this.realTimeMetricsRepo.findOne({
-      order: {
-        timestamp: 'DESC',
-      },
-    });
-
-    // Get historical data for trends (last hour)
-    const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const trends = await this.realTimeMetricsRepo.find({
-      where: {
-        timestamp: MoreThanOrEqual(hourAgo),
-      },
-      order: {
-        timestamp: 'ASC',
-      },
-    });
-
-    // Calculate key trends
-    const activeUserTrend = trends.map((t) => ({
-      timestamp: t.timestamp,
-      users: t.active_users,
-    }));
-
-    const cartValueTrend = trends.map((t) => ({
-      timestamp: t.timestamp,
-      value: t.cart_value,
-    }));
-
-    return {
-      current,
-      trends: {
-        activeUsers: activeUserTrend,
-        cartValue: cartValueTrend,
-      },
-    };
-  }
-
-  /**
-   * Gets performance metrics for a specific product
-   */
-  async getProductPerformance(productId: string, startDate: Date, endDate: Date) {
-    // Get sales metrics for the product
-    const salesData = await this.salesMetricsRepo
-      .createQueryBuilder('sm')
-      .select([
-        'date',
-        "jsonb_path_query(top_products, '$[*] ? (@.product_id == $productId)')",
-      ])
-      .where('date BETWEEN :startDate AND :endDate', { startDate, endDate })
-      .setParameter('productId', productId)
-      .getRawMany();
-
-    // Calculate trends
-    const trends = salesData.map((d) => ({
-      date: d.date,
-      units: d.units_sold,
-      revenue: d.revenue,
-    }));
-
-    return {
-      trends,
-      totals: trends.reduce(
-        (acc, curr) => ({
-          units: acc.units + curr.units,
-          revenue: acc.revenue + curr.revenue,
-        }),
-        { units: 0, revenue: 0 },
-      ),
-    };
-  }
-
-  /**
-   * Gets category performance metrics
-   */
-  async getCategoryPerformance(
-    categoryId: string,
-    startDate: Date,
-    endDate: Date,
-  ) {
-    // Get sales metrics for the category
-    const salesData = await this.salesMetricsRepo
-      .createQueryBuilder('sm')
-      .select([
-        'date',
-        "jsonb_path_query(sales_by_category, '$[*] ? (@.category_id == $categoryId)')",
-      ])
-      .where('date BETWEEN :startDate AND :endDate', { startDate, endDate })
-      .setParameter('categoryId', categoryId)
-      .getRawMany();
-
-    // Get inventory metrics for the category
-    const inventoryData = await this.inventoryMetricsRepo
-      .createQueryBuilder('im')
-      .select([
-        'date',
-        "jsonb_path_query(category_metrics, '$[*] ? (@.category_id == $categoryId)')",
-      ])
-      .where('date BETWEEN :startDate AND :endDate', { startDate, endDate })
-      .setParameter('categoryId', categoryId)
-      .getRawMany();
-
-    return {
-      sales: salesData,
-      inventory: inventoryData,
-    };
   }
 }

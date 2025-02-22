@@ -54,6 +54,31 @@ describe('AnalyticsController', () => {
     ],
   };
 
+  const mockProductPerformance = {
+    sales: 1000,
+    revenue: 50000,
+    views: 5000,
+    trend: [
+      { date: new Date('2025-01-01'), sales: 100, revenue: 5000 },
+    ],
+  };
+
+  const mockCategoryPerformance = {
+    sales: 2000,
+    revenue: 100000,
+    products: 50,
+    trend: [
+      { date: new Date('2025-01-01'), sales: 200, revenue: 10000 },
+    ],
+  };
+
+  const mockTrafficSources = {
+    sources: [
+      { source: 'google', visits: 1000, conversion_rate: 2.5 },
+      { source: 'direct', visits: 500, conversion_rate: 3.0 },
+    ],
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AnalyticsController],
@@ -64,9 +89,10 @@ describe('AnalyticsController', () => {
             getSalesOverview: jest.fn().mockResolvedValue(mockSalesData),
             getInventoryOverview: jest.fn().mockResolvedValue(mockInventoryData),
             getCustomerInsights: jest.fn().mockResolvedValue(mockCustomerData),
-            getRealTimeDashboard: jest.fn().mockResolvedValue(mockRealTimeData),
-            getProductPerformance: jest.fn(),
-            getCategoryPerformance: jest.fn(),
+            getProductPerformance: jest.fn().mockResolvedValue(mockProductPerformance),
+            getCategoryPerformance: jest.fn().mockResolvedValue(mockCategoryPerformance),
+            getTrafficSourceDistribution: jest.fn().mockResolvedValue(mockTrafficSources),
+            getCurrentMetrics: jest.fn().mockResolvedValue(mockRealTimeData),
           },
         },
         {
@@ -74,12 +100,7 @@ describe('AnalyticsController', () => {
           useValue: {
             getCurrentMetrics: jest.fn().mockResolvedValue(mockRealTimeData),
             getActiveUserCount: jest.fn().mockResolvedValue(150),
-            getPageViewDistribution: jest.fn().mockResolvedValue([
-              { page: '/home', views: 50, average_time: 120 },
-              { page: '/products', views: 30, average_time: 180 },
-            ]),
-            getTrafficSourceDistribution: jest.fn(),
-            getPageViewCounts: jest.fn(),
+            getPageViewCounts: jest.fn().mockResolvedValue(mockRealTimeData.pageViews),
           },
         },
       ],
@@ -94,106 +115,84 @@ describe('AnalyticsController', () => {
     expect(controller).toBeDefined();
   });
 
-  describe('getSalesOverview', () => {
-    it('should return sales overview for a date range', async () => {
+  describe('GET /analytics/sales', () => {
+    it('should get sales analytics', async () => {
       const startDate = new Date('2025-01-01');
       const endDate = new Date('2025-01-31');
+      const result = await controller.getSales(startDate, endDate);
 
-      const result = await controller.getSalesOverview(startDate, endDate);
-
-      expect(result).toEqual(mockSalesData);
       expect(queryService.getSalesOverview).toHaveBeenCalledWith(startDate, endDate);
+      expect(result).toEqual(mockSalesData);
     });
   });
 
-  describe('getInventoryOverview', () => {
-    it('should return current inventory statistics', async () => {
-      const date = new Date('2025-02-01');
+  describe('GET /analytics/inventory', () => {
+    it('should get inventory analytics', async () => {
+      const date = new Date('2025-01-01');
+      const result = await controller.getInventory(date);
 
-      const result = await controller.getInventoryOverview(date);
-
-      expect(result).toEqual(mockInventoryData);
       expect(queryService.getInventoryOverview).toHaveBeenCalledWith(date);
+      expect(result).toEqual(mockInventoryData);
     });
   });
 
-  describe('getCustomerInsights', () => {
-    it('should return customer behavior analysis for a date range', async () => {
+  describe('GET /analytics/customers', () => {
+    it('should get customer analytics', async () => {
       const startDate = new Date('2025-01-01');
       const endDate = new Date('2025-01-31');
+      const result = await controller.getCustomers(startDate, endDate);
 
-      const result = await controller.getCustomerInsights(startDate, endDate);
-
-      expect(result).toEqual(mockCustomerData);
       expect(queryService.getCustomerInsights).toHaveBeenCalledWith(startDate, endDate);
+      expect(result).toEqual(mockCustomerData);
     });
   });
 
-  describe('getRealTimeDashboard', () => {
-    it('should return real-time metrics', async () => {
+  describe('GET /analytics/realtime/dashboard', () => {
+    it('should get real-time dashboard data', async () => {
       const result = await controller.getRealTimeDashboard();
 
-      expect(result).toEqual(mockRealTimeData);
       expect(trackingService.getCurrentMetrics).toHaveBeenCalled();
+      expect(result).toEqual(mockRealTimeData);
     });
   });
 
-  describe('getActiveUserCount', () => {
-    it('should return current active user count', async () => {
-      const result = await controller.getActiveUserCount();
+  describe('GET /analytics/active-users', () => {
+    it('should get active user count', async () => {
+      const result = await controller.getActiveUsers();
 
-      expect(result).toBe(150);
       expect(trackingService.getActiveUserCount).toHaveBeenCalled();
+      expect(result).toEqual(150);
     });
   });
 
-  describe('getPageViewDistribution', () => {
-    it('should return page view distribution', async () => {
-      const expectedDistribution = [
-        { page: '/home', views: 50, average_time: 120 },
-        { page: '/products', views: 30, average_time: 180 },
-      ];
+  describe('GET /analytics/products/performance', () => {
+    it('should get product performance metrics', async () => {
+      const startDate = new Date('2025-01-01');
+      const endDate = new Date('2025-01-31');
+      const result = await controller.getProductPerformance(startDate, endDate);
 
-      const result = await controller.getPageViewDistribution();
-
-      expect(result).toEqual(expectedDistribution);
-      expect(trackingService.getPageViewDistribution).toHaveBeenCalled();
+      expect(queryService.getProductPerformance).toHaveBeenCalledWith(startDate, endDate);
+      expect(result).toEqual(mockProductPerformance);
     });
   });
 
-  describe('getProductPerformance', () => {
-    it('should return product performance metrics', async () => {
-      const result = await controller.getProductPerformance();
+  describe('GET /analytics/categories/performance', () => {
+    it('should get category performance metrics', async () => {
+      const startDate = new Date('2025-01-01');
+      const endDate = new Date('2025-01-31');
+      const result = await controller.getCategoryPerformance(startDate, endDate);
 
-      expect(result).toBeDefined();
-      expect(queryService.getProductPerformance).toHaveBeenCalled();
+      expect(queryService.getCategoryPerformance).toHaveBeenCalledWith(startDate, endDate);
+      expect(result).toEqual(mockCategoryPerformance);
     });
   });
 
-  describe('getCategoryPerformance', () => {
-    it('should return category performance metrics', async () => {
-      const result = await controller.getCategoryPerformance();
-
-      expect(result).toBeDefined();
-      expect(queryService.getCategoryPerformance).toHaveBeenCalled();
-    });
-  });
-
-  describe('getTrafficSourceDistribution', () => {
-    it('should return traffic source distribution', async () => {
+  describe('GET /analytics/traffic-sources', () => {
+    it('should get traffic source distribution', async () => {
       const result = await controller.getTrafficSourceDistribution();
 
-      expect(result).toBeDefined();
-      expect(trackingService.getTrafficSourceDistribution).toHaveBeenCalled();
-    });
-  });
-
-  describe('getPageViewCounts', () => {
-    it('should return page view counts', async () => {
-      const result = await controller.getPageViewCounts();
-
-      expect(result).toBeDefined();
-      expect(trackingService.getPageViewCounts).toHaveBeenCalled();
+      expect(queryService.getTrafficSourceDistribution).toHaveBeenCalled();
+      expect(result).toEqual(mockTrafficSources);
     });
   });
 });

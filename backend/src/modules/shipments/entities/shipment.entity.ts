@@ -2,21 +2,7 @@ import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from '../../../common/entities/base.entity';
 import { Order } from '../../orders/entities/order.entity';
-
-/**
- * Enum for shipment status
- * Tracks the state of shipment from creation to delivery
- */
-export enum ShipmentStatus {
-  PENDING = 'pending',
-  PROCESSING = 'processing',
-  SHIPPED = 'shipped',
-  IN_TRANSIT = 'in_transit',
-  OUT_FOR_DELIVERY = 'out_for_delivery',
-  DELIVERED = 'delivered',
-  FAILED = 'failed',
-  RETURNED = 'returned'
-}
+import { ShipmentStatus } from '../enums/shipment-status.enum';
 
 /**
  * Shipment entity for tracking order deliveries

@@ -135,6 +135,108 @@ Protected endpoints with proper authorization:
   - Input validation
   - Response formatting
 
+#### Test Mocking Patterns
+
+##### Service Layer Mocking
+When testing the order service, follow these patterns for mocking:
+
+1. **Transaction Mocking**
+```typescript
+jest.spyOn(dataSource, 'transaction').mockImplementation(
+  async (isolationOrCb: any, maybeCallback?: any) => {
+    const callback = maybeCallback || isolationOrCb;
+    const mockEntityManager = {
+      create: jest.fn().mockReturnValue(mockOrder),
+      save: jest.fn().mockResolvedValue(mockOrder),
+      createQueryBuilder: mockManagerCreateQueryBuilder,
+      findOne: jest.fn().mockResolvedValue(mockProduct),
+    };
+    return callback(mockEntityManager as unknown as EntityManager);
+  }
+);
+```
+
+2. **Query Builder Mocking**
+```typescript
+// Mock variant query builder with locking
+const variantQueryBuilder = {
+  setLock: jest.fn().mockReturnThis(),
+  whereInIds: jest.fn().mockReturnThis(),
+  getMany: jest.fn().mockResolvedValue([mockVariant]),
+};
+
+// Mock inventory query builder
+const inventoryQueryBuilder = {
+  where: jest.fn().mockReturnThis(),
+  getOne: jest.fn().mockResolvedValue(mockInventoryItem),
+};
+
+// Mock manager's createQueryBuilder
+const mockManagerCreateQueryBuilder = jest.fn().mockImplementation((entity: any, alias: string) => {
+  if (entity === ProductVariant) {
+    return variantQueryBuilder;
+  }
+  // Default to inventory query builder for all other cases
+  return inventoryQueryBuilder;
+});
+```
+
+##### Controller Layer Mocking
+When testing the order controller, follow these patterns:
+
+1. **Service Mock Setup**
+```typescript
+const mockOrder = {
+  id: '123',
+  user_id: '456',
+  status: OrderStatus.PENDING,
+  total_amount: 100,
+  payments: [{
+    id: '789',
+    amount: 100,
+    status: PaymentStatus.PENDING,
+    method: PaymentMethod.CREDIT_CARD
+  }],
+  shipments: [{
+    id: '101',
+    status: ShipmentStatus.PENDING,
+    tracking_number: 'track_123'
+  }]
+};
+
+const mockService = {
+  createOrder: jest.fn().mockResolvedValue(mockOrder),
+  updateOrder: jest.fn().mockResolvedValue(mockOrder),
+  findOrderById: jest.fn().mockResolvedValue(mockOrder),
+  findOrdersByUser: jest.fn().mockResolvedValue([mockOrder])
+};
+```
+
+2. **Request Context Mocking**
+```typescript
+const mockRequest = {
+  user: { id: '456' }
+};
+
+const mockCreateOrderDto = {
+  items: [{ variant_id: 'variant123', quantity: 2 }],
+  shipping_address: {
+    street: '123 Main St',
+    city: 'City',
+    state: 'State',
+    country: 'Country',
+    postal_code: '12345'
+  }
+};
+```
+
+These patterns ensure proper testing of:
+- Service layer integration
+- Request/response handling
+- User context management
+- Input validation
+- Error handling
+
 ### Integration Tests
 - End-to-end order flow
 - Concurrent order processing

@@ -32,7 +32,10 @@ export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
   /**
-   * Creates a new order for the authenticated user
+   * Creates a new order
+   * @param req Request object containing user information
+   * @param createOrderDto Order creation data
+   * @returns Created order
    */
   @Post()
   @ApiOperation({ summary: 'Create a new order' })
@@ -42,7 +45,7 @@ export class OrderController {
     type: Order,
   })
   async createOrder(
-    @Request() req,
+    @Request() req: { user: { id: string } },
     @Body() createOrderDto: CreateOrderDto,
   ): Promise<Order> {
     return this.orderService.createOrder(req.user.id, createOrderDto);
@@ -81,16 +84,18 @@ export class OrderController {
   }
 
   /**
-   * Gets all orders for the authenticated user
+   * Gets orders for the current user
+   * @param req Request object containing user information
+   * @returns List of user's orders
    */
-  @Get()
+  @Get('my-orders')
   @ApiOperation({ summary: 'Get all orders for current user' })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Orders found',
     type: [Order],
   })
-  async getUserOrders(@Request() req): Promise<Order[]> {
+  async getUserOrders(@Request() req: { user: { id: string } }): Promise<Order[]> {
     return this.orderService.findOrdersByUser(req.user.id);
   }
 }

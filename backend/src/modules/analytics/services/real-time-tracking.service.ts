@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, MoreThanOrEqual } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { RealTimeMetrics } from '../entities/real-time-metrics.entity';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -14,6 +14,7 @@ export class RealTimeTrackingService {
   private activeUsers: Map<string, Date> = new Map();
   private pageCounts: Map<string, number> = new Map();
   private trafficSources: Map<string, Set<string>> = new Map();
+  private trafficSourceDistribution: Map<string, number> = new Map();
 
   constructor(
     @InjectRepository(RealTimeMetrics)
@@ -21,6 +22,70 @@ export class RealTimeTrackingService {
     private dataSource: DataSource,
     private eventEmitter: EventEmitter2,
   ) {}
+
+  /**
+   * Gets current active user count
+   */
+  getActiveUserCount(): number {
+    return this.activeUsers.size;
+  }
+
+  /**
+   * Gets current page view counts
+   */
+  getPageViewCounts(): Map<string, number> {
+    return new Map(this.pageCounts);
+  }
+
+  /**
+   * Gets current metrics for the real-time dashboard
+   */
+  async getCurrentMetrics() {
+    // Get latest metrics
+    const current = await this.realTimeMetricsRepo.findOne({
+      order: {
+        timestamp: 'DESC',
+      },
+    });
+
+    // Get historical data for trends (last hour)
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const trends = await this.realTimeMetricsRepo.find({
+      where: {
+        timestamp: MoreThanOrEqual(hourAgo),
+      },
+      order: {
+        timestamp: 'ASC',
+      },
+    });
+
+    // Calculate key trends
+    const activeUserTrend = trends.map((t) => ({
+      timestamp: t.timestamp,
+      users: t.active_users,
+    }));
+
+    const pageViewTrend = trends.map((t) => ({
+      timestamp: t.timestamp,
+      views: t.page_views,
+    }));
+
+    const trafficSourceTrend = trends.map((t) => ({
+      timestamp: t.timestamp,
+      sources: t.traffic_sources,
+    }));
+
+    return {
+      activeUsers: current?.active_users || 0,
+      pageViews: current?.page_views || [],
+      trafficSources: current?.traffic_sources || [],
+      trends: {
+        activeUsers: activeUserTrend,
+        pageViews: pageViewTrend,
+        trafficSources: trafficSourceTrend,
+      },
+    };
+  }
 
   /**
    * Tracks user activity
@@ -44,18 +109,35 @@ export class RealTimeTrackingService {
   }
 
   /**
-   * Tracks traffic sources
-   * @param source Traffic source
-   * @param sessionId Session identifier
+   * Track traffic source for a session
+   * @param source - Traffic source (e.g., 'google', 'direct')
+   * @param sessionId - Unique session identifier
    */
-  async trackTrafficSource(source: string, sessionId: string) {
-    const sessions = this.trafficSources.get(source) || new Set<string>();
+  async trackTrafficSource(source: string, sessionId: string): Promise<void> {
+    // Initialize set for source if it doesn't exist
     if (!this.trafficSources.has(source)) {
-      this.trafficSources.set(source, sessions);
+      this.trafficSources.set(source, new Set<string>());
     }
-    sessions.add(sessionId);
-    this.activeUsers.set(sessionId, new Date(Date.now()));
+
+    // Get the sessions set and add the new session
+    const sessions = this.trafficSources.get(source);
+    if (sessions) {
+      sessions.add(sessionId);
+    }
+
     await this.updateRealTimeMetrics();
+  }
+
+  /**
+   * Gets traffic source distribution
+   * Returns a map of traffic sources to their unique session counts
+   */
+  getTrafficSourceDistribution(): Map<string, number> {
+    const distribution = new Map<string, number>();
+    for (const [source, sessions] of this.trafficSources.entries()) {
+      distribution.set(source, sessions.size);
+    }
+    return distribution;
   }
 
   /**
@@ -176,6 +258,12 @@ export class RealTimeTrackingService {
         current_popular_products: popularProducts,
         traffic_sources: trafficSourceMetrics,
         page_views: pageViewMetrics,
+        traffic_source_distribution: Array.from(
+          this.getTrafficSourceDistribution().entries(),
+        ).map(([source, count]) => ({
+          source,
+          count,
+        })),
       });
 
       await manager.save(RealTimeMetrics, metrics);
@@ -183,30 +271,5 @@ export class RealTimeTrackingService {
       // Emit update event
       this.eventEmitter.emit('analytics.realtime.updated', metrics);
     });
-  }
-
-  /**
-   * Gets current active user count
-   */
-  getActiveUserCount(): number {
-    return this.activeUsers.size;
-  }
-
-  /**
-   * Gets current page view counts
-   */
-  getPageViewCounts(): Map<string, number> {
-    return new Map(this.pageCounts);
-  }
-
-  /**
-   * Gets current traffic source distribution
-   */
-  getTrafficSourceDistribution(): Map<string, number> {
-    const distribution = new Map<string, number>();
-    for (const [source, sessions] of this.trafficSources.entries()) {
-      distribution.set(source, sessions.size);
-    }
-    return distribution;
   }
 }

@@ -4,51 +4,47 @@ import { OrderService } from '../services/order.service';
 import { CreateOrderDto } from '../dtos/create-order.dto';
 import { UpdateOrderDto } from '../dtos/update-order.dto';
 import { Order, OrderStatus } from '../entities/order.entity';
-import { PaymentStatus } from '../../payments/enums/payment-status.enum';
+import { Payment } from '../../payments/entities/payment.entity';
 import { PaymentMethod } from '../../payments/enums/payment-method.enum';
+import { PaymentStatus } from '../../payments/enums/payment-status.enum';
+import { Shipment } from '../../shipments/entities/shipment.entity';
 import { ShipmentStatus } from '../../shipments/enums/shipment-status.enum';
 
 describe('OrderController', () => {
   let controller: OrderController;
   let service: OrderService;
 
-  const mockOrder: Order = {
+  const mockOrder: Partial<Order> = {
     id: '123',
-    user: {
-      id: '456',
-      email: 'test@example.com',
-      role: 'customer',
-      full_name: 'Test User',
-      status: 'active',
-      orders: [],
-      addresses: [],
-      created_at: new Date(),
-      updated_at: new Date(),
-    },
+    user_id: '456',
     items: [],
     status: OrderStatus.PENDING,
     total_amount: 100,
-    payments: [{
-      id: '789',
-      order_id: '123',
-      amount: 100,
-      status: PaymentStatus.PENDING,
-      method: PaymentMethod.CREDIT_CARD,
-      transaction_id: 'tx_123',
-      order: null,
-      created_at: new Date(),
-      updated_at: new Date(),
-    }],
-    shipments: [{
-      id: '101',
-      order_id: '123',
-      status: ShipmentStatus.PENDING,
-      tracking_number: 'track_123',
-      shipping_method: 'standard',
-      order: null,
-      created_at: new Date(),
-      updated_at: new Date(),
-    }],
+    payments: [
+      {
+        id: '789',
+        amount: 100,
+        status: PaymentStatus.PENDING,
+        method: PaymentMethod.CREDIT_CARD,
+        transaction_id: 'tx_123',
+        order: {} as Order,
+        created_at: new Date(),
+        updated_at: new Date(),
+      } as Payment,
+    ],
+    shipments: [
+      {
+        id: '101',
+        order_id: '123',
+        status: ShipmentStatus.PENDING,
+        tracking_number: 'track_123',
+        carrier: 'UPS',
+        shipping_provider: 'UPS',
+        order: {} as Order,
+        created_at: new Date(),
+        updated_at: new Date(),
+      } as Shipment,
+    ],
     created_at: new Date(),
     updated_at: new Date()
   };
@@ -88,13 +84,13 @@ describe('OrderController', () => {
         {
           provide: OrderService,
           useValue: {
-            createOrder: jest.fn().mockResolvedValue(mockOrder),
+            createOrder: jest.fn().mockResolvedValue(mockOrder as Order),
             updateOrder: jest.fn().mockResolvedValue({
               ...mockOrder,
               ...mockUpdateOrderDto,
-            }),
-            findOrderById: jest.fn().mockResolvedValue(mockOrder),
-            findOrdersByUser: jest.fn().mockResolvedValue([mockOrder]),
+            } as Order),
+            findOrderById: jest.fn().mockResolvedValue(mockOrder as Order),
+            findOrdersByUser: jest.fn().mockResolvedValue([mockOrder as Order]),
           },
         },
       ],
@@ -113,7 +109,7 @@ describe('OrderController', () => {
       const req = { user: { id: '456' } };
       const result = await controller.createOrder(req, mockCreateOrderDto);
 
-      expect(result).toEqual(mockOrder);
+      expect(result).toEqual(mockOrder as Order);
       expect(service.createOrder).toHaveBeenCalledWith(
         '456',
         mockCreateOrderDto,
@@ -125,7 +121,7 @@ describe('OrderController', () => {
     it('should update an order', async () => {
       const result = await controller.updateOrder('123', mockUpdateOrderDto);
 
-      expect(result).toEqual({ ...mockOrder, ...mockUpdateOrderDto });
+      expect(result).toEqual({ ...mockOrder, ...mockUpdateOrderDto } as Order);
       expect(service.updateOrder).toHaveBeenCalledWith('123', mockUpdateOrderDto);
     });
   });
@@ -134,7 +130,7 @@ describe('OrderController', () => {
     it('should return an order by id', async () => {
       const result = await controller.getOrder('123');
 
-      expect(result).toEqual(mockOrder);
+      expect(result).toEqual(mockOrder as Order);
       expect(service.findOrderById).toHaveBeenCalledWith('123');
     });
   });
@@ -144,7 +140,7 @@ describe('OrderController', () => {
       const req = { user: { id: '456' } };
       const result = await controller.getUserOrders(req);
 
-      expect(result).toEqual([mockOrder]);
+      expect(result).toEqual([mockOrder as Order]);
       expect(service.findOrdersByUser).toHaveBeenCalledWith('456');
     });
   });

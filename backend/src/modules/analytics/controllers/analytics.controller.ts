@@ -25,6 +25,20 @@ import { AnalyticsQueryService } from '../services/analytics-query.service';
 import { RealTimeTrackingService } from '../services/real-time-tracking.service';
 
 /**
+ * Custom pipe for parsing date strings into Date objects
+ */
+@Injectable()
+class ParseDatePipe implements PipeTransform<string, Date> {
+  transform(value: string, metadata: ArgumentMetadata): Date {
+    const date = new Date(value);
+    if (isNaN(date.getTime())) {
+      throw new BadRequestException('Invalid date format');
+    }
+    return date;
+  }
+}
+
+/**
  * Controller for analytics dashboard endpoints
  * Provides data for various analytics visualizations
  */
@@ -40,119 +54,53 @@ export class AnalyticsController {
   ) {}
 
   /**
-   * Custom pipe for parsing date strings into Date objects
-   */
-  @Injectable()
-  static class ParseDatePipe implements PipeTransform<string, Date> {
-    transform(value: string, metadata: ArgumentMetadata): Date {
-      const date = new Date(value);
-      if (isNaN(date.getTime())) {
-        throw new BadRequestException('Invalid date format');
-      }
-      return date;
-    }
-  }
-
-  /**
-   * Gets sales overview for a date range
-   */
-  @Get('sales/overview')
-  @ApiOperation({ summary: 'Get sales overview (Admin only)' })
-  @ApiQuery({ name: 'startDate', type: Date, required: true })
-  @ApiQuery({ name: 'endDate', type: Date, required: true })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Sales overview retrieved successfully',
-  })
-  async getSalesOverview(
-    @Query('startDate', AnalyticsController.ParseDatePipe) startDate: Date,
-    @Query('endDate', AnalyticsController.ParseDatePipe) endDate: Date,
-  ) {
-    return this.analyticsQueryService.getSalesOverview(startDate, endDate);
-  }
-
-  /**
-   * Gets sales overview for a date range
+   * Gets sales analytics for a date range
    */
   @Get('sales')
-  @ApiOperation({ summary: 'Get sales overview (Admin only)' })
+  @ApiOperation({ summary: 'Get sales analytics (Admin only)' })
   @ApiQuery({ name: 'startDate', type: Date, required: true })
   @ApiQuery({ name: 'endDate', type: Date, required: true })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Sales overview retrieved successfully',
+    description: 'Sales analytics retrieved successfully',
   })
   async getSales(
-    @Query('startDate', AnalyticsController.ParseDatePipe) startDate: Date,
-    @Query('endDate', AnalyticsController.ParseDatePipe) endDate: Date,
+    @Query('startDate', new ParseDatePipe()) startDate: Date,
+    @Query('endDate', new ParseDatePipe()) endDate: Date,
   ) {
     return this.analyticsQueryService.getSalesOverview(startDate, endDate);
   }
 
   /**
-   * Gets inventory overview
-   */
-  @Get('inventory/overview')
-  @ApiOperation({ summary: 'Get inventory overview (Admin only)' })
-  @ApiQuery({ name: 'date', type: Date, required: true })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Inventory overview retrieved successfully',
-  })
-  async getInventoryOverview(
-    @Query('date', AnalyticsController.ParseDatePipe) date: Date,
-  ) {
-    return this.analyticsQueryService.getInventoryOverview(date);
-  }
-
-  /**
-   * Gets inventory overview
+   * Gets inventory analytics
    */
   @Get('inventory')
-  @ApiOperation({ summary: 'Get inventory overview (Admin only)' })
+  @ApiOperation({ summary: 'Get inventory analytics (Admin only)' })
   @ApiQuery({ name: 'date', type: Date, required: true })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Inventory overview retrieved successfully',
+    description: 'Inventory analytics retrieved successfully',
   })
   async getInventory(
-    @Query('date', AnalyticsController.ParseDatePipe) date: Date,
+    @Query('date', new ParseDatePipe()) date: Date,
   ) {
     return this.analyticsQueryService.getInventoryOverview(date);
   }
 
   /**
-   * Gets customer insights
-   */
-  @Get('customers/insights')
-  @ApiOperation({ summary: 'Get customer insights (Admin only)' })
-  @ApiQuery({ name: 'startDate', type: Date, required: true })
-  @ApiQuery({ name: 'endDate', type: Date, required: true })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Customer insights retrieved successfully',
-  })
-  async getCustomerInsights(
-    @Query('startDate', AnalyticsController.ParseDatePipe) startDate: Date,
-    @Query('endDate', AnalyticsController.ParseDatePipe) endDate: Date,
-  ) {
-    return this.analyticsQueryService.getCustomerInsights(startDate, endDate);
-  }
-
-  /**
-   * Gets customer insights
+   * Gets customer analytics
    */
   @Get('customers')
-  @ApiOperation({ summary: 'Get customer insights (Admin only)' })
+  @ApiOperation({ summary: 'Get customer analytics (Admin only)' })
   @ApiQuery({ name: 'startDate', type: Date, required: true })
   @ApiQuery({ name: 'endDate', type: Date, required: true })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Customer insights retrieved successfully',
+    description: 'Customer analytics retrieved successfully',
   })
   async getCustomers(
-    @Query('startDate', AnalyticsController.ParseDatePipe) startDate: Date,
-    @Query('endDate', AnalyticsController.ParseDatePipe) endDate: Date,
+    @Query('startDate', new ParseDatePipe()) startDate: Date,
+    @Query('endDate', new ParseDatePipe()) endDate: Date,
   ) {
     return this.analyticsQueryService.getCustomerInsights(startDate, endDate);
   }
@@ -167,81 +115,7 @@ export class AnalyticsController {
     description: 'Real-time dashboard data retrieved successfully',
   })
   async getRealTimeDashboard() {
-    return this.analyticsQueryService.getRealTimeDashboard();
-  }
-
-  /**
-   * Gets real-time dashboard data
-   */
-  @Get('realtime')
-  @ApiOperation({ summary: 'Get real-time dashboard data (Admin only)' })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Real-time dashboard data retrieved successfully',
-  })
-  async getRealTime() {
-    return this.analyticsQueryService.getRealTimeDashboard();
-  }
-
-  /**
-   * Gets product performance metrics
-   */
-  @Get('products/:id/performance')
-  @ApiOperation({ summary: 'Get product performance metrics (Admin only)' })
-  @ApiQuery({ name: 'startDate', type: Date, required: true })
-  @ApiQuery({ name: 'endDate', type: Date, required: true })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Product performance metrics retrieved successfully',
-  })
-  async getProductPerformance(
-    @Query('id', ParseUUIDPipe) productId: string,
-    @Query('startDate', AnalyticsController.ParseDatePipe) startDate: Date,
-    @Query('endDate', AnalyticsController.ParseDatePipe) endDate: Date,
-  ) {
-    return this.analyticsQueryService.getProductPerformance(
-      productId,
-      startDate,
-      endDate,
-    );
-  }
-
-  /**
-   * Gets category performance metrics
-   */
-  @Get('categories/:id/performance')
-  @ApiOperation({ summary: 'Get category performance metrics (Admin only)' })
-  @ApiQuery({ name: 'startDate', type: Date, required: true })
-  @ApiQuery({ name: 'endDate', type: Date, required: true })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Category performance metrics retrieved successfully',
-  })
-  async getCategoryPerformance(
-    @Query('id', ParseUUIDPipe) categoryId: string,
-    @Query('startDate', AnalyticsController.ParseDatePipe) startDate: Date,
-    @Query('endDate', AnalyticsController.ParseDatePipe) endDate: Date,
-  ) {
-    return this.analyticsQueryService.getCategoryPerformance(
-      categoryId,
-      startDate,
-      endDate,
-    );
-  }
-
-  /**
-   * Gets active user count
-   */
-  @Get('realtime/users')
-  @ApiOperation({ summary: 'Get active user count (Admin only)' })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Active user count retrieved successfully',
-  })
-  getActiveUserCount() {
-    return {
-      count: this.realTimeTrackingService.getActiveUserCount(),
-    };
+    return this.realTimeTrackingService.getCurrentMetrics();
   }
 
   /**
@@ -253,56 +127,69 @@ export class AnalyticsController {
     status: HttpStatus.OK,
     description: 'Active user count retrieved successfully',
   })
-  getActiveUsers() {
-    return {
-      count: this.realTimeTrackingService.getActiveUserCount(),
-    };
+  async getActiveUsers() {
+    return this.realTimeTrackingService.getActiveUserCount();
   }
 
   /**
-   * Gets page view distribution
-   */
-  @Get('realtime/pageviews')
-  @ApiOperation({ summary: 'Get page view distribution (Admin only)' })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Page view distribution retrieved successfully',
-  })
-  getPageViewDistribution() {
-    return {
-      views: Object.fromEntries(this.realTimeTrackingService.getPageViewCounts()),
-    };
-  }
-
-  /**
-   * Gets page view distribution
+   * Gets page view counts
    */
   @Get('page-views')
-  @ApiOperation({ summary: 'Get page view distribution (Admin only)' })
+  @ApiOperation({ summary: 'Get page view counts (Admin only)' })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Page view distribution retrieved successfully',
+    description: 'Page view counts retrieved successfully',
   })
-  getPageViews() {
-    return {
-      views: Object.fromEntries(this.realTimeTrackingService.getPageViewCounts()),
-    };
+  async getPageViews() {
+    return this.realTimeTrackingService.getPageViewCounts();
   }
 
   /**
    * Gets traffic source distribution
    */
-  @Get('realtime/traffic')
+  @Get('traffic-sources')
   @ApiOperation({ summary: 'Get traffic source distribution (Admin only)' })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Traffic source distribution retrieved successfully',
   })
-  getTrafficSourceDistribution() {
-    return {
-      sources: Object.fromEntries(
-        this.realTimeTrackingService.getTrafficSourceDistribution(),
-      ),
-    };
+  async getTrafficSourceDistribution() {
+    return this.analyticsQueryService.getTrafficSourceDistribution();
+  }
+
+  /**
+   * Gets product performance metrics
+   */
+  @Get('products/performance')
+  @ApiOperation({ summary: 'Get product performance metrics (Admin only)' })
+  @ApiQuery({ name: 'startDate', type: Date, required: true })
+  @ApiQuery({ name: 'endDate', type: Date, required: true })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Product performance metrics retrieved successfully',
+  })
+  async getProductPerformance(
+    @Query('startDate', new ParseDatePipe()) startDate: Date,
+    @Query('endDate', new ParseDatePipe()) endDate: Date,
+  ) {
+    return this.analyticsQueryService.getProductPerformance(startDate, endDate);
+  }
+
+  /**
+   * Gets category performance metrics
+   */
+  @Get('categories/performance')
+  @ApiOperation({ summary: 'Get category performance metrics (Admin only)' })
+  @ApiQuery({ name: 'startDate', type: Date, required: true })
+  @ApiQuery({ name: 'endDate', type: Date, required: true })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Category performance metrics retrieved successfully',
+  })
+  async getCategoryPerformance(
+    @Query('startDate', new ParseDatePipe()) startDate: Date,
+    @Query('endDate', new ParseDatePipe()) endDate: Date,
+  ) {
+    return this.analyticsQueryService.getCategoryPerformance(startDate, endDate);
   }
 }

@@ -165,16 +165,18 @@ export class InventoryService {
 
       // Emit events based on adjustment type
       if (dto.adjustment < 0) {
-        this.eventEmitter.emit('inventory.decreased', {
+        this.eventEmitter.emit('inventory.adjusted', {
           inventory_id: id,
           quantity: Math.abs(dto.adjustment),
           reason: dto.reason,
+          type: 'decrease',
         });
       } else {
-        this.eventEmitter.emit('inventory.increased', {
+        this.eventEmitter.emit('inventory.adjusted', {
           inventory_id: id,
           quantity: dto.adjustment,
           reason: dto.reason,
+          type: 'increase',
         });
       }
 
@@ -218,7 +220,24 @@ export class InventoryService {
       }
 
       item.reserved_quantity += quantity;
-      return manager.save(InventoryItem, item);
+
+      const savedItem = await manager.save(InventoryItem, item);
+
+      // Create reservation record
+      await manager.insert('inventory_movements', {
+        inventory_item_id: id,
+        quantity: -quantity,
+        reason: 'RESERVATION',
+        reference: null,
+      });
+
+      // Emit reservation event
+      this.eventEmitter.emit('inventory.reserved', {
+        inventory_id: id,
+        quantity: quantity,
+      });
+
+      return savedItem;
     });
   }
 

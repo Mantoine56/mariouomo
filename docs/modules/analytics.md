@@ -10,124 +10,330 @@ The Analytics Module provides comprehensive tracking and analysis capabilities f
 - **InventoryMetrics**: Monitors stock levels, turnover rates, and SKU metrics
 - **CustomerMetrics**: Analyzes customer behavior and engagement
 - **RealTimeMetrics**: Provides instant platform activity insights
+- **PageView**: Tracks individual page views and user interactions
+- **ActiveUser**: Monitors currently active users on the platform
 
 ### 2. Services
 
-#### AnalyticsCollectorService
-- Collects and stores analytics data
-- Handles order creation events
-- Processes inventory updates
-- Manages customer interaction data
-
-#### AnalyticsAggregatorService
-- Aggregates daily metrics
-- Runs scheduled aggregation jobs
-- Maintains historical data consistency
-- Optimizes data storage
-
 #### AnalyticsQueryService
-- Provides dashboard data retrieval
-- Handles complex analytics queries
-- Supports date range filtering
-- Offers performance insights
+Provides dashboard data retrieval with type-safe implementations:
+
+```typescript
+interface RawSalesMetrics {
+  revenue: number;
+  orders: number;
+  avg_order_value: number;
+  date: Date;
+}
+
+interface RawInventoryMetrics {
+  total_items: number;
+  low_stock_items: number;
+  out_of_stock_items: number;
+  turnover_rate: number;
+  date: Date;
+}
+
+interface RawCustomerMetrics {
+  retention_rate: number;
+  new_customers: number;
+  repeat_customers: number;
+  date: Date;
+}
+```
+
+Key Features:
+- Type-safe query results with TypeORM
+- Efficient data aggregation
+- Comprehensive error handling
+- Null-safe value access
 
 #### RealTimeTrackingService
-- Tracks active user sessions
-- Monitors page views
-- Analyzes traffic sources
-- Provides real-time metrics
+Handles real-time analytics tracking:
+- Active user monitoring
+- Page view tracking
+- Performance metrics collection
+- Traffic source analysis
 
 ### 3. WebSocket Gateway
-- Manages real-time data streaming
-- Handles client subscriptions
-- Broadcasts metric updates
-- Ensures secure connections
+The Analytics Gateway (`AnalyticsGateway`) provides real-time analytics updates through WebSocket connections.
+
+#### Connection Management
+- Handles client connections and disconnections
+- Tracks active dashboard sessions
+- Manages client subscriptions to different metric types
+- Ensures secure access through JWT authentication and role-based guards
+
+#### Subscription Types
+```typescript
+// Subscribe to real-time metrics (Admin only)
+socket.emit('subscribe_realtime');
+
+// Subscribe to sales metrics
+socket.emit('subscribe_sales');
+
+// Subscribe to inventory metrics
+socket.emit('subscribe_inventory');
+
+// Subscribe to customer metrics
+socket.emit('subscribe_customers');
+```
+
+#### Event Types
+```typescript
+// Real-time metrics update
+socket.on('realtime_update', (metrics: RealTimeMetrics) => {
+  // Handle real-time metrics update
+});
+
+// Sales metrics update
+socket.on('sales_update', (metrics: SalesMetrics) => {
+  // Handle sales metrics update
+});
+
+// Inventory metrics update
+socket.on('inventory_update', (metrics: InventoryMetrics) => {
+  // Handle inventory metrics update
+});
+
+// Customer metrics update
+socket.on('customer_update', (metrics: CustomerMetrics) => {
+  // Handle customer metrics update
+});
+```
+
+#### Activity Tracking
+The gateway also tracks user activity and page views:
+```typescript
+// Track page view
+socket.emit('page.view', { page: '/products' });
+
+// Track traffic source
+socket.emit('traffic.source', { source: 'google' });
+```
+
+#### Security
+- All connections require JWT authentication
+- Real-time metrics subscription requires ADMIN role
+- Client connections are automatically cleaned up on disconnect
+- Rate limiting is applied to prevent abuse
+
+#### Implementation Details
+- Uses a private subscription system for efficient message routing
+- Maintains separate subscriptions for different metric types
+- Broadcasts updates only to subscribed clients
+- Handles connection cleanup and resource management
 
 ### 4. Analytics Controller Endpoints
 
 #### Sales Analytics
 ```typescript
-GET /analytics/sales/overview
+GET /analytics/sales
 Query Parameters:
   - startDate: Date
   - endDate: Date
+
+Response:
+{
+  revenue: number;
+  orders: number;
+  averageOrderValue: number;
+  trend: {
+    date: Date;
+    revenue: number;
+    orders: number;
+  }[];
+}
 ```
-Returns sales metrics for the specified date range.
 
 #### Inventory Analytics
 ```typescript
-GET /analytics/inventory/overview
+GET /analytics/inventory
 Query Parameters:
   - date: Date
+
+Response:
+{
+  current: {
+    totalItems: number;
+    lowStockItems: number;
+    outOfStockItems: number;
+    turnoverRate: number;
+  };
+  turnoverTrend: {
+    date: Date;
+    turnoverRate: number;
+  }[];
+}
 ```
-Returns current inventory status and metrics.
 
 #### Customer Insights
 ```typescript
-GET /analytics/customers/insights
+GET /analytics/customers
 Query Parameters:
   - startDate: Date
   - endDate: Date
-```
-Returns customer behavior analysis and trends.
 
-#### Real-time Dashboard
-```typescript
-GET /analytics/realtime/dashboard
+Response:
+{
+  retention: number;
+  churn: number;
+  newCustomers: number;
+  repeatCustomers: number;
+  trend: {
+    date: Date;
+    retention: number;
+    churn: number;
+  }[];
+}
 ```
-Returns current platform activity metrics.
 
 #### Product Performance
 ```typescript
-GET /analytics/products/:id/performance
+GET /analytics/products/performance
 Query Parameters:
   - startDate: Date
   - endDate: Date
+
+Response:
+{
+  sales: number;
+  revenue: number;
+  orders: number;
+  views: number;
+  conversionRate: number;
+  trend: {
+    date: Date;
+    sales: number;
+    revenue: number;
+    orders: number;
+    conversionRate: number;
+  }[];
+}
 ```
-Returns performance metrics for a specific product.
 
 #### Category Performance
 ```typescript
-GET /analytics/categories/:id/performance
+GET /analytics/categories/performance
 Query Parameters:
   - startDate: Date
   - endDate: Date
-```
-Returns performance metrics for a product category.
 
-#### Real-time Metrics
-```typescript
-GET /analytics/realtime/users
-GET /analytics/realtime/pageviews
-GET /analytics/realtime/traffic
+Response:
+{
+  sales: number;
+  revenue: number;
+  orders: number;
+  products: number;
+  trend: {
+    date: Date;
+    sales: number;
+    revenue: number;
+    orders: number;
+  }[];
+}
 ```
-Returns various real-time platform metrics.
+
+#### Traffic Source Distribution
+```typescript
+GET /analytics/traffic-sources
+Response:
+{
+  sources: {
+    source: string;
+    visits: number;
+    conversion_rate: number;
+  }[];
+}
+```
+
+## Testing
+The Analytics module includes comprehensive unit tests covering all major functionality:
+
+```typescript
+describe('AnalyticsController', () => {
+  // Basic controller instantiation
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+
+  // Sales analytics
+  it('should get sales analytics', async () => {
+    const result = await controller.getSales(startDate, endDate);
+    expect(result).toHaveProperty('revenue');
+    expect(result).toHaveProperty('orders');
+    expect(result).toHaveProperty('trend');
+  });
+
+  // Inventory analytics
+  it('should get inventory analytics', async () => {
+    const result = await controller.getInventory(date);
+    expect(result).toHaveProperty('current');
+    expect(result).toHaveProperty('turnoverTrend');
+  });
+
+  // Customer analytics
+  it('should get customer analytics', async () => {
+    const result = await controller.getCustomers(startDate, endDate);
+    expect(result).toHaveProperty('retention');
+    expect(result).toHaveProperty('churn');
+    expect(result).toHaveProperty('trend');
+  });
+
+  // Real-time analytics
+  it('should get real-time dashboard data', async () => {
+    const result = await controller.getRealTimeDashboard();
+    expect(result).toHaveProperty('activeUsers');
+    expect(result).toHaveProperty('pageViews');
+  });
+});
+```
+
+### Test Coverage
+- Controller endpoints
+- Service methods
+- Data transformations
+- Error handling
+- Type safety
+- Null value handling
 
 ## Security
 - All endpoints require authentication
 - Admin-only access via RBAC
 - Rate limiting applied
 - Data encryption in transit
+- Type-safe implementations
+- Proper error handling
 
 ## Best Practices
-1. Use date ranges for historical data queries
-2. Subscribe to WebSocket events for real-time updates
-3. Implement proper error handling
-4. Cache frequently accessed metrics
-5. Monitor rate limits
+1. Use type-safe interfaces for all database queries
+2. Handle null values with nullish coalescing
+3. Implement comprehensive error handling
+4. Use proper TypeORM query builders
+5. Follow consistent naming conventions
+6. Write thorough unit tests
+7. Document API responses
 
 ## Integration Example
 ```typescript
-// Subscribe to real-time updates
-socket.on('analytics:update', (data) => {
-  // Handle real-time analytics update
-  updateDashboard(data);
-});
+// Fetch sales analytics with type safety
+interface SalesAnalytics {
+  revenue: number;
+  orders: number;
+  averageOrderValue: number;
+  trend: Array<{
+    date: Date;
+    revenue: number;
+    orders: number;
+  }>;
+}
 
-// Fetch historical data
-async function fetchSalesData(startDate: Date, endDate: Date) {
+async function fetchSalesAnalytics(
+  startDate: Date,
+  endDate: Date
+): Promise<SalesAnalytics> {
   const response = await fetch(
-    `/analytics/sales/overview?startDate=${startDate}&endDate=${endDate}`
+    `/analytics/sales?startDate=${startDate}&endDate=${endDate}`
   );
   return response.json();
 }
@@ -138,13 +344,8 @@ The module uses standard HTTP status codes:
 - 200: Successful request
 - 400: Invalid parameters
 - 401: Unauthorized
-- 403: Forbidden (insufficient permissions)
-- 429: Too many requests
+- 403: Forbidden
+- 404: Resource not found
 - 500: Server error
 
-## Performance Considerations
-1. Use appropriate date ranges to limit data size
-2. Implement client-side caching where appropriate
-3. Use WebSocket connections for real-time data
-4. Consider implementing data aggregation
-5. Monitor query performance
+Error responses include detailed messages and proper type information.

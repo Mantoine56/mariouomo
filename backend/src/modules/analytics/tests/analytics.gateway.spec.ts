@@ -16,22 +16,39 @@ describe('AnalyticsGateway', () => {
   const mockClient = {
     id: 'testClientId',
     emit: jest.fn(),
+    disconnect: jest.fn(),
   } as unknown as Socket;
 
-  const mockRealTimeMetrics = {
-    id: '123',
-    timestamp: new Date(),
-    active_users: 150,
-    page_views: [
-      { page: '/home', views: 50, average_time: 120 },
-      { page: '/products', views: 30, average_time: 180 },
-    ],
-    traffic_sources: [
-      { source: 'google', active_users: 30, conversion_rate: 2.5 },
-      { source: 'direct', active_users: 20, conversion_rate: 3.0 },
-    ],
+  const mockMetrics: RealTimeMetrics = {
+    id: 'metrics-1',
+    active_users: 5,
+    active_sessions: 3,
+    cart_count: 2,
+    cart_value: 150,
+    pending_orders: 1,
+    pending_revenue: 75.5,
+    current_popular_products: [],
+    traffic_sources: [],
+    page_views: [],
     created_at: new Date(),
     updated_at: new Date(),
+    timestamp: new Date()
+  };
+
+  const mockRealTimeMetrics: RealTimeMetrics = {
+    id: '123',
+    active_users: 10,
+    active_sessions: 5,
+    cart_count: 3,
+    cart_value: 250,
+    pending_orders: 2,
+    pending_revenue: 180,
+    current_popular_products: [],
+    traffic_sources: [],
+    page_views: [],
+    created_at: new Date(),
+    updated_at: new Date(),
+    timestamp: new Date()
   };
 
   const mockTrackingService = {
@@ -39,7 +56,7 @@ describe('AnalyticsGateway', () => {
     trackPageView: jest.fn(),
     trackTrafficSource: jest.fn(),
     removeUser: jest.fn(),
-    getCurrentMetrics: jest.fn().mockResolvedValue(mockRealTimeMetrics),
+    getCurrentMetrics: jest.fn().mockResolvedValue(mockMetrics),
     updateMetrics: jest.fn().mockResolvedValue(mockRealTimeMetrics),
   };
 
@@ -57,6 +74,12 @@ describe('AnalyticsGateway', () => {
 
     gateway = module.get<AnalyticsGateway>(AnalyticsGateway);
     trackingService = module.get<RealTimeTrackingService>(RealTimeTrackingService);
+    
+    // Mock the WebSocket server
+    gateway.server = {
+      emit: jest.fn(),
+      to: jest.fn().mockReturnThis(),
+    } as any;
   });
 
   /**
@@ -71,17 +94,20 @@ describe('AnalyticsGateway', () => {
    * Verifies proper setup of WebSocket connections
    */
   describe('handleConnection', () => {
-    it('should track new user connection', () => {
-      // Arrange
-      const client = mockClient;
+    it('should handle socket connection and track user activity', async () => {
+      const client = {
+        id: 'test-client',
+        emit: jest.fn(),
+        handshake: {},
+        conn: {},
+        rooms: new Set(),
+        data: {},
+      } as unknown as Socket;
 
-      // Act
-      gateway.handleConnection(client);
-
-      // Assert
-      expect(trackingService.trackUserActivity).toHaveBeenCalledWith(
-        client.id,
-      );
+      await gateway.handleConnection(client);
+      
+      expect(trackingService.trackUserActivity).toHaveBeenCalledWith(client.id, client.id);
+      // Initial metrics are not emitted in handleConnection anymore
     });
   });
 
@@ -90,14 +116,13 @@ describe('AnalyticsGateway', () => {
    * Verifies proper cleanup of WebSocket connections
    */
   describe('handleDisconnect', () => {
-    it('should remove user on disconnect', () => {
-      // Arrange
-      const client = mockClient;
+    it('should handle socket disconnection', async () => {
+      const client = {
+        id: 'test-client',
+      } as Socket;
 
-      // Act
-      gateway.handleDisconnect(client);
-
-      // Assert
+      await gateway.handleDisconnect(client);
+      
       expect(trackingService.removeUser).toHaveBeenCalledWith(client.id);
     });
   });
@@ -107,16 +132,13 @@ describe('AnalyticsGateway', () => {
    * Verifies proper tracking of page views
    */
   describe('handlePageView', () => {
-    it('should track page view', () => {
-      // Arrange
+    it('should track page view', async () => {
       const page = '/products';
-      const client = mockClient;
+      const client = { id: 'testClientId' } as Socket;
 
-      // Act
-      gateway.handlePageView(client, { page });
+      await gateway.handlePageView(client, { page });
 
-      // Assert
-      expect(trackingService.trackPageView).toHaveBeenCalledWith(page);
+      expect(trackingService.trackPageView).toHaveBeenCalledWith(page, client.id);
     });
   });
 
@@ -125,16 +147,13 @@ describe('AnalyticsGateway', () => {
    * Verifies proper tracking of traffic sources
    */
   describe('handleTrafficSource', () => {
-    it('should track traffic source', () => {
-      // Arrange
+    it('should track traffic source', async () => {
       const source = 'google';
-      const client = mockClient;
+      const client = { id: 'testClientId' } as Socket;
 
-      // Act
-      gateway.handleTrafficSource(client, { source });
+      await gateway.handleTrafficSource(client, { source });
 
-      // Assert
-      expect(trackingService.trackTrafficSource).toHaveBeenCalledWith(source);
+      expect(trackingService.trackTrafficSource).toHaveBeenCalledWith(source, client.id);
     });
   });
 
@@ -142,54 +161,32 @@ describe('AnalyticsGateway', () => {
    * Tests for real-time metrics broadcasting
    * Verifies proper emission of analytics updates to connected clients
    */
-  describe('broadcastMetricsUpdate', () => {
-    it('should broadcast metrics update to all clients', () => {
-      const metrics: RealTimeMetrics = mockRealTimeMetrics;
-      gateway.server = {
+  describe('metrics updates', () => {
+    it('should broadcast metrics updates to subscribed clients', async () => {
+      // Set up a mock client subscribed to realtime metrics
+      const client = {
+        id: 'test-client',
         emit: jest.fn(),
-      } as any;
+        handshake: {},
+        conn: {},
+        rooms: new Set(),
+        data: {},
+        join: jest.fn(),
+        leave: jest.fn(),
+        disconnect: jest.fn(),
+      } as unknown as Socket;
 
-      // Act
-      gateway.broadcastMetricsUpdate(metrics);
-
-      // Assert
-      expect(gateway.server.emit).toHaveBeenCalledWith(
-        'analytics:update',
-        metrics,
-      );
-    });
-  });
-
-  describe('subscribeToMetrics', () => {
-    it('should subscribe clients to real-time metrics', async () => {
-      const client = { id: 'client123' };
+      // Add client to active dashboards
+      (gateway as any).activeDashboards.set(client.id, client);
       
-      await gateway.subscribeToMetrics(client);
+      // Subscribe client to realtime metrics
+      gateway.handleRealtimeSubscription(client);
       
-      expect(trackingService.getCurrentMetrics).toHaveBeenCalled();
-      // Add more assertions based on your subscription logic
-    });
-  });
-
-  describe('unsubscribeFromMetrics', () => {
-    it('should unsubscribe clients from real-time metrics', () => {
-      const client = { id: 'client123' };
+      // Trigger metrics update
+      await gateway.handleRealtimeUpdate(mockMetrics);
       
-      gateway.unsubscribeFromMetrics(client);
-      
-      // Add assertions based on your unsubscription logic
-      expect(true).toBeTruthy(); // Replace with actual assertions
-    });
-  });
-
-  describe('broadcastMetrics', () => {
-    it('should broadcast metrics to all subscribed clients', async () => {
-      const metrics = mockRealTimeMetrics;
-      
-      await gateway.broadcastMetrics(metrics);
-      
-      // Add assertions based on your broadcasting logic
-      expect(true).toBeTruthy(); // Replace with actual assertions
+      // Verify the client receives the update
+      expect(client.emit).toHaveBeenCalledWith('realtime_update', mockMetrics);
     });
   });
 });

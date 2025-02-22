@@ -2,31 +2,8 @@ import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from '../../../common/entities/base.entity';
 import { Order } from '../../orders/entities/order.entity';
-
-/**
- * Enum for payment status
- * Ensures consistent status values across the application
- */
-export enum PaymentStatus {
-  PENDING = 'pending',
-  PROCESSING = 'processing',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-  REFUNDED = 'refunded',
-  PARTIALLY_REFUNDED = 'partially_refunded'
-}
-
-/**
- * Enum for payment methods
- * Standardizes supported payment methods
- */
-export enum PaymentMethod {
-  CREDIT_CARD = 'credit_card',
-  DEBIT_CARD = 'debit_card',
-  PAYPAL = 'paypal',
-  BANK_TRANSFER = 'bank_transfer',
-  GIFT_CARD = 'gift_card'
-}
+import { PaymentStatus } from '../enums/payment-status.enum';
+import { PaymentMethod } from '../enums/payment-method.enum';
 
 /**
  * Payment entity for tracking order payments

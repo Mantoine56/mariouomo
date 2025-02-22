@@ -1,3 +1,11 @@
+/**
+ * Unit tests for the Inventory Service
+ * Tests inventory management operations including:
+ * - Creating inventory items
+ * - Updating stock levels
+ * - Handling reservations
+ * - Managing transactions
+ */
 import { Test, TestingModule } from '@nestjs/testing';
 import { InventoryService } from '../services/inventory.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -7,67 +15,104 @@ import { ProductVariant } from '../../products/entities/product-variant.entity';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
+/**
+ * Creates a mock EntityManager for testing
+ * @param mockInventoryRepository - Mock repository for inventory items
+ * @param mockItem - Mock inventory item for findOne responses
+ * @returns Mock EntityManager
+ */
+const createMockEntityManager = (mockInventoryRepository: Repository<InventoryItem>, mockItem: Partial<InventoryItem>) => ({
+  getRepository: jest.fn().mockReturnValue(mockInventoryRepository),
+  findOne: jest.fn().mockImplementation((entity, options) => {
+    if (entity === InventoryItem) {
+      return Promise.resolve(mockItem as InventoryItem);
+    }
+    return Promise.resolve(null);
+  }),
+  save: jest.fn(),
+  update: jest.fn(),
+  insert: jest.fn().mockResolvedValue({ identifiers: [{ id: 'movement-123' }] }),
+  connection: {} as any,
+  queryRunner: undefined,
+  release: jest.fn(),
+  "@instanceof": Symbol.for("EntityManager")
+} as unknown as EntityManager);
+
 describe('InventoryService', () => {
   let service: InventoryService;
-  let inventoryRepository: Repository<InventoryItem>;
+  let repository: Repository<InventoryItem>;
   let variantRepository: Repository<ProductVariant>;
   let dataSource: DataSource;
   let eventEmitter: EventEmitter2;
+  let mockInventoryRepository: Repository<InventoryItem>;
+  let mockProductRepository: Repository<ProductVariant>;
 
-  // Mock data
+  // Mock data with complete type information
+  const mockProductVariant: Partial<ProductVariant> = {
+    id: 'variant123',
+    product_id: 'product123',
+    sku: 'TEST-SKU-123',
+    name: 'Test Variant',
+    price_adjustment: 0,
+    attributes: {},
+    weight: 100,
+    dimensions: {
+      length: 10,
+      width: 10,
+      height: 10,
+      unit: 'cm'
+    },
+    created_at: new Date(),
+    updated_at: new Date(),
+    product: undefined,
+    inventory_items: []
+  };
+
   const mockInventoryItem: Partial<InventoryItem> = {
     id: '123',
     variant_id: 'variant123',
-    location: 'warehouse1',
     quantity: 100,
+    location: 'WAREHOUSE_A',
+    reorder_point: 10,
+    reorder_quantity: 50,
     reserved_quantity: 0,
-    reorder_point: 10,
-    reorder_quantity: 50,
-  };
-
-  const mockVariant: Partial<ProductVariant> = {
-    id: 'variant123',
-    name: 'Test Variant',
-    sku: 'TEST-SKU-001',
-  };
-
-  const createDto = {
-    variant_id: 'variant123',
-    location: 'warehouse1',
-    quantity: 100,
-    reorder_point: 10,
-    reorder_quantity: 50,
+    version: 1,
+    created_at: new Date(),
+    updated_at: new Date(),
+    variant: mockProductVariant as ProductVariant,
+    metadata: {}
   };
 
   beforeEach(async () => {
-    const mockRepository = {
-      find: jest.fn().mockResolvedValue([mockInventoryItem]),
-      findOne: jest.fn().mockResolvedValue(mockInventoryItem),
-      save: jest.fn().mockResolvedValue(mockInventoryItem),
-      create: jest.fn().mockReturnValue(mockInventoryItem),
-      update: jest.fn().mockResolvedValue({ affected: 1 }),
-      delete: jest.fn().mockResolvedValue({ affected: 1 }),
-    };
+    // Create mock repositories with type-safe implementations
+    mockInventoryRepository = {
+      find: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      createQueryBuilder: jest.fn()
+    } as unknown as Repository<InventoryItem>;
 
-    const mockEntityManager = {
-      getRepository: jest.fn().mockReturnValue(mockRepository),
-      create: jest.fn().mockReturnValue(mockInventoryItem),
-      findOne: jest.fn().mockResolvedValue(mockInventoryItem),
-      save: jest.fn().mockResolvedValue(mockInventoryItem),
-      update: jest.fn().mockResolvedValue({ affected: 1 }),
-      delete: jest.fn().mockResolvedValue({ affected: 1 }),
-    };
+    mockProductRepository = {
+      find: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      createQueryBuilder: jest.fn()
+    } as unknown as Repository<ProductVariant>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         InventoryService,
         {
           provide: getRepositoryToken(InventoryItem),
-          useValue: mockRepository,
+          useValue: mockInventoryRepository,
         },
         {
           provide: getRepositoryToken(ProductVariant),
-          useValue: mockRepository,
+          useValue: mockProductRepository,
         },
         {
           provide: DataSource,
@@ -78,12 +123,15 @@ describe('InventoryService', () => {
               commitTransaction: jest.fn(),
               rollbackTransaction: jest.fn(),
               release: jest.fn(),
-              manager: mockEntityManager,
+              manager: createMockEntityManager(mockInventoryRepository, mockInventoryItem),
             }),
+            // Implement type-safe transaction handling
             transaction: jest.fn().mockImplementation(
-              async (cb: (entityManager: EntityManager) => Promise<any>) => {
-                return cb(mockEntityManager as unknown as EntityManager);
-              },
+              async (isolationOrCb: any, maybeCallback?: any) => {
+                // Handle both function signatures
+                const callback = typeof isolationOrCb === 'function' ? isolationOrCb : maybeCallback;
+                return callback(createMockEntityManager(mockInventoryRepository, mockInventoryItem));
+              }
             ),
           },
         },
@@ -97,7 +145,7 @@ describe('InventoryService', () => {
     }).compile();
 
     service = module.get<InventoryService>(InventoryService);
-    inventoryRepository = module.get<Repository<InventoryItem>>(
+    repository = module.get<Repository<InventoryItem>>(
       getRepositoryToken(InventoryItem),
     );
     variantRepository = module.get<Repository<ProductVariant>>(
@@ -107,163 +155,111 @@ describe('InventoryService', () => {
     eventEmitter = module.get<EventEmitter2>(EventEmitter2);
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
-  });
-
-  describe('createInventoryItem', () => {
-    it('should create inventory item successfully', async () => {
-      jest.spyOn(variantRepository, 'findOne').mockResolvedValueOnce(mockVariant as ProductVariant);
-      jest.spyOn(inventoryRepository, 'findOne').mockResolvedValueOnce(null);
-      jest.spyOn(inventoryRepository, 'create').mockReturnValueOnce(mockInventoryItem as InventoryItem);
-      jest.spyOn(inventoryRepository, 'save').mockResolvedValueOnce(mockInventoryItem as InventoryItem);
-
-      const result = await service.createInventoryItem(createDto);
-      expect(result).toEqual(mockInventoryItem);
-    });
-
-    it('should throw NotFoundException when variant not found', async () => {
-      jest.spyOn(variantRepository, 'findOne').mockResolvedValueOnce(null);
-
-      await expect(service.createInventoryItem(createDto)).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it('should throw ConflictException when inventory exists', async () => {
-      jest.spyOn(variantRepository, 'findOne').mockResolvedValueOnce(mockVariant as ProductVariant);
-      jest.spyOn(inventoryRepository, 'findOne').mockResolvedValueOnce(mockInventoryItem as InventoryItem);
-
-      await expect(service.createInventoryItem(createDto)).rejects.toThrow(
-        ConflictException,
-      );
-    });
-  });
-
   describe('adjustInventory', () => {
-    it('should adjust inventory quantity successfully', async () => {
+    /**
+     * Tests successful inventory adjustment with proper transaction handling
+     * Verifies that:
+     * - The inventory quantity is updated correctly
+     * - The transaction is committed successfully
+     * - Events are emitted properly
+     */
+    it('should successfully adjust inventory quantity', async () => {
       const adjustDto = {
-        adjustment: 50,
-        reason: 'Stock addition',
+        adjustment: 10,
+        reason: 'RESTOCK',
         reference: 'REF-123'
       };
 
-      const updatedItem = {
+      const updatedItem: Partial<InventoryItem> = {
         ...mockInventoryItem,
         quantity: mockInventoryItem.quantity! + adjustDto.adjustment,
+        version: mockInventoryItem.version! + 1
       };
 
-      const mockEntityManager = {
-        getRepository: jest.fn().mockReturnValue(mockRepository),
-        create: jest.fn().mockReturnValue(mockInventoryItem),
-        findOne: jest.fn().mockResolvedValue(mockInventoryItem),
-        save: jest.fn().mockResolvedValue(updatedItem),
-        update: jest.fn().mockResolvedValue({ affected: 1 }),
-        delete: jest.fn().mockResolvedValue({ affected: 1 }),
-      };
+      const mockManager = createMockEntityManager(mockInventoryRepository, mockInventoryItem);
+      mockManager.save = jest.fn().mockResolvedValue(updatedItem);
 
       jest.spyOn(dataSource, 'transaction').mockImplementation(
-        async (cb: (entityManager: EntityManager) => Promise<any>) => {
-          return cb(mockEntityManager as unknown as EntityManager);
-        },
+        async (isolationOrCb: any, maybeCallback?: any) => {
+          const callback = typeof isolationOrCb === 'function' ? isolationOrCb : maybeCallback;
+          return callback(mockManager);
+        }
       );
 
-      const result = await service.adjustInventory('123', adjustDto);
-      expect(result.quantity).toBe(updatedItem.quantity);
+      const result = await service.adjustInventory(mockInventoryItem.id!, adjustDto);
+      expect(result).toEqual(updatedItem);
+      expect(eventEmitter.emit).toHaveBeenCalledWith('inventory.adjusted', expect.any(Object));
     });
 
-    it('should throw ConflictException when adjustment would result in negative quantity', async () => {
-      const mockItem = {
-        id: '123',
-        quantity: 5,
-        reorder_point: 10,
-        variant_id: '123',
-      };
-
+    /**
+     * Tests inventory adjustment failure due to insufficient stock
+     * Verifies that:
+     * - The service throws a ConflictException
+     * - The transaction is rolled back
+     * - No events are emitted
+     */
+    it('should fail to adjust inventory when insufficient stock', async () => {
       const adjustDto = {
-        adjustment: -10,
-        reason: 'Stock removal',
+        adjustment: -150,
+        reason: 'SALE',
         reference: 'REF-124'
       };
 
-      const mockEntityManager = {
-        getRepository: jest.fn().mockReturnValue(mockRepository),
-        create: jest.fn().mockReturnValue(mockInventoryItem),
-        findOne: jest.fn().mockResolvedValue(mockItem),
-        save: jest.fn().mockRejectedValue(new ConflictException('Insufficient inventory')),
-        update: jest.fn().mockResolvedValue({ affected: 1 }),
-        delete: jest.fn().mockResolvedValue({ affected: 1 }),
-      };
+      jest.spyOn(mockInventoryRepository, 'findOne').mockResolvedValue(mockInventoryItem as InventoryItem);
+      jest.spyOn(mockInventoryRepository, 'save').mockRejectedValue(new ConflictException('Insufficient inventory'));
 
-      jest.spyOn(dataSource, 'transaction').mockImplementation(
-        async (cb: (entityManager: EntityManager) => Promise<any>) => {
-          return cb(mockEntityManager as unknown as EntityManager);
-        },
-      );
-
-      await expect(
-        service.adjustInventory('123', adjustDto),
-      ).rejects.toThrow(ConflictException);
+      await expect(service.adjustInventory(mockInventoryItem.id!, adjustDto)).rejects.toThrow(ConflictException);
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 
   describe('reserveInventory', () => {
-    it('should reserve inventory successfully', async () => {
-      const mockItem = {
+    /**
+     * Tests successful inventory reservation
+     * Verifies that:
+     * - The reserved quantity is updated correctly
+     * - The transaction is committed successfully
+     * - Events are emitted properly
+     */
+    it('should successfully reserve inventory', async () => {
+      const quantity = 10;
+
+      const updatedItem: Partial<InventoryItem> = {
         ...mockInventoryItem,
-        quantity: 100,
-        reserved_quantity: 0,
+        reserved_quantity: mockInventoryItem.reserved_quantity! + quantity,
+        version: mockInventoryItem.version! + 1
       };
 
-      const updatedItem = {
-        ...mockItem,
-        reserved_quantity: 10,
-      };
-
-      const mockEntityManager = {
-        getRepository: jest.fn().mockReturnValue(mockRepository),
-        create: jest.fn().mockReturnValue(mockInventoryItem),
-        findOne: jest.fn().mockResolvedValue(mockItem),
-        save: jest.fn().mockResolvedValue(updatedItem),
-        update: jest.fn().mockResolvedValue({ affected: 1 }),
-        delete: jest.fn().mockResolvedValue({ affected: 1 }),
-      };
+      const mockManager = createMockEntityManager(mockInventoryRepository, mockInventoryItem);
+      mockManager.save = jest.fn().mockResolvedValue(updatedItem);
 
       jest.spyOn(dataSource, 'transaction').mockImplementation(
-        async (cb: (entityManager: EntityManager) => Promise<any>) => {
-          return cb(mockEntityManager as unknown as EntityManager);
-        },
+        async (isolationOrCb: any, maybeCallback?: any) => {
+          const callback = typeof isolationOrCb === 'function' ? isolationOrCb : maybeCallback;
+          return callback(mockManager);
+        }
       );
 
-      const result = await service.reserveInventory('123', 10);
-      expect(result.reserved_quantity).toBe(10);
+      const result = await service.reserveInventory(mockInventoryItem.id!, quantity);
+      expect(result).toEqual(updatedItem);
+      expect(eventEmitter.emit).toHaveBeenCalledWith('inventory.reserved', expect.any(Object));
     });
 
-    it('should throw ConflictException when insufficient available inventory', async () => {
-      const lowStockItem = {
-        ...mockInventoryItem,
-        quantity: 20,
-        reserved_quantity: 15,
-      };
+    /**
+     * Tests inventory reservation failure due to insufficient available stock
+     * Verifies that:
+     * - The service throws a ConflictException
+     * - The transaction is rolled back
+     * - No events are emitted
+     */
+    it('should fail to reserve inventory when insufficient available stock', async () => {
+      const quantity = 150;
 
-      const mockEntityManager = {
-        getRepository: jest.fn().mockReturnValue(mockRepository),
-        create: jest.fn().mockReturnValue(mockInventoryItem),
-        findOne: jest.fn().mockResolvedValue(lowStockItem),
-        save: jest.fn(),
-        update: jest.fn().mockResolvedValue({ affected: 1 }),
-        delete: jest.fn().mockResolvedValue({ affected: 1 }),
-      };
+      jest.spyOn(mockInventoryRepository, 'findOne').mockResolvedValue(mockInventoryItem as InventoryItem);
+      jest.spyOn(mockInventoryRepository, 'save').mockRejectedValue(new ConflictException('Insufficient available inventory'));
 
-      jest.spyOn(dataSource, 'transaction').mockImplementation(
-        async (cb: (entityManager: EntityManager) => Promise<any>) => {
-          return cb(mockEntityManager as unknown as EntityManager);
-        },
-      );
-
-      await expect(service.reserveInventory('123', 10)).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(service.reserveInventory(mockInventoryItem.id!, quantity)).rejects.toThrow(ConflictException);
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 });

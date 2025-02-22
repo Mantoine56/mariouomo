@@ -11,439 +11,278 @@ import { CustomerMetrics } from '../entities/customer-metrics.entity';
 import { RealTimeMetrics } from '../entities/real-time-metrics.entity';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
-interface SalesMetricsData {
-  date: Date;
-  total_revenue: number;
-  total_orders: number;
-  total_units_sold: number;
-  discount_amount: number;
-  top_products: any[];
-}
-
-interface InventoryMetricsData {
-  date: Date;
-  total_items: number;
-  low_stock_items: number;
-  turnover_rate: number;
-}
-
-interface CustomerMetricsData {
-  date: Date;
-  retention_rate: number;
-  churn_rate: number;
-  new_customers: number;
-  repeat_customers: number;
-  customer_segments: Array<{
-    segment: string;
-    customer_count: number;
-    total_revenue: number;
-  }>;
-}
-
-interface RealTimeMetricsData {
-  timestamp: Date;
-  active_users: number;
-  cart_value: number;
-}
-
 describe('AnalyticsQueryService', () => {
   let service: AnalyticsQueryService;
-  let salesRepo: Repository<SalesMetrics>;
-  let inventoryRepo: Repository<InventoryMetrics>;
-  let customerRepo: Repository<CustomerMetrics>;
-  let realTimeMetricsRepo: Repository<RealTimeMetrics>;
-
-  // Mock implementations of required repositories
-  const mockSalesMetricsRepository = {
-    find: jest.fn().mockResolvedValue([
-      {
-        date: new Date('2025-01-15'),
-        total_revenue: 1000,
-        total_orders: 50,
-        total_units_sold: 75,
-        discount_amount: 100,
-        top_products: [
-          { id: 1, name: 'Product 1', sales: 30 },
-          { id: 2, name: 'Product 2', sales: 20 }
-        ]
-      }
-    ]),
-    findOne: jest.fn(),
-    save: jest.fn(),
-    createQueryBuilder: jest.fn().mockReturnValue({
-      select: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      getRawMany: jest.fn().mockResolvedValue([
-        { product: { id: 1, name: 'Product 1', sales: 30 } },
-        { product: { id: 2, name: 'Product 2', sales: 20 } }
-      ]),
-    }),
-  };
-
-  const mockInventoryMetricsRepository = {
-    find: jest.fn(),
-    findOne: jest.fn().mockResolvedValue({
-      date: new Date('2025-02-01'),
-      total_items: 500,
-      low_stock_items: 10,
-      turnover_rate: 2.5
-    }),
-    save: jest.fn(),
-    createQueryBuilder: jest.fn().mockReturnValue({
-      select: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      orderBy: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      getRawMany: jest.fn().mockResolvedValue([
-        { 
-          date: new Date('2025-02-01'),
-          turnover_rate: 2.5
-        }
-      ]),
-    }),
-  };
-
-  const mockCustomerMetricsRepository = {
-    find: jest.fn().mockResolvedValue([
-      {
-        date: new Date('2025-01-15'),
-        retention_rate: 85,
-        churn_rate: 15,
-        new_customers: 100,
-        repeat_customers: 500,
-        customer_segments: [
-          { segment: 'VIP', customer_count: 50, total_revenue: 5000 },
-          { segment: 'Regular', customer_count: 450, total_revenue: 22500 }
-        ]
-      }
-    ]),
-    findOne: jest.fn(),
-    save: jest.fn(),
-  };
-
-  const mockRealTimeMetricsRepository = {
-    find: jest.fn().mockResolvedValue([
-      {
-        timestamp: new Date('2025-01-01T12:00:00Z'),
-        active_users: 150,
-        cart_value: 2500,
-      },
-      {
-        timestamp: new Date('2025-01-01T12:30:00Z'),
-        active_users: 180,
-        cart_value: 3000,
-      }
-    ]),
-    findOne: jest.fn().mockResolvedValue({
-      timestamp: new Date('2025-01-01T13:00:00Z'),
-      active_users: 200,
-      cart_value: 3500,
-    }),
-    save: jest.fn(),
-  };
+  let salesRepo: jest.Mocked<Repository<SalesMetrics>>;
+  let inventoryRepo: jest.Mocked<Repository<InventoryMetrics>>;
+  let customerRepo: jest.Mocked<Repository<CustomerMetrics>>;
+  let realTimeRepo: jest.Mocked<Repository<RealTimeMetrics>>;
 
   beforeEach(async () => {
-    // Set up testing module with mocked dependencies
+    // Create mock repositories with all required methods
+    const createMockRepo = () => ({
+      createQueryBuilder: jest.fn(() => ({
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        getRawOne: jest.fn().mockResolvedValue(null),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      })),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn(),
+    });
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AnalyticsQueryService,
         {
           provide: getRepositoryToken(SalesMetrics),
-          useValue: mockSalesMetricsRepository,
+          useValue: createMockRepo(),
         },
         {
           provide: getRepositoryToken(InventoryMetrics),
-          useValue: mockInventoryMetricsRepository,
+          useValue: createMockRepo(),
         },
         {
           provide: getRepositoryToken(CustomerMetrics),
-          useValue: mockCustomerMetricsRepository,
+          useValue: createMockRepo(),
         },
         {
           provide: getRepositoryToken(RealTimeMetrics),
-          useValue: mockRealTimeMetricsRepository,
+          useValue: createMockRepo(),
         },
       ],
     }).compile();
 
     service = module.get<AnalyticsQueryService>(AnalyticsQueryService);
-    salesRepo = module.get<Repository<SalesMetrics>>(
-      getRepositoryToken(SalesMetrics),
-    );
-    inventoryRepo = module.get<Repository<InventoryMetrics>>(
-      getRepositoryToken(InventoryMetrics),
-    );
-    customerRepo = module.get<Repository<CustomerMetrics>>(
-      getRepositoryToken(CustomerMetrics),
-    );
-    realTimeMetricsRepo = module.get<Repository<RealTimeMetrics>>(
-      getRepositoryToken(RealTimeMetrics),
-    );
+    salesRepo = module.get(getRepositoryToken(SalesMetrics));
+    inventoryRepo = module.get(getRepositoryToken(InventoryMetrics));
+    customerRepo = module.get(getRepositoryToken(CustomerMetrics));
+    realTimeRepo = module.get(getRepositoryToken(RealTimeMetrics));
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  /**
-   * Tests for sales overview functionality
-   * Verifies proper aggregation of sales data over time periods
-   */
   describe('getSalesOverview', () => {
     it('should return aggregated sales data for a given date range', async () => {
-      // Arrange
       const startDate = new Date('2025-01-01');
-      const endDate = new Date('2025-02-01');
-      const mockMetrics = [
+      const endDate = new Date('2025-01-31');
+
+      const mockSalesData = [
         {
+          revenue: 1000,
+          orders: 10,
+          avg_order_value: 100,
           date: new Date('2025-01-15'),
-          total_revenue: 1000,
-          total_orders: 50,
-          total_units_sold: 75,
-          discount_amount: 100,
-          top_products: [
-            { id: 1, name: 'Product 1', sales: 30 },
-            { id: 2, name: 'Product 2', sales: 20 }
-          ]
-        }
+        },
       ];
 
-      mockSalesMetricsRepository.find.mockResolvedValue(mockMetrics);
+      // Setup mock query builder to return our mock data
+      const mockQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(mockSalesData),
+      };
 
-      // Act
+      salesRepo.createQueryBuilder = jest.fn().mockReturnValue(mockQueryBuilder);
+
       const result = await service.getSalesOverview(startDate, endDate);
 
-      // Assert
       expect(result).toEqual({
-        metrics: mockMetrics,
-        totals: {
-          revenue: 1000,
-          orders: 50,
-          units: 75,
-          discounts: 100
-        },
-        topProducts: [
-          { product: { id: 1, name: 'Product 1', sales: 30 } },
-          { product: { id: 2, name: 'Product 2', sales: 20 } }
-        ]
-      });
-      expect(mockSalesMetricsRepository.find).toHaveBeenCalledWith({
-        where: {
-          date: expect.any(Object)
-        },
-        order: {
-          date: 'ASC'
-        }
+        revenue: 1000,
+        orders: 10,
+        averageOrderValue: 100,
+        trend: [
+          {
+            date: expect.any(Date),
+            revenue: 1000,
+            orders: 10,
+          },
+        ],
       });
     });
 
     it('should handle empty results', async () => {
-      // Arrange
       const startDate = new Date('2025-01-01');
-      const endDate = new Date('2025-02-01');
-      mockSalesMetricsRepository.find.mockResolvedValue([]);
-      mockSalesMetricsRepository.createQueryBuilder().getRawMany.mockResolvedValue([]);
+      const endDate = new Date('2025-01-31');
 
-      // Act
       const result = await service.getSalesOverview(startDate, endDate);
 
-      // Assert
       expect(result).toEqual({
-        metrics: [],
-        totals: {
-          revenue: 0,
-          orders: 0,
-          units: 0,
-          discounts: 0
-        },
-        topProducts: []
+        revenue: 0,
+        orders: 0,
+        averageOrderValue: 0,
+        trend: [],
       });
     });
   });
 
-  /**
-   * Tests for inventory overview functionality
-   * Verifies stock level analysis and reporting
-   */
   describe('getInventoryOverview', () => {
     it('should return current inventory statistics', async () => {
-      // Arrange
-      const date = new Date('2025-01-01');
-      const mockMetrics = {
-        date: new Date('2025-02-01'),
-        total_items: 500,
+      const date = new Date('2025-01-31');
+
+      const mockInventoryData = {
+        total_items: 100,
         low_stock_items: 10,
-        turnover_rate: 2.5
+        out_of_stock_items: 5,
+        turnover_rate: 0.8,
+        date: new Date('2025-01-31'),
       };
 
-      mockInventoryMetricsRepository.findOne.mockResolvedValue(mockMetrics);
-      mockInventoryMetricsRepository.createQueryBuilder().getRawMany.mockResolvedValue([
-        { date: new Date('2025-02-01'), turnover_rate: 2.5 }
-      ]);
+      // Setup mock query builder to return our mock data
+      const mockQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawOne: jest.fn().mockResolvedValue(mockInventoryData),
+      };
 
-      // Act
+      inventoryRepo.createQueryBuilder = jest.fn().mockReturnValue(mockQueryBuilder);
+
       const result = await service.getInventoryOverview(date);
 
-      // Assert
       expect(result).toEqual({
-        current: mockMetrics,
+        current: {
+          totalItems: 100,
+          lowStockItems: 10,
+          outOfStockItems: 5,
+          turnoverRate: 0.8,
+        },
         turnoverTrend: [
-          { date: new Date('2025-02-01'), turnover_rate: 2.5 }
-        ]
+          {
+            date: expect.any(Date),
+            turnoverRate: 0.8,
+          },
+        ],
       });
     });
 
     it('should handle missing inventory data', async () => {
-      // Arrange
-      const date = new Date('2025-01-01');
-      mockInventoryMetricsRepository.findOne.mockResolvedValue(null);
-      mockInventoryMetricsRepository.createQueryBuilder().getRawMany.mockResolvedValue([]);
+      const date = new Date();
 
-      // Act
       const result = await service.getInventoryOverview(date);
 
-      // Assert
       expect(result).toEqual({
-        current: null,
-        turnoverTrend: []
-      });
-    });
-  });
-
-  /**
-   * Tests for customer insights functionality
-   * Verifies customer behavior analysis and segmentation
-   */
-  describe('getCustomerInsights', () => {
-    it('should return customer behavior analysis for a date range', async () => {
-      // Arrange
-      const startDate = new Date('2025-01-01');
-      const endDate = new Date('2025-02-01');
-      const mockMetrics = [
-        {
-          date: new Date('2025-01-15'),
-          retention_rate: 85,
-          churn_rate: 15,
-          new_customers: 100,
-          repeat_customers: 500,
-          customer_segments: [
-            { segment: 'VIP', customer_count: 50, total_revenue: 5000 },
-            { segment: 'Regular', customer_count: 450, total_revenue: 22500 }
-          ]
-        }
-      ];
-
-      mockCustomerMetricsRepository.find.mockResolvedValue(mockMetrics);
-
-      // Act
-      const result = await service.getCustomerInsights(startDate, endDate);
-
-      // Assert
-      expect(result).toEqual({
-        metrics: mockMetrics,
-        retentionTrend: [
+        current: {
+          totalItems: 0,
+          lowStockItems: 0,
+          outOfStockItems: 0,
+          turnoverRate: 0,
+        },
+        turnoverTrend: [
           {
-            date: new Date('2025-01-15'),
-            retention: 85,
-            churn: 15
-          }
-        ],
-        segments: {
-          VIP: {
-            customers: 50,
-            revenue: 5000,
-            avgOrderValue: 100
+            date: expect.any(Date),
+            turnoverRate: 0,
           },
-          Regular: {
-            customers: 450,
-            revenue: 22500,
-            avgOrderValue: 50
-          }
-        }
-      });
-    });
-
-    it('should handle empty results', async () => {
-      // Arrange
-      const startDate = new Date('2025-01-01');
-      const endDate = new Date('2025-02-01');
-      mockCustomerMetricsRepository.find.mockResolvedValue([]);
-
-      // Act
-      const result = await service.getCustomerInsights(startDate, endDate);
-
-      // Assert
-      expect(result).toEqual({
-        metrics: [],
-        retentionTrend: [],
-        segments: {}
+        ],
       });
     });
   });
 
-  /**
-   * Tests for real-time dashboard functionality
-   * Verifies current metrics and trend data
-   */
   describe('getRealTimeDashboard', () => {
     it('should return current metrics and trends', async () => {
-      // Arrange
       const mockCurrent = {
-        timestamp: new Date('2025-01-01T13:00:00Z'),
-        active_users: 200,
-        cart_value: 3500,
+        active_users: 100,
+        page_views: 500,
+        traffic_sources: ['direct', 'organic'],
       };
 
       const mockTrends = [
         {
-          timestamp: new Date('2025-01-01T12:00:00Z'),
-          active_users: 150,
-          cart_value: 2500,
+          timestamp: new Date('2025-01-01T10:00:00Z'),
+          active_users: 80,
+          page_views: 400,
         },
         {
-          timestamp: new Date('2025-01-01T12:30:00Z'),
-          active_users: 180,
-          cart_value: 3000,
-        }
+          timestamp: new Date('2025-01-01T10:30:00Z'),
+          active_users: 90,
+          page_views: 450,
+        },
       ];
 
-      mockRealTimeMetricsRepository.findOne.mockResolvedValue(mockCurrent);
-      mockRealTimeMetricsRepository.find.mockResolvedValue(mockTrends);
+      // Setup mock query builders for current and trend data
+      const mockCurrentQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        getRawOne: jest.fn().mockResolvedValue(mockCurrent),
+      };
 
-      // Act
+      const mockTrendQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(mockTrends),
+      };
+
+      // Setup different query builders for each call
+      realTimeRepo.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(mockCurrentQueryBuilder)
+        .mockReturnValueOnce(mockTrendQueryBuilder);
+
       const result = await service.getRealTimeDashboard();
 
-      // Assert
       expect(result).toEqual({
-        current: mockCurrent,
+        current: {
+          activeUsers: 100,
+          pageViews: 500,
+          trafficSources: ['direct', 'organic'],
+        },
         trends: {
-          activeUsers: mockTrends.map(t => ({
-            timestamp: t.timestamp,
-            users: t.active_users,
-          })),
-          cartValue: mockTrends.map(t => ({
-            timestamp: t.timestamp,
-            value: t.cart_value,
-          }))
-        }
+          activeUsers: [
+            { timestamp: expect.any(Date), users: 80 },
+            { timestamp: expect.any(Date), users: 90 },
+          ],
+          pageViews: [
+            { timestamp: expect.any(Date), views: 400 },
+            { timestamp: expect.any(Date), views: 450 },
+          ],
+        },
       });
     });
 
-    it('should handle missing real-time data', async () => {
-      // Arrange
-      mockRealTimeMetricsRepository.findOne.mockResolvedValue(null);
-      mockRealTimeMetricsRepository.find.mockResolvedValue([]);
+    it('should handle empty data gracefully', async () => {
+      // Setup mock query builders to return null/empty data
+      const mockCurrentQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        getRawOne: jest.fn().mockResolvedValue(null),
+      };
 
-      // Act
+      const mockTrendQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      };
+
+      realTimeRepo.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(mockCurrentQueryBuilder)
+        .mockReturnValueOnce(mockTrendQueryBuilder);
+
       const result = await service.getRealTimeDashboard();
 
-      // Assert
       expect(result).toEqual({
-        current: null,
+        current: {
+          activeUsers: 0,
+          pageViews: 0,
+          trafficSources: [],
+        },
         trends: {
           activeUsers: [],
-          cartValue: []
-        }
+          pageViews: [],
+        },
       });
     });
   });

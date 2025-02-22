@@ -7,6 +7,8 @@ import { CreateOrderDto } from '../dtos/create-order.dto';
 import { UpdateOrderDto } from '../dtos/update-order.dto';
 import { ProductVariant } from '../../products/entities/product-variant.entity';
 import { Profile } from '../../users/entities/profile.entity';
+import { InventoryItem } from '../../products/entities/inventory-item.entity';
+import { Product } from '../../products/entities/product.entity';
 
 /**
  * Service handling order-related business logic
@@ -23,6 +25,10 @@ export class OrderService {
     private readonly variantRepository: Repository<ProductVariant>,
     @InjectRepository(Profile)
     private readonly profileRepository: Repository<Profile>,
+    @InjectRepository(InventoryItem)
+    private readonly inventoryItemRepository: Repository<InventoryItem>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -59,12 +65,31 @@ export class OrderService {
       
       for (const item of dto.items) {
         const variant = variantMap.get(item.variant_id);
-        if (variant.stock_quantity < item.quantity) {
+        if (!variant) {
+          throw new NotFoundException(`Product variant not found: ${item.variant_id}`);
+        }
+
+        const inventory = await manager
+          .createQueryBuilder(InventoryItem, 'inventory')
+          .where('inventory.variant_id = :variantId', { variantId: variant.id })
+          .getOne();
+
+        if (!inventory || inventory.quantity < item.quantity) {
           throw new ConflictException(
             `Insufficient stock for variant: ${variant.name}`
           );
         }
-        subtotal += variant.price * item.quantity;
+
+        // Get base price from product and add variant adjustment
+        const product = await manager.findOne(Product, {
+          where: { id: variant.product_id }
+        });
+        if (!product) {
+          throw new NotFoundException(`Product not found for variant: ${variant.id}`);
+        }
+
+        const price = product.base_price + variant.price_adjustment;
+        subtotal += price * item.quantity;
       }
 
       // Calculate order totals (simplified tax and shipping for now)
@@ -92,26 +117,48 @@ export class OrderService {
       const orderItems = await Promise.all(
         dto.items.map(async (item) => {
           const variant = variantMap.get(item.variant_id);
-          
+          if (!variant) {
+            throw new NotFoundException(`Product variant not found: ${item.variant_id}`);
+          }
+
+          // Get inventory item
+          const inventory = await manager
+            .createQueryBuilder(InventoryItem, 'inventory')
+            .where('inventory.variant_id = :variantId', { variantId: variant.id })
+            .getOne();
+
+          if (!inventory) {
+            throw new NotFoundException(`Inventory not found for variant: ${variant.id}`);
+          }
+
           // Update inventory
-          variant.stock_quantity -= item.quantity;
-          await manager.save(ProductVariant, variant);
+          inventory.quantity -= item.quantity;
+          await manager.save(InventoryItem, inventory);
+
+          // Get product for name and base price
+          const product = await manager.findOne(Product, {
+            where: { id: variant.product_id }
+          });
+          if (!product) {
+            throw new NotFoundException(`Product not found for variant: ${variant.id}`);
+          }
+
+          const price = product.base_price + variant.price_adjustment;
 
           // Create order item
-          const orderItem = manager.create(OrderItem, {
-            order_id: savedOrder.id,
-            variant_id: item.variant_id,
-            quantity: item.quantity,
-            unit_price: variant.price,
-            subtotal: variant.price * item.quantity,
-            product_name: variant.product_name,
-            variant_name: variant.name,
-            product_metadata: {
-              sku: variant.sku,
-              weight: variant.weight,
-              dimensions: variant.dimensions,
-            },
-          });
+          const orderItem = new OrderItem();
+          orderItem.order_id = savedOrder.id;
+          orderItem.variant_id = variant.id;
+          orderItem.quantity = item.quantity;
+          orderItem.unit_price = price;
+          orderItem.subtotal = price * item.quantity;
+          orderItem.product_name = product.name;
+          orderItem.variant_name = variant.name;
+          orderItem.product_metadata = {
+            sku: variant.sku,
+            weight: variant.weight || undefined,
+            dimensions: variant.dimensions || undefined,
+          };
 
           return manager.save(OrderItem, orderItem);
         })
@@ -194,7 +241,7 @@ export class OrderService {
     newStatus: OrderStatus,
   ): Promise<void> {
     // Define valid status transitions
-    const validTransitions = {
+    const validTransitions: Record<OrderStatus, OrderStatus[]> = {
       [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
       [OrderStatus.CONFIRMED]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED],
       [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
@@ -226,9 +273,9 @@ export class OrderService {
       // Return inventory for each item
       for (const item of order.items) {
         await manager.increment(
-          ProductVariant,
+          InventoryItem,
           { id: item.variant_id },
-          'stock_quantity',
+          'quantity',
           item.quantity
         );
       }
