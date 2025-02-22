@@ -9,6 +9,9 @@ import { UpdateProductDto } from '../dtos/update-product.dto';
 import { SearchProductsDto } from '../dtos/search-products.dto';
 import { PaginationQueryDto } from '@common/dtos/pagination.dto';
 import { CacheService } from '@common/cache/cache.service';
+import { ProductImage } from '../entities/product-image.entity';
+import { ProductImageRepository } from '../repositories/product-image.repository';
+import { NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class ProductService {
@@ -21,6 +24,8 @@ export class ProductService {
     private readonly productRepository: ProductRepository,
     @InjectRepository(ProductVariant)
     private readonly variantRepository: Repository<ProductVariant>,
+    @InjectRepository(ProductImage)
+    private readonly productImageRepository: ProductImageRepository,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -108,6 +113,53 @@ export class ProductService {
     
     await this.productRepository.softDelete(id);
     await this.invalidateCache(id);
+  }
+
+  /**
+   * Add an image to a product
+   * @param productId Product ID
+   * @param imageData Image URLs
+   */
+  async addProductImage(
+    productId: string,
+    imageData: { originalUrl: string; thumbnailUrl: string },
+  ): Promise<void> {
+    const product = await this.productRepository.findOne(productId);
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    // Create new image entity
+    const image = new ProductImage();
+    image.originalUrl = imageData.originalUrl;
+    image.thumbnailUrl = imageData.thumbnailUrl;
+    image.product = product;
+
+    // Save image
+    await this.productImageRepository.save(image);
+
+    // Clear cache
+    await this.cacheService.del(`product:${productId}`);
+  }
+
+  /**
+   * Remove an image from a product
+   * @param productId Product ID
+   * @param imageId Image ID
+   */
+  async removeProductImage(productId: string, imageId: string): Promise<void> {
+    const product = await this.productRepository.findOne(productId, {
+      relations: ['images'],
+    });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    // Remove image
+    await this.productImageRepository.delete(imageId);
+
+    // Clear cache
+    await this.cacheService.del(`product:${productId}`);
   }
 
   /**
