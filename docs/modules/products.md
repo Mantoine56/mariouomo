@@ -134,6 +134,150 @@ Response:
 }
 ```
 
+## Variant Management
+
+### Variant Service (`VariantService`)
+Handles all variant-related operations including:
+- CRUD operations for variants
+- Inventory tracking
+- SKU management
+- Low stock alerts
+
+```typescript
+interface IVariantService {
+  createVariant(dto: CreateVariantDto): Promise<ProductVariant>;
+  updateVariant(id: string, dto: UpdateVariantDto): Promise<ProductVariant>;
+  deleteVariant(id: string): Promise<void>;
+  updateInventory(id: string, quantity: number): Promise<ProductVariant>;
+  getVariantById(id: string): Promise<ProductVariant>;
+  getProductVariants(productId: string): Promise<ProductVariant[]>;
+}
+```
+
+### Variant Features
+- **Attributes Management**
+  - Dynamic attribute support (size, color, etc.)
+  - Flexible attribute schema
+  - Validation rules
+
+- **Inventory Tracking**
+  - Real-time quantity updates
+  - Low stock alerts
+  - Inventory history
+
+- **Pricing**
+  - Variant-specific pricing
+  - Bulk pricing support
+  - Price history tracking
+
+### API Endpoints
+
+#### Create Variant
+```http
+POST /api/variants
+Content-Type: application/json
+
+{
+  "productId": "uuid",
+  "sku": "SKU123",
+  "price": 29.99,
+  "attributes": [
+    {
+      "name": "size",
+      "value": "large"
+    },
+    {
+      "name": "color",
+      "value": "blue"
+    }
+  ],
+  "quantity": 100,
+  "lowStockThreshold": 10
+}
+```
+
+#### Update Variant
+```http
+PUT /api/variants/:id
+Content-Type: application/json
+
+{
+  "price": 34.99,
+  "quantity": 150
+}
+```
+
+#### Update Inventory
+```http
+PUT /api/variants/:id/inventory
+Content-Type: application/json
+
+{
+  "quantity": 75
+}
+```
+
+#### Get Product Variants
+```http
+GET /api/variants/product/:productId
+```
+
+### Data Model
+
+```typescript
+interface ProductVariant {
+  id: string;
+  sku: string;
+  price: number;
+  attributes: {
+    name: string;
+    value: string;
+  }[];
+  quantity: number;
+  lowStockThreshold: number;
+  weight?: number;
+  dimensions?: {
+    length: number;
+    width: number;
+    height: number;
+  };
+}
+```
+
+### Error Handling
+
+- **Validation Errors (400)**
+  - Invalid SKU format
+  - Duplicate SKU
+  - Invalid price
+  - Invalid quantity
+
+- **Not Found Errors (404)**
+  - Variant not found
+  - Product not found
+
+- **Authorization Errors (403)**
+  - Insufficient permissions
+
+### Inventory Management
+
+- **Low Stock Alerts**
+  - Configurable thresholds
+  - Email notifications
+  - Dashboard alerts
+
+- **Stock Updates**
+  - Batch updates
+  - Audit logging
+  - History tracking
+
+### Security
+
+- Role-based access control
+- Input validation
+- SKU uniqueness enforcement
+- Audit logging
+
 ## Image Handling
 
 ### Image Processing
