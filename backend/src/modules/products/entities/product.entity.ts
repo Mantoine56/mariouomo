@@ -1,9 +1,10 @@
-import { Entity, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, OneToMany, ManyToMany, JoinColumn, JoinTable } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from '../../../common/entities/base.entity';
 import { Store } from '../../stores/entities/store.entity';
 import { ProductVariant } from './product-variant.entity';
 import { ProductImage } from './product-image.entity';
+import { Category } from './category.entity';
 
 /**
  * Product entity representing items that can be sold in the store
@@ -65,4 +66,18 @@ export class Product extends BaseEntity {
 
   @OneToMany(() => ProductImage, image => image.product)
   images: ProductImage[];
+
+  @ManyToMany(() => Category, (category: Category) => category.products)
+  @JoinTable({
+    name: 'product_categories',
+    joinColumn: {
+      name: 'product_id',
+      referencedColumnName: 'id',
+    },
+    inverseJoinColumn: {
+      name: 'category_id',
+      referencedColumnName: 'id',
+    },
+  })
+  categories: Category[];
 }

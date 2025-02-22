@@ -278,6 +278,135 @@ interface ProductVariant {
 - SKU uniqueness enforcement
 - Audit logging
 
+## Category Management
+
+### Overview
+The category management system provides a hierarchical tree structure for organizing products. It features:
+- Tree-based category organization
+- Redis caching for fast retrieval
+- Proper validation and error handling
+- Support for category movement and reordering
+
+### Key Components
+
+#### 1. Category Service (`CategoryService`)
+Handles all category-related operations with the following features:
+- CRUD operations for categories
+- Tree structure management
+- Redis-based caching
+- Parent-child relationship handling
+
+```typescript
+interface ICategoryService {
+  createCategory(dto: CreateCategoryDto): Promise<Category>;
+  updateCategory(id: string, dto: UpdateCategoryDto): Promise<Category>;
+  deleteCategory(id: string): Promise<void>;
+  moveCategory(id: string, dto: MoveCategoryDto): Promise<Category>;
+  getCategoryTree(): Promise<Category[]>;
+  getCategoryById(id: string): Promise<Category>;
+  getCategoryBySlug(slug: string): Promise<Category>;
+}
+```
+
+#### 2. Category Repository
+Extends TypeORM's TreeRepository for efficient tree operations:
+- Tree structure querying
+- Hierarchical data management
+- Efficient ancestor/descendant lookups
+
+#### 3. DTOs
+- `CreateCategoryDto`: Category creation with optional parent
+- `UpdateCategoryDto`: Partial category updates
+- `MoveCategoryDto`: Category position management
+
+### Caching Strategy
+- Category tree cached with 1-hour TTL
+- Automatic cache invalidation on updates
+- Efficient tree serialization/deserialization
+- Date handling for cached objects
+
+### API Endpoints
+
+#### Create Category
+```http
+POST /api/categories
+Content-Type: application/json
+
+{
+  "name": "Men's Clothing",
+  "slug": "mens-clothing",
+  "description": "Men's clothing collection",
+  "parentId": "uuid" // optional
+}
+```
+
+Response:
+```json
+{
+  "id": "uuid",
+  "name": "Men's Clothing",
+  "slug": "mens-clothing",
+  "description": "Men's clothing collection",
+  "path": "Clothing > Men's Clothing",
+  "position": 0,
+  "isVisible": true,
+  "totalProducts": 0,
+  "children": []
+}
+```
+
+#### Update Category
+```http
+PUT /api/categories/:id
+Content-Type: application/json
+
+{
+  "name": "Updated Name",
+  "description": "Updated description"
+}
+```
+
+#### Move Category
+```http
+PUT /api/categories/:id/move
+Content-Type: application/json
+
+{
+  "parentId": "uuid",
+  "position": 1
+}
+```
+
+#### Get Category Tree
+```http
+GET /api/categories/tree
+```
+
+Returns the complete category hierarchy with proper caching.
+
+#### Delete Category
+```http
+DELETE /api/categories/:id
+```
+
+Performs validation before deletion:
+- Checks for existing children
+- Verifies no associated products
+- Maintains tree integrity
+
+### Error Handling
+- Duplicate slug detection
+- Parent category validation
+- Tree integrity checks
+- Proper error messages
+
+### Testing
+Comprehensive test suite covering:
+- CRUD operations
+- Tree structure management
+- Cache operations
+- Error scenarios
+
 ## Image Handling
 
 ### Image Processing
