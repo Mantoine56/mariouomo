@@ -37,6 +37,23 @@ Custom repository extending TypeORM's repository pattern with specialized querie
 - `SearchProductsDto`: Search parameters with sorting
 - `ProductResponseDto`: API response formatting
 
+#### 4. Image Service (`ImageService`)
+Handles all image-related operations including:
+- Image upload and processing
+- Thumbnail generation
+- CDN integration
+- Image optimization
+
+```typescript
+interface IImageService {
+  uploadProductImage(file: Buffer, productId: string): Promise<{
+    originalUrl: string;
+    thumbnailUrl: string;
+  }>;
+  deleteImage(imageUrl: string): Promise<void>;
+}
+```
+
 ### Caching Strategy
 - Product details cached for 1 hour
 - Search results cached with composite keys
@@ -88,6 +105,72 @@ Protected endpoint for partial updates.
 DELETE /api/products/:id
 ```
 Protected endpoint performing soft delete.
+
+### Upload Product Image
+```http
+POST /api/products/:id/images
+Content-Type: multipart/form-data
+
+file: <image_file>
+```
+
+Response:
+```json
+{
+  "originalUrl": "https://cdn.mariouomo.com/products/123/image.jpg",
+  "thumbnailUrl": "https://cdn.mariouomo.com/products/123/image-thumb.jpg"
+}
+```
+
+### Delete Product Image
+```http
+DELETE /api/products/:id/images/:imageId
+```
+
+Response:
+```json
+{
+  "message": "Image deleted successfully"
+}
+```
+
+## Image Handling
+
+### Image Processing
+- Original images are resized to max 1200x1200px
+- Thumbnails are generated at 300x300px
+- JPEG optimization with 80% quality
+- Progressive loading support
+
+### CDN Integration
+- Images are stored in S3
+- Served through CloudFront CDN
+- Cache-Control headers for optimal caching
+- Public URLs for easy access
+
+### Security
+- Secure file upload validation
+- Content-Type verification
+- Size limits enforcement
+- Proper ACL settings
+
+### Error Handling
+- Validation errors (400)
+- Processing errors (400)
+- Storage errors (500)
+- Detailed error messages
+
+Example usage:
+```typescript
+// Upload image
+const { originalUrl, thumbnailUrl } = await imageService.uploadProductImage(
+  fileBuffer,
+  productId
+);
+
+// Delete image
+await imageService.deleteImage(imageUrl);
+```
 
 ## Full-Text Search Implementation
 
