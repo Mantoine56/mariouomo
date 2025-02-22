@@ -6,6 +6,7 @@ You are working on an enterprise-grade e-commerce platform built with NestJS and
 - make sure to ALWAYS include comments in your code; it makes your code more readable and maintainable
 - Any new junior dev should be able to read and understand the codebase.
 - this project uses pnpm not npm
+- always commit to github as you progress with bug fixes or new features
 
 ## Core Development Principles
 
