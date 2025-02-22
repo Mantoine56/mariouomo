@@ -225,57 +225,47 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
 
 ---
 
-## Chunk 1: Requirements & Project Setup
-
-1. **Confirm Requirements**  
-   - [x] Finalize feature lists (Product CRUD, Order Management, Admin roles, AI assistant, etc.).  
-   - [x] Ensure clarity on roles (owner, manager, customer service) for your e-commerce operations.
-
-2. **Establish Repositories & Environment**  
-   - [x] Create separate Git repos or folders for the back-end (NestJS) and the front-end (Next.js).  
-   - [ ] Decide on your branching strategy (e.g., Gitflow).  
-   - [x] Ensure Node.js, NestJS CLI, Supabase access, Stripe test keys, and environment variables are ready.
-
-3. **Finalize Tech Stack Details**  
-   - [x] **NestJS** as the API layer, connecting to PostgreSQL (Supabase).  
-   - [x] **Next.js** (React) for the storefront (and optional separate Next.js app for admin).  
-   - [x] **Stripe** for payments; shipping aggregator (Shippo, EasyPost, etc.) for fulfillment.
-
-**Outcome**: Clear scope, version control setup, and a stable development environment.
-
----
-
-## Chunk 2: Database Implementation
+## Chunk 1: Database & Entity Setup
 
 1. **Define & Create Schema**
-   - Reference dbimplementation.md for tables
-   - Implement all indexes for performance
-   - Set up materialized views for analytics
-   - Configure audit logging for critical tables
+   - [x] Provision Supabase and configure settings
+     - [x] Enable required extensions
+     - [x] Configure connection pooling (auto-managed)
+     - [x] Set up automated backups
+   - [x] Create base entities and common types
+     - [x] BaseEntity with common fields
+     - [x] Common enums and types
+   - [x] Create core entities
+     - [x] Store entity
+     - [x] Profile entity
+     - [x] UserAddress entity
+     - [x] Product entity
+     - [x] ProductVariant entity
+     - [x] ProductImage entity
+     - [x] InventoryItem entity
+     - [x] Order entity
+     - [x] OrderItem entity
+     - [x] Payment entity
+     - [x] Shipment entity
+     - [x] Discount entity
+     - [x] GiftCard entity
+     - [x] Event entity
+   - [x] Create database migrations
+   - [x] Set up Row Level Security (RLS)
+   - [x] Configure database indexes
+   - [x] Set up database triggers
 
-2. **Provision Supabase**
-   - Enable required extensions (citext, pg_stat_statements)
-   - Configure connection pooling
-   - Set up automated backups
-   - Configure read replicas if needed
-
-3. **Apply Initial SQL / Migrations**
-   - Use Prisma migrations
-   - Include all performance indexes
-   - Set up triggers for updated_at timestamps
-   - Configure full-text search
-
-4. **Security & RLS**
-   - Enable RLS on all tables
-   - Implement row-level security policies
-   - Set up audit logging
-   - Configure rate limiting tables
+2. **Security & RLS**
+   - [x] Enable RLS on all tables
+   - [x] Implement row-level security policies
+   - [x] Set up audit logging
+   - [x] Configure rate limiting tables
 
 **Outcome**: A performant, secure database with monitoring and analytics capabilities.
 
 ---
 
-## Chunk 3: NestJS Back-End Skeleton
+## Chunk 2: NestJS Back-End Skeleton
 
 1. **Project Setup**
    - Initialize NestJS with TypeScript
@@ -307,7 +297,7 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
 
 ---
 
-## Chunk 4: Next.js Storefront (Customer-Facing)
+## Chunk 3: Next.js Storefront (Customer-Facing)
 
 1. **Project Setup**
    - Next.js with TypeScript
@@ -337,7 +327,7 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
 
 ---
 
-## Chunk 5: Admin Dashboard
+## Chunk 4: Admin Dashboard
 
 1. **Separate or Shared Next.js App**  
    - Decide whether to host the admin dashboard in a separate Next.js project or within the same codebase under a protected route.
@@ -361,7 +351,7 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
 
 ---
 
-## Chunk 6: Shipping & Fulfillment
+## Chunk 5: Shipping & Fulfillment
 
 1. **Shipping Aggregator Integration**  
    - Evaluate aggregator (Shippo, EasyPost) for multi-carrier shipping.  
@@ -383,7 +373,7 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
 
 ---
 
-## Chunk 7: AI Assistant (Admin-Only Feature)
+## Chunk 6: AI Assistant (Admin-Only Feature)
 
 1. **LLM Integration**  
    - Connect NestJS to a Large Language Model (OpenAI or similar).  
@@ -405,7 +395,7 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
 
 ---
 
-## Chunk 8: Testing, Security & Production Launch
+## Chunk 7: Testing, Security & Production Launch
 
 1. **Automated Testing**
    - Unit tests (Jest)
@@ -449,3 +439,36 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
 - Phase in advanced features (AI assistant, multi-warehouse inventory, advanced reporting) **after** the basic e-commerce flow is solid.
 
 By following this **chunked plan**, you’ll gradually build and refine each layer of the system, from database and back-end services to front-end customer experiences and admin management—all while minimizing conflicts and rework.
+
+---
+
+## Implementation Progress
+
+### Phase 1: Infrastructure Setup 
+- [x] Set up Supabase project
+- [x] Configure authentication
+- [x] Set up database schema
+- [x] Implement RLS policies
+- [x] Configure analytics views
+- [x] Set up audit logging
+- [x] Configure backup system (via Supabase)
+
+### Phase 2: Backend Development 
+- [ ] Set up NestJS project
+  - [ ] Initialize project with pnpm
+  - [ ] Configure TypeScript
+  - [ ] Set up project structure
+- [ ] Configure environment variables
+  - [ ] Database connection
+  - [ ] Authentication settings
+  - [ ] API configuration
+- [ ] Implement database service layer
+  - [ ] Create entity models
+  - [ ] Set up repositories
+  - [ ] Implement CRUD operations
+- [ ] Create API endpoints
+  - [ ] Products API
+  - [ ] Orders API
+  - [ ] User management API
+- [ ] Implement authentication middleware
+- [ ] Set up validation pipes
