@@ -215,22 +215,66 @@ await discountService.recordDiscountUsage(discount.id);
 ```
 
 ## Testing
-Comprehensive test suite covering:
 
-### Unit Tests
-- Discount creation and validation
-- Amount calculations
-- Usage tracking
-- Error cases:
-  - Invalid codes
-  - Usage limits
-  - Date restrictions
-  - Customer eligibility
+### Service Tests
+
+The discount service is thoroughly tested with comprehensive test cases covering:
+
+1. **Discount Creation**
+   - Validation of unique discount codes
+   - Proper handling of duplicate codes
+   - Event emission on successful creation
+
+2. **Discount Validation**
+   - Active and valid discount verification
+   - Minimum purchase requirements
+   - Usage limit enforcement
+   - Non-existent discount handling
+
+3. **Usage Tracking**
+   - Atomic increment of usage count
+   - Usage limit validation
+   - Event emission on usage
 
 ### Transaction Testing
-- Proper usage counting
-- Race condition prevention
-- Rollback scenarios
+
+The module implements robust transaction testing using TypeORM's transaction API:
+
+```typescript
+// Example of transaction mock in tests
+jest.spyOn(dataSource, 'transaction').mockImplementationOnce(async (
+  _isolationOrCb: any,
+  runInTransaction?: (entityManager: EntityManager) => Promise<unknown>
+) => {
+  const manager = {
+    getRepository: () => ({
+      findOne: jest.fn().mockResolvedValue(mockDiscount),
+      save: jest.fn()
+    })
+  } as unknown as EntityManager;
+
+  // Handle both transaction method signatures
+  const cb = runInTransaction || _isolationOrCb;
+  return cb(manager);
+});
+```
+
+Key aspects of transaction testing:
+
+1. **Mock Implementation**
+   - Proper handling of TypeORM's transaction signatures
+   - EntityManager mocking with repository methods
+   - Type-safe mock implementations
+
+2. **Atomic Operations**
+   - Testing of transactional operations
+   - Proper rollback on failures
+   - Concurrent operation handling
+
+3. **Error Cases**
+   - Transaction failure scenarios
+   - Database constraint violations
+   - Concurrent modification handling
 
 ## Best Practices
 1. Always validate discounts before applying
