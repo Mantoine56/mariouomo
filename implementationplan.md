@@ -442,7 +442,50 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
 
 ---
 
-## Chunk 3: Next.js Storefront (Customer-Facing)
+## Chunk 3: Admin Dashboard (Updated Priority)
+
+1. **Project Setup**
+   - [x] Next.js with TypeScript
+   - [x] Configure build optimization
+   - [x] Set up error boundaries
+   - [x] Implement proper SEO
+
+2. **Core Admin Features**
+   - [ ] Product Management
+     - [ ] Product creation/editing interface
+     - [ ] Bulk operations support
+     - [ ] Image management with preview
+     - [ ] Inventory management UI
+   - [ ] Order Management
+     - [ ] Order list and details view
+     - [ ] Order status management
+     - [ ] Fulfillment workflow UI
+     - [ ] Return/refund processing
+   - [ ] Customer Management
+     - [ ] Customer list and details
+     - [ ] Order history view
+     - [ ] Customer segmentation
+     - [ ] Communication history
+
+3. **Analytics Dashboard**
+   - [ ] Real-time metrics display
+   - [ ] Sales and inventory charts
+   - [ ] Customer insights visualization
+   - [ ] Performance monitoring UI
+   - [ ] Custom report builder
+   - [ ] Export functionality
+
+4. **Security & Access Control**
+   - [ ] Role-based access control UI
+   - [ ] Admin user management
+   - [ ] Activity logging and audit
+   - [ ] Security settings configuration
+
+**Outcome**: A comprehensive admin interface enabling efficient business operations.
+
+---
+
+## Chunk 4: Next.js Storefront (Customer-Facing)
 
 1. **Project Setup**
    - Next.js with TypeScript
@@ -469,30 +512,6 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
    - Analytics integration
 
 **Outcome**: A fast, secure storefront with excellent UX.
-
----
-
-## Chunk 4: Admin Dashboard
-
-1. **Separate or Shared Next.js App**  
-   - Decide whether to host the admin dashboard in a separate Next.js project or within the same codebase under a protected route.
-
-2. **Admin Features**  
-   - **User Management**: View/edit roles, invite team members.  
-   - **Product Management**: Create/update products, manage images (Supabase Storage).  
-   - **Order Management**: View, filter, fulfill orders; handle refunds/returns.  
-   - **Discounts & Gift Cards**: Generate codes, set rules, track usage.  
-   - **Reporting**: Sales over time, top products, low inventory alerts.
-
-3. **Access Control**  
-   - Restrict admin routes to users with `role = admin` (and optionally manager roles).  
-   - Use the RLS policies in the database for fail-safe security.
-
-4. **Dashboard UX**  
-   - Consider a UI library (Material-UI, Chakra, etc.) for rapid form creation and tables.  
-   - Ensure it’s responsive if your staff occasionally uses tablets or phones.
-
-**Outcome**: A robust internal tool for managing all aspects of the store.
 
 ---
 
@@ -577,149 +596,85 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
 
 ---
 
-### Final Notes
+### Current Work Status
 
-- Each chunk can be pursued **sequentially** or with some overlap (e.g., you can develop the Next.js front-end while still refining some back-end endpoints).
-- Keep an eye on **RLS policies** to ensure data privacy and adopt best practices for **API security**.
-- Phase in advanced features (AI assistant, multi-warehouse inventory, advanced reporting) **after** the basic e-commerce flow is solid.
+### Completed Features
+1. **Product-Category Integration**
+   - [x] Full product-category relationship implementation
+   - [x] Category-based product filtering
+   - [x] Category management endpoints
+   - [x] Product-category association validation
 
-By following this **chunked plan**, you’ll gradually build and refine each layer of the system, from database and back-end services to front-end customer experiences and admin management—all while minimizing conflicts and rework.
+2. **Order Fulfillment Workflow**
+   - [x] Complete order lifecycle implementation
+   - [x] Status transition management
+   - [x] Inventory integration
+   - [x] Address management
+   - [x] Transaction handling
 
----
+3. **Low Stock Notification System**
+   - [x] Event-based notification system
+   - [x] Stock level monitoring
+   - [x] Concurrent access handling
+   - [x] Notification delivery
 
-## Implementation Progress
-
-### Phase 1: Infrastructure Setup 
-- [x] Set up Supabase project
-- [x] Configure authentication
-- [x] Set up database schema
-- [x] Implement RLS policies
-- [x] Configure analytics views
-- [x] Set up audit logging
-- [x] Configure backup system (via Supabase)
-
-### Phase 2: Backend Development 
-- [x] Set up NestJS project
-  - [x] Initialize project with pnpm
-  - [x] Configure TypeScript
-  - [x] Set up project structure
-- [x] Configure environment variables
-  - [x] Database connection
-  - [x] Authentication settings
-  - [x] API configuration
-- [x] Implement database service layer
-  - [x] Create entity models
-  - [x] Set up repositories
-  - [x] Implement CRUD operations
-- [x] Create API endpoints
-  - [x] Products API
-  - [x] Orders API
-  - [x] User management API
-- [x] Implement authentication middleware
-- [x] Set up validation pipes
-
-### Phase 3: Analytics Module Implementation
-- [x] Design analytics data models
-- [x] Create analytics collection service
-- [x] Implement data aggregation service
-- [x] Create analytics query service
-- [x] Add real-time analytics tracking
-- [x] Create analytics dashboard endpoints
-- [x] Add unit tests
-- [x] Create documentation
-
-### Current Tasks
-- [x] Implement Orders Module
-  - [x] Create Order entity and DTOs
-  - [x] Implement OrderService with business logic
-  - [x] Create OrderController with endpoints
-  - [x] Add unit tests
-  - [x] Create documentation
-
-- [x] Implement Inventory Module
-  - [x] Create InventoryItem entity and DTOs
-  - [x] Implement InventoryService with business logic
-  - [x] Create InventoryController with endpoints
-  - [x] Add unit tests
-  - [x] Create documentation
-
-- [ ] Implement Analytics Module
-  - [x] Design analytics data models
-  - [x] Create analytics collection service
-  - [x] Implement data aggregation service
-  - [x] Create analytics query service
-  - [ ] Add real-time tracking with WebSocket
-  - [ ] Create analytics dashboard endpoints
-  - [ ] Add unit tests
-  - [ ] Create documentation
+4. **Analytics & Monitoring**
+   - [x] Real-time tracking implementation
+   - [x] Dashboard API endpoints
+   - [x] WebSocket integration
+   - [x] Performance monitoring (APM)
+   - [x] Custom metrics and alerts
+   - [x] Resource monitoring
+   - [x] Data visualization endpoints
+   - [x] Historical data analysis
 
 ### Next Steps
-1. Analytics Module Implementation (In Progress)
-   - [x] Design analytics schema for:
-     - Sales metrics
-     - Inventory turnover
-     - Customer behavior
-     - Product performance
-   - [x] Implement data collection services
-   - [x] Create aggregation pipelines for:
-     - Daily metrics rollup
-     - Performance analytics
-     - Trend analysis
-   - [ ] Add real-time tracking:
-     - WebSocket gateway setup
-     - Real-time event handling
-     - Client subscription management
-   - [ ] Build dashboard API:
-     - Analytics controller
-     - Data visualization endpoints
-     - Real-time updates
+1. **UI/UX Enhancement**
+   - [ ] Admin dashboard interface improvements
+   - [ ] Advanced visualization components
+   - [ ] Custom report builder UI
+   - [ ] Real-time monitoring dashboard
 
-2. Frontend Development
-   - Create admin dashboard
-   - Implement analytics visualizations
-   - Add inventory management UI
-   - Create order management interface
-
-3. Testing and Documentation
-   - Write integration tests
-   - Create API documentation
-   - Add deployment guides
-   - Create user manuals
+2. **System Optimization**
+   - [ ] Query performance tuning
+   - [ ] Cache strategy refinement
+   - [ ] WebSocket connection optimization
+   - [ ] Load balancing implementation
 
 ---
 
 ## Current Implementation Status (as of February 2025)
 
 ### Recently Completed Features
-- [x] Analytics Module Core Implementation
-  - [x] Analytics Controller with comprehensive endpoints
-  - [x] Real-time tracking service
-  - [x] WebSocket Gateway for live updates
-  - [x] Data aggregation services
-  - [x] Documentation and API specifications
+- Analytics Module Core Implementation
+  - Analytics Controller with comprehensive endpoints
+  - Real-time tracking service
+  - WebSocket Gateway for live updates
+  - Data aggregation services
+  - Documentation and API specifications
 
 ### Active Development
 1. **Analytics Dashboard Enhancement**
-   - [ ] Real-time tracking with WebSocket
-     - [ ] Client subscription management
-     - [ ] Real-time event handling
-     - [ ] Performance optimization
-   - [ ] Dashboard API completion
-     - [ ] Data visualization endpoints
-     - [ ] Real-time updates integration
-     - [ ] Advanced filtering capabilities
+   - Real-time tracking with WebSocket
+     - Client subscription management
+     - Real-time event handling
+     - Performance optimization
+   - Dashboard API completion
+     - Data visualization endpoints
+     - Real-time updates integration
+     - Advanced filtering capabilities
 
 2. **Testing & Documentation**
-   - [ ] Complete E2E tests for analytics features
-   - [ ] Performance testing for real-time updates
-   - [ ] Load testing for concurrent connections
-   - [ ] Security testing for admin-only features
+   - Complete E2E tests for analytics features
+   - Performance testing for real-time updates
+   - Load testing for concurrent connections
+   - Security testing for admin-only features
 
 3. **Admin Interface Integration**
-   - [ ] Analytics dashboard UI components
-   - [ ] Real-time data visualization
-   - [ ] Custom reporting interface
-   - [ ] Admin-specific features
+   - Analytics dashboard UI components
+   - Real-time data visualization
+   - Custom reporting interface
+   - Admin-specific features
 
 ### Immediate Next Steps
 1. Complete WebSocket implementation for real-time tracking
