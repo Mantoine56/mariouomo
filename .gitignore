@@ -60,3 +60,4 @@ frontend/out/
 # Prisma
 backend/prisma/*.db
 backend/prisma/migrations/
+dashboard-template/
