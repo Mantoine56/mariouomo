@@ -2,16 +2,25 @@
  * Dashboard Home Page
  * 
  * Displays an overview of key metrics and recent activities
- * Adapted from the next-shadcn-dashboard-starter template.
+ * Provides quick access to common actions and visualizes important data
  */
 import React from "react";
-import { Button } from "@/components/ui/button";
-import {
-  BarChart3,
-  PackageOpen,
-  ShoppingCart,
-  Users
+import Link from "next/link";
+import { 
+  BarChart3, 
+  PackageOpen, 
+  ShoppingCart, 
+  Users,
+  CreditCard,
+  TrendingUp,
+  ClipboardList,
+  RefreshCw,
+  ChevronRight
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { StatCard } from "@/components/ui/stat-card";
+import { ActivityList, type ActivityItem } from "@/components/ui/activity-list";
+import { DashboardCard } from "@/components/ui/dashboard-card";
 
 export default function DashboardPage() {
   // Mock data for dashboard statistics
@@ -20,29 +29,37 @@ export default function DashboardPage() {
       name: "Total Revenue", 
       value: "$12,345.67", 
       change: "+12%", 
-      changeType: "increase",
-      icon: <BarChart3 className="h-5 w-5 text-primary" /> 
+      changeDirection: "increase" as const,
+      description: "Compared to last month",
+      icon: <BarChart3 className="h-5 w-5 text-primary" />,
+      variant: "primary" as const
     },
     { 
       name: "Orders", 
       value: "156", 
       change: "+8%", 
-      changeType: "increase",
-      icon: <ShoppingCart className="h-5 w-5 text-indigo-500" /> 
+      changeDirection: "increase" as const,
+      description: "42 processed today",
+      icon: <ShoppingCart className="h-5 w-5 text-indigo-500" />,
+      variant: "info" as const
     },
     { 
       name: "Customers", 
       value: "2,345", 
       change: "+15%", 
-      changeType: "increase",
-      icon: <Users className="h-5 w-5 text-green-500" /> 
+      changeDirection: "increase" as const,
+      description: "237 new this month",
+      icon: <Users className="h-5 w-5 text-green-500" />,
+      variant: "success" as const
     },
     { 
       name: "Products", 
       value: "432", 
       change: "+3", 
-      changeType: "increase",
-      icon: <PackageOpen className="h-5 w-5 text-amber-500" /> 
+      changeDirection: "increase" as const,
+      description: "28 out of stock",
+      icon: <PackageOpen className="h-5 w-5 text-amber-500" />,
+      variant: "warning" as const
     },
   ];
 
@@ -55,12 +72,105 @@ export default function DashboardPage() {
     { id: "ORD-1238", customer: "Michael Brown", date: "2025-02-29", amount: "$149.99", status: "Processing" },
   ];
 
+  // Mock data for recent activities
+  const recentActivities: ActivityItem[] = [
+    {
+      id: "act-1",
+      type: "order",
+      title: "New order received",
+      description: "Order #ORD-1234 ($129.99) from John Doe",
+      time: "10 minutes ago",
+      link: {
+        href: "/dashboard/orders/ORD-1234",
+        label: "View order"
+      }
+    },
+    {
+      id: "act-2",
+      type: "payment",
+      title: "Payment received",
+      description: "$259.99 payment for order #ORD-1236",
+      time: "45 minutes ago",
+      user: {
+        name: "Robert Johnson"
+      }
+    },
+    {
+      id: "act-3",
+      type: "shipment",
+      title: "Order shipped",
+      description: "Order #ORD-1237 has been shipped via Express",
+      time: "2 hours ago",
+      link: {
+        href: "/dashboard/orders/ORD-1237",
+        label: "Track shipment"
+      }
+    },
+    {
+      id: "act-4",
+      type: "product",
+      title: "Low stock alert",
+      description: "Product 'Italian Leather Loafers' is running low (3 left)",
+      time: "3 hours ago",
+      link: {
+        href: "/dashboard/products/123",
+        label: "Manage inventory"
+      }
+    },
+    {
+      id: "act-5",
+      type: "customer",
+      title: "New customer registered",
+      description: "Michael Brown created an account",
+      time: "5 hours ago",
+      link: {
+        href: "/dashboard/customers/456",
+        label: "View profile"
+      }
+    }
+  ];
+
+  // Quick action items
+  const quickActions = [
+    { 
+      title: "Create Order", 
+      icon: <ClipboardList className="h-5 w-5" />, 
+      href: "/dashboard/orders/new", 
+      color: "bg-blue-50 text-blue-600"
+    },
+    { 
+      title: "Add Product", 
+      icon: <PackageOpen className="h-5 w-5" />, 
+      href: "/dashboard/products/new", 
+      color: "bg-amber-50 text-amber-600"
+    },
+    { 
+      title: "Process Payments", 
+      icon: <CreditCard className="h-5 w-5" />, 
+      href: "/dashboard/payments", 
+      color: "bg-green-50 text-green-600"
+    },
+    { 
+      title: "View Reports", 
+      icon: <TrendingUp className="h-5 w-5" />, 
+      href: "/dashboard/reports", 
+      color: "bg-purple-50 text-purple-600"
+    }
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+      {/* Header with page title and actions */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">Welcome back! Here's what's happening with your store today.</p>
+        </div>
         <div className="flex space-x-3">
-          <Button variant="outline" size="sm">Export Data</Button>
+          <Button variant="outline" size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh Data
+          </Button>
           <Button size="sm">New Order</Button>
         </div>
       </div>
@@ -68,65 +178,41 @@ export default function DashboardPage() {
       {/* Stats Overview */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <div
+          <StatCard
             key={stat.name}
-            className="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6"
-          >
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                {stat.icon}
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dt className="truncate text-sm font-medium text-gray-500">{stat.name}</dt>
-                <dd className="flex items-baseline">
-                  <div className="text-2xl font-semibold text-gray-900">
-                    {stat.value}
-                  </div>
-                  <div
-                    className={`ml-2 flex items-baseline text-sm font-semibold ${
-                      stat.changeType === "increase" ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    {stat.changeType === "increase" ? (
-                      <svg className="h-5 w-5 flex-shrink-0 self-center text-green-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fillRule="evenodd" d="M10 17a.75.75 0 01-.75-.75V5.612L5.29 9.77a.75.75 0 01-1.08-1.04l5.25-5.5a.75.75 0 011.08 0l5.25 5.5a.75.75 0 11-1.08 1.04l-3.96-4.158V16.25A.75.75 0 0110 17z" clipRule="evenodd" />
-                      </svg>
-                    ) : (
-                      <svg className="h-5 w-5 flex-shrink-0 self-center text-red-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fillRule="evenodd" d="M10 3a.75.75 0 01.75.75v10.638l3.96-4.158a.75.75 0 111.08 1.04l-5.25 5.5a.75.75 0 01-1.08 0l-5.25-5.5a.75.75 0 111.08-1.04l3.96 4.158V3.75A.75.75 0 0110 3z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                    <span className="sr-only">
-                      {stat.changeType === "increase" ? "Increased" : "Decreased"} by
-                    </span>
-                    {stat.change}
-                  </div>
-                </dd>
-              </div>
-            </div>
-          </div>
+            title={stat.name}
+            value={stat.value}
+            change={stat.change}
+            changeDirection={stat.changeDirection}
+            description={stat.description}
+            icon={stat.icon}
+            variant={stat.variant}
+          />
         ))}
       </div>
 
-      {/* Recent Orders */}
-      <div className="overflow-hidden rounded-lg bg-white shadow">
-        <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
-          <h3 className="text-lg font-medium leading-6 text-gray-900">Recent Orders</h3>
-          <Button variant="link" asChild>
-            <a href="/dashboard/orders">View all</a>
-          </Button>
-        </div>
-        <div className="border-t border-gray-200">
+      {/* Main content */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Orders */}
+        <DashboardCard
+          title="Recent Orders"
+          headerAction={
+            <Button variant="link" asChild>
+              <Link href="/dashboard/orders">View all</Link>
+            </Button>
+          }
+          className="lg:col-span-2"
+        >
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-300">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead>
                 <tr>
-                  <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Order ID</th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Customer</th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Date</th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Amount</th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Status</th>
-                  <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                  <th scope="col" className="py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
+                  <th scope="col" className="py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                  <th scope="col" className="py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th scope="col" className="py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                  <th scope="col" className="py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="relative py-3">
                     <span className="sr-only">View</span>
                   </th>
                 </tr>
@@ -134,11 +220,11 @@ export default function DashboardPage() {
               <tbody className="divide-y divide-gray-200 bg-white">
                 {recentOrders.map((order) => (
                   <tr key={order.id}>
-                    <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">{order.id}</td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{order.customer}</td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{order.date}</td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{order.amount}</td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm">
+                    <td className="py-4 text-sm font-medium text-gray-900">{order.id}</td>
+                    <td className="py-4 text-sm text-gray-500">{order.customer}</td>
+                    <td className="py-4 text-sm text-gray-500">{order.date}</td>
+                    <td className="py-4 text-sm text-gray-500">{order.amount}</td>
+                    <td className="py-4 text-sm">
                       <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
                         order.status === 'Completed' ? 'bg-green-100 text-green-800' : 
                         order.status === 'Processing' ? 'bg-yellow-100 text-yellow-800' : 
@@ -147,11 +233,11 @@ export default function DashboardPage() {
                         {order.status}
                       </span>
                     </td>
-                    <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                    <td className="py-4 text-right text-sm font-medium">
                       <Button variant="link" asChild>
-                        <a href={`/dashboard/orders/${order.id}`}>
+                        <Link href={`/dashboard/orders/${order.id}`}>
                           View<span className="sr-only">, {order.id}</span>
-                        </a>
+                        </Link>
                       </Button>
                     </td>
                   </tr>
@@ -159,8 +245,43 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </DashboardCard>
+
+        {/* Activity Feed */}
+        <DashboardCard
+          title="Recent Activity"
+          description="Latest actions across your store"
+          className="lg:col-span-1"
+        >
+          <ActivityList 
+            activities={recentActivities} 
+            maxItems={5}
+          />
+        </DashboardCard>
       </div>
+
+      {/* Quick Actions */}
+      <DashboardCard title="Quick Actions">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          {quickActions.map((action) => (
+            <Link
+              key={action.title}
+              href={action.href}
+              className="group flex items-center p-4 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+            >
+              <div className={`flex-shrink-0 p-2 rounded-lg mr-4 ${action.color}`}>
+                {action.icon}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 group-hover:text-gray-900">
+                  {action.title}
+                </p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-gray-500" />
+            </Link>
+          ))}
+        </div>
+      </DashboardCard>
     </div>
   );
 } 

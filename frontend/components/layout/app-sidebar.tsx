@@ -2,7 +2,27 @@
  * App Sidebar Component
  * 
  * Main sidebar navigation for the Mario Uomo admin dashboard.
- * Adapted from next-shadcn-dashboard-starter template.
+ * Features:
+ * - Collapsible sidebar with icon-only mode
+ * - Expandable navigation sections
+ * - User profile dropdown
+ * - Responsive design
+ * - Keyboard navigation support
+ * - Screen reader accessibility
+ * 
+ * Usage:
+ * ```tsx
+ * import AppSidebar from '@/components/layout/app-sidebar';
+ * 
+ * export default function DashboardLayout() {
+ *   return (
+ *     <div>
+ *       <AppSidebar />
+ *       <main>{children}</main>
+ *     </div>
+ *   );
+ * }
+ * ```
  */
 'use client';
 
@@ -19,23 +39,19 @@ import {
   ChevronRight,
   LogOut,
   ChevronsUpDown,
-  User
+  User,
 } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
+  SidebarMenuButton,
+  useSidebar,
   SidebarRail,
-  useSidebar
+  SidebarTrigger
 } from '@/components/ui/sidebar';
 import {
   Collapsible,
@@ -51,9 +67,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
 
-// Navigation items for the sidebar
-const navItems = [
+// Navigation items with TypeScript interface for better type safety
+interface NavItem {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  items?: Array<{
+    title: string;
+    url: string;
+  }>;
+}
+
+// Main navigation items configuration
+const navItems: NavItem[] = [
   {
     title: 'Dashboard',
     url: '/dashboard',
@@ -114,78 +142,78 @@ export default function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible='icon'>
+    <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className='flex gap-2 py-2 text-sidebar-accent-foreground'>
+        <div className="flex h-16 items-center px-4">
           <div className='flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground'>
             <span className="font-bold">MU</span>
           </div>
-          <div className='grid flex-1 text-left text-sm leading-tight'>
+          <div className='grid flex-1 ml-2 text-left text-sm leading-tight'>
             <span className='truncate font-semibold'>Mario Uomo</span>
             <span className='truncate text-xs'>Admin Dashboard</span>
           </div>
+          <SidebarTrigger className="ml-auto" />
         </div>
       </SidebarHeader>
       
-      <SidebarContent className='overflow-x-hidden'>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-          <SidebarMenu>
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return item?.items && item?.items?.length > 0 ? (
-                <Collapsible
-                  key={item.title}
-                  asChild
-                  defaultOpen={pathname.startsWith(item.url)}
-                  className='group/collapsible'
-                >
+      <SidebarContent>
+        <SidebarMenu>
+          {navItems.map((item) => {
+            const IconComponent = item.icon;
+            return item?.items && item?.items?.length > 0 ? (
+              <Collapsible
+                key={item.title}
+                defaultOpen={pathname.startsWith(item.url)}
+              >
+                <CollapsibleTrigger asChild>
                   <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton
-                        tooltip={item.title}
-                        isActive={pathname.startsWith(item.url)}
-                      >
-                        {item.icon && <Icon className="mr-2 h-4 w-4" />}
-                        <span>{item.title}</span>
-                        <ChevronRight className='ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90' />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        {item.items?.map((subItem) => (
-                          <SidebarMenuSubItem key={subItem.title}>
-                            <SidebarMenuSubButton
-                              asChild
-                              isActive={pathname === subItem.url}
-                            >
-                              <Link href={subItem.url}>
-                                <span>{subItem.title}</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
+                    <SidebarMenuButton
+                      isActive={pathname.startsWith(item.url)}
+                    >
+                      <IconComponent className="mr-2 h-4 w-4" />
+                      {!state.collapsed && <span>{item.title}</span>}
+                      {!state.collapsed && (
+                        <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                      )}
+                    </SidebarMenuButton>
                   </SidebarMenuItem>
-                </Collapsible>
-              ) : (
-                <SidebarMenuItem key={item.title}>
+                </CollapsibleTrigger>
+                
+                {!state.collapsed && (
+                  <CollapsibleContent>
+                    <div className="ml-6 space-y-1">
+                      {item.items.map((subItem) => (
+                        <Link
+                          key={subItem.title}
+                          href={subItem.url}
+                          className={cn(
+                            'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                            pathname === subItem.url
+                              ? 'bg-accent text-accent-foreground'
+                              : 'hover:bg-accent hover:text-accent-foreground'
+                          )}
+                        >
+                          <span>{subItem.title}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                )}
+              </Collapsible>
+            ) : (
+              <SidebarMenuItem key={item.title}>
+                <Link href={item.url}>
                   <SidebarMenuButton
-                    asChild
-                    tooltip={item.title}
                     isActive={pathname === item.url}
                   >
-                    <Link href={item.url}>
-                      <Icon className="mr-2 h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
+                    <IconComponent className="mr-2 h-4 w-4" />
+                    {!state.collapsed && <span>{item.title}</span>}
                   </SidebarMenuButton>
-                </SidebarMenuItem>
-              );
-            })}
-          </SidebarMenu>
-        </SidebarGroup>
+                </Link>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
       </SidebarContent>
       
       <SidebarFooter>
@@ -193,22 +221,23 @@ export default function AppSidebar() {
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size='lg'
-                  className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
-                >
+                <SidebarMenuButton>
                   <div className="relative h-8 w-8 rounded-full bg-muted mr-2">
                     <User className="h-5 w-5 absolute inset-0 m-auto" />
                   </div>
-                  <div className='grid flex-1 text-left text-sm leading-tight'>
-                    <span className='truncate font-semibold'>
-                      {user?.name || ''}
-                    </span>
-                    <span className='truncate text-xs'>
-                      {user?.email || ''}
-                    </span>
-                  </div>
-                  <ChevronsUpDown className='ml-auto size-4' />
+                  {!state.collapsed && (
+                    <>
+                      <div className='grid flex-1 text-left text-sm leading-tight'>
+                        <span className='truncate font-semibold'>
+                          {user?.name || ''}
+                        </span>
+                        <span className='truncate text-xs'>
+                          {user?.email || ''}
+                        </span>
+                      </div>
+                      <ChevronsUpDown className='ml-auto size-4' />
+                    </>
+                  )}
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -254,7 +283,6 @@ export default function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
-      
       <SidebarRail />
     </Sidebar>
   );
