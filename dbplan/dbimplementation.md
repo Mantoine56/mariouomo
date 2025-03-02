@@ -7,7 +7,7 @@ Last Updated: 2025-02-22
 
 ### Completed Tasks
 - Initial documentation and planning
-- SQL script preparation (in dbsql.sql)
+- SQL script preparation (in docs/database/migrations/initial-schema.sql)
 - Schema definition (in dbschema.md)
 - RLS policies definition (in rlspolicies.md)
 - Configure Supabase Project
