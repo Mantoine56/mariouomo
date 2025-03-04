@@ -6,15 +6,127 @@
  * and category breakdown for different time periods.
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class AnalyticsSeedService {
+  private readonly logger = new Logger(AnalyticsSeedService.name);
+  private debugLogFile: string | null;
+  
   constructor(
     private readonly dataSource: DataSource
-  ) {}
+  ) {
+    // Force direct output to stdout
+    process.stdout.write('AnalyticsSeedService constructor called\n');
+    
+    // Setup debug logging
+    this.setupLogging();
+    
+    // Output again after setup
+    process.stdout.write('AnalyticsSeedService initialization complete\n');
+  }
+  
+  /**
+   * Setup logging directory and files
+   */
+  private setupLogging(): void {
+    try {
+      process.stdout.write('Setting up logging for AnalyticsSeedService...\n');
+      
+      const logDir = './debug-logs';
+      // Create directory if it doesn't exist
+      if (!fs.existsSync(logDir)) {
+        process.stdout.write(`Creating log directory: ${logDir}\n`);
+        fs.mkdirSync(logDir, { recursive: true });
+      }
+      
+      // Get current time for filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      this.debugLogFile = path.join(logDir, `analytics-seed-${timestamp}.log`);
+      
+      // Write initial log entry
+      this.logDebug('AnalyticsSeedService initialized');
+      this.logDebug(`Current working directory: ${process.cwd()}`);
+      this.logDebug(`Database URL: ${this.maskDatabaseUrl(process.env.DATABASE_URL)}`);
+      
+      process.stdout.write('Logging setup complete for AnalyticsSeedService\n');
+    } catch (error) {
+      process.stderr.write(`Error setting up logging for AnalyticsSeedService: ${error}\n`);
+      // Try alternative directory
+      try {
+        const altLogDir = '/tmp/seed-logs';
+        if (!fs.existsSync(altLogDir)) {
+          process.stdout.write(`Creating alternative log directory: ${altLogDir}\n`);
+          fs.mkdirSync(altLogDir, { recursive: true });
+        }
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        this.debugLogFile = path.join(altLogDir, `analytics-seed-${timestamp}.log`);
+        this.logDebug('AnalyticsSeedService initialized using alternative log directory');
+      } catch (altError) {
+        process.stderr.write(`Failed to create even alternative log directory: ${altError}\n`);
+        // Last resort - don't use file logging
+        this.debugLogFile = null;
+      }
+    }
+  }
+  
+  /**
+   * Mask sensitive parts of the database URL for logging
+   */
+  private maskDatabaseUrl(url: string | undefined): string {
+    if (!url) return 'undefined';
+    try {
+      // Simple regex to mask the password in the connection string
+      return url.replace(/(postgresql:\/\/[^:]+:)([^@]+)(@.+)/, '$1*****$3');
+    } catch (error) {
+      return 'Error masking URL';
+    }
+  }
+  
+  /**
+   * Log message to debug file and stdout
+   */
+  private logDebug(message: string): void {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] ${message}\n`;
+    
+    // Always log to stdout
+    process.stdout.write(`${message}\n`);
+    
+    // Write to file only if file path is set
+    if (this.debugLogFile) {
+      try {
+        fs.appendFileSync(this.debugLogFile, logMessage);
+      } catch (error) {
+        process.stderr.write(`Error writing to log file: ${error.message}\n`);
+      }
+    }
+  }
+  
+  /**
+   * Log error message and details to debug file and stderr
+   */
+  private logError(message: string, error: any): void {
+    const timestamp = new Date().toISOString();
+    const errorMessage = error instanceof Error ? `${error.message}\n${error.stack}` : String(error);
+    const logMessage = `[${timestamp}] ERROR: ${message}\n${errorMessage}\n`;
+    
+    // Always log to stderr
+    process.stderr.write(`ERROR: ${message}\n${errorMessage}\n`);
+    
+    // Write to file only if file path is set
+    if (this.debugLogFile) {
+      try {
+        fs.appendFileSync(this.debugLogFile, logMessage);
+      } catch (logError) {
+        process.stderr.write(`Error writing to log file: ${logError.message}\n`);
+      }
+    }
+  }
   
   /**
    * Generate random dates within a range
@@ -427,31 +539,102 @@ export class AnalyticsSeedService {
    * Run the full seed operation
    */
   async seed(): Promise<void> {
+    process.stdout.write('Starting seed operation in AnalyticsSeedService\n');
+    this.logDebug('Starting seed operation in AnalyticsSeedService');
+    
     try {
-      console.log('Starting seed operation...');
+      // Verify database connection
+      process.stdout.write('Checking database connection...\n');
+      this.logDebug('Checking database connection...');
+      
+      try {
+        const connectionStatus = this.dataSource.isInitialized ? 'Connected' : 'Not connected';
+        process.stdout.write(`Database connection status: ${connectionStatus}\n`);
+        this.logDebug(`Database connection status: ${connectionStatus}`);
+        
+        if (!this.dataSource.isInitialized) {
+          process.stdout.write('Database connection is not initialized, attempting to initialize...\n');
+          this.logDebug('Database connection is not initialized, attempting to initialize...');
+          await this.dataSource.initialize();
+          process.stdout.write('Database connection initialized successfully\n');
+          this.logDebug('Database connection initialized successfully');
+        }
+        
+        // Test query to verify connection
+        process.stdout.write('Running test query to verify connection...\n');
+        this.logDebug('Running test query to verify connection...');
+        const result = await this.dataSource.query('SELECT NOW() as time');
+        process.stdout.write(`Test query result: ${JSON.stringify(result)}\n`);
+        this.logDebug(`Test query result: ${JSON.stringify(result)}`);
+        
+      } catch (dbError) {
+        process.stderr.write(`Database connection error: ${dbError}\n`);
+        this.logError('Database connection error', dbError);
+        throw new Error(`Database connection failed: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
+      }
       
       // Create store
-      console.log('Creating store...');
+      process.stdout.write('Creating store...\n');
+      this.logDebug('Creating store...');
       const store = await this.createStore();
+      process.stdout.write(`Store created with ID: ${store?.id || 'unknown'}\n`);
+      this.logDebug(`Store created with ID: ${store?.id || 'unknown'}`);
       
       // Create products (with variants and images)
-      console.log('Creating products with variants and images...');
+      process.stdout.write('Creating products with variants and images...\n');
+      this.logDebug('Creating products with variants and images...');
       const products = await this.createSampleProducts(store);
-      console.log(`Created ${products.length} products.`);
+      process.stdout.write(`Created ${products?.length || 0} products.\n`);
+      this.logDebug(`Created ${products?.length || 0} products.`);
       
       // Create profiles
-      console.log('Creating customer profiles...');
+      process.stdout.write('Creating customer profiles...\n');
+      this.logDebug('Creating customer profiles...');
       const profiles = await this.createSampleProfiles();
-      console.log(`Created ${profiles.length} customer profiles.`);
+      process.stdout.write(`Created ${profiles?.length || 0} customer profiles.\n`);
+      this.logDebug(`Created ${profiles?.length || 0} customer profiles.`);
       
       // Generate orders
-      console.log('Generating orders...');
+      process.stdout.write('Generating orders...\n');
+      this.logDebug('Generating orders...');
       await this.generateOrders(store, profiles, products);
-      console.log('Orders generated successfully.');
+      process.stdout.write('Orders generated successfully.\n');
+      this.logDebug('Orders generated successfully.');
       
-      console.log('Seed operation completed successfully!');
+      process.stdout.write('Seed operation completed successfully!\n');
+      this.logDebug('Seed operation completed successfully!');
     } catch (error) {
-      console.error('Error during seed operation:', error);
+      process.stderr.write(`Error during seed operation: ${error}\n`);
+      this.logError('Error during seed operation', error);
+      
+      // Check for database-specific errors
+      if (error.code) {
+        process.stderr.write(`Database error code: ${error.code}\n`);
+        this.logDebug(`Database error code: ${error.code}`);
+      }
+      
+      // Try to get details about database connection
+      try {
+        const isConnected = this.dataSource.isInitialized;
+        process.stderr.write(`Database connection status during error: ${isConnected ? 'Connected' : 'Not connected'}\n`);
+        this.logDebug(`Database connection status during error: ${isConnected ? 'Connected' : 'Not connected'}`);
+        
+        if (isConnected) {
+          try {
+            // Check if we can still query
+            const result = await this.dataSource.query('SELECT 1 as test');
+            process.stdout.write(`Can still run queries: ${JSON.stringify(result)}\n`);
+            this.logDebug(`Can still run queries: ${JSON.stringify(result)}`);
+          } catch (queryError) {
+            process.stderr.write('Cannot run queries despite connection being initialized\n');
+            this.logDebug('Cannot run queries despite connection being initialized');
+          }
+        }
+      } catch (connError) {
+        process.stderr.write(`Unable to check database connection: ${connError}\n`);
+        this.logDebug(`Unable to check database connection: ${connError}`);
+      }
+      
       throw error;
     }
   }
