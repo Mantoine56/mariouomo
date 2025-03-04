@@ -198,6 +198,10 @@ export function ProductsStep({ initialData, onComplete }: ProductsStepProps) {
               role="combobox"
               aria-expanded={open}
               className="w-full justify-between"
+              onClick={() => {
+                console.log("Opening product search dropdown");
+                setOpen(true);
+              }}
             >
               <span>Search for products...</span>
               <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -213,7 +217,10 @@ export function ProductsStep({ initialData, onComplete }: ProductsStepProps) {
                     <CommandItem
                       key={product.id}
                       value={product.name}
-                      onSelect={() => addProduct(product)}
+                      onSelect={() => {
+                        console.log("Selected product:", product);
+                        addProduct(product);
+                      }}
                       className="flex items-center justify-between"
                     >
                       <div className="flex items-center">
@@ -250,6 +257,20 @@ export function ProductsStep({ initialData, onComplete }: ProductsStepProps) {
                           <span className="text-red-500">Out of stock</span>
                         )}
                       </div>
+                      
+                      {/* Add manual add button for easier selection */}
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent CommandItem's onSelect from firing
+                          console.log("Manual add product:", product);
+                          addProduct(product);
+                        }}
+                        className="ml-2"
+                      >
+                        Add
+                      </Button>
                     </CommandItem>
                   ))}
                 </ScrollArea>

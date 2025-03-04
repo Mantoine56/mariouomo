@@ -124,6 +124,8 @@ export default function CreateOrderPage() {
    * Update order data from a step
    */
   const updateOrderData = (stepId: string, data: Partial<OrderFormData>) => {
+    console.log(`Updating order data for step ${stepId}:`, data);
+    
     setOrderData(prev => {
       const updatedData = { ...prev, ...data };
       
@@ -140,7 +142,11 @@ export default function CreateOrderPage() {
     });
     
     // Mark the step as completed
-    setCompletedSteps(prev => ({ ...prev, [stepId]: true }));
+    setCompletedSteps(prev => {
+      const updated = { ...prev, [stepId]: true };
+      console.log("Updated completed steps:", updated);
+      return updated;
+    });
   };
 
   /**
@@ -150,7 +156,11 @@ export default function CreateOrderPage() {
     // Validate current step before moving forward
     const currentStepId = STEPS[currentStep].id;
     
+    console.log("Current step:", currentStepId);
+    console.log("Completed steps:", completedSteps);
+    
     if (!completedSteps[currentStepId]) {
+      console.log("Step not completed");
       toast({
         title: "Please complete the current step",
         description: `You need to fill out all required fields in the ${STEPS[currentStep].label} section.`,
@@ -161,6 +171,7 @@ export default function CreateOrderPage() {
     
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(currentStep + 1);
+      console.log("Moving to next step:", STEPS[currentStep + 1].id);
     }
   };
 

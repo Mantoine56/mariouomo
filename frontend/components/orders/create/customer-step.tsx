@@ -193,6 +193,10 @@ export function CustomerStep({ initialData, onComplete }: CustomerStepProps) {
                     role="combobox"
                     aria-expanded={open}
                     className="w-full justify-between"
+                    onClick={() => {
+                      console.log("Opening customer dropdown");
+                      setOpen(true);
+                    }}
                   >
                     {selectedCustomer ? 
                       selectedCustomer.name : 
@@ -210,6 +214,7 @@ export function CustomerStep({ initialData, onComplete }: CustomerStepProps) {
                           key={customer.id}
                           value={customer.name}
                           onSelect={() => {
+                            console.log("Selected customer:", customer);
                             setSelectedCustomer(customer);
                             setOpen(false);
                           }}
@@ -228,6 +233,21 @@ export function CustomerStep({ initialData, onComplete }: CustomerStepProps) {
                               {customer.email}
                             </span>
                           </div>
+                          
+                          {/* Add manual select button for additional trigger */}
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent CommandItem's onSelect from firing
+                              console.log("Manual select customer:", customer);
+                              setSelectedCustomer(customer);
+                              setOpen(false);
+                            }}
+                            className="ml-auto"
+                          >
+                            Select
+                          </Button>
                         </CommandItem>
                       ))}
                     </CommandGroup>
