@@ -25,6 +25,56 @@ export type Product = {
   cost?: number;
 };
 
+/**
+ * Define the shape of an Order
+ */
+export type Order = {
+  id: string;
+  customer: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+  };
+  status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
+  total_amount: number;
+  subtotal: number;
+  tax: number;
+  shipping: number;
+  created_at: string;
+  updated_at: string;
+  payment_status: 'pending' | 'paid' | 'failed' | 'refunded';
+  shipping_address: {
+    street: string;
+    city: string;
+    state: string;
+    country: string;
+    postal_code: string;
+    additional_details?: string;
+  };
+  billing_address: {
+    street: string;
+    city: string;
+    state: string;
+    country: string;
+    postal_code: string;
+    additional_details?: string;
+  };
+  items: Array<{
+    id: string;
+    product_id: string;
+    product_name: string;
+    product_image?: string;
+    quantity: number;
+    unit_price: number;
+    total_price: number;
+  }>;
+  customer_notes?: string;
+  staff_notes?: string;
+  payment_method?: string;
+  tracking_number?: string;
+};
+
 export const delay = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -433,3 +483,427 @@ export const fakeProducts = {
 
 // Initialize sample products - ensure this is called
 fakeProducts.initialize(); 
+
+// Mock order data store
+export const fakeOrders = {
+  records: [] as Order[], // Holds the list of order objects
+
+  // Initialize with sample data
+  initialize() {
+    this.records = [
+      {
+        id: 'ORD-001',
+        customer: {
+          id: 'CUST-001',
+          name: 'John Doe',
+          email: 'john.doe@example.com',
+          phone: '+1 (555) 123-4567'
+        },
+        status: 'delivered',
+        total_amount: 189.97,
+        subtotal: 169.99,
+        tax: 9.99,
+        shipping: 9.99,
+        created_at: '2025-04-10T14:30:00Z',
+        updated_at: '2025-04-12T16:45:00Z',
+        payment_status: 'paid',
+        shipping_address: {
+          street: '123 Main St',
+          city: 'New York',
+          state: 'NY',
+          country: 'USA',
+          postal_code: '10001'
+        },
+        billing_address: {
+          street: '123 Main St',
+          city: 'New York',
+          state: 'NY',
+          country: 'USA',
+          postal_code: '10001'
+        },
+        items: [
+          {
+            id: 'ITEM-001',
+            product_id: 'PROD-002',
+            product_name: 'Slim Fit Jeans',
+            product_image: 'https://api.slingacademy.com/public/sample-products/2.png',
+            quantity: 1,
+            unit_price: 59.99,
+            total_price: 59.99
+          },
+          {
+            id: 'ITEM-002',
+            product_id: 'PROD-006',
+            product_name: 'Silk Dress Tie',
+            product_image: 'https://api.slingacademy.com/public/sample-products/6.png',
+            quantity: 2,
+            unit_price: 49.99,
+            total_price: 99.98
+          }
+        ],
+        payment_method: 'Credit Card',
+        tracking_number: 'TRK123456789'
+      },
+      {
+        id: 'ORD-002',
+        customer: {
+          id: 'CUST-002',
+          name: 'Jane Smith',
+          email: 'jane.smith@example.com',
+          phone: '+1 (555) 987-6543'
+        },
+        status: 'processing',
+        total_amount: 309.96,
+        subtotal: 279.98,
+        tax: 19.99,
+        shipping: 9.99,
+        created_at: '2025-04-12T10:15:00Z',
+        updated_at: '2025-04-12T11:20:00Z',
+        payment_status: 'paid',
+        shipping_address: {
+          street: '456 Oak Ave',
+          city: 'Los Angeles',
+          state: 'CA',
+          country: 'USA',
+          postal_code: '90001'
+        },
+        billing_address: {
+          street: '456 Oak Ave',
+          city: 'Los Angeles',
+          state: 'CA',
+          country: 'USA',
+          postal_code: '90001'
+        },
+        items: [
+          {
+            id: 'ITEM-003',
+            product_id: 'PROD-011',
+            product_name: 'Leather Oxford Shoes',
+            product_image: 'https://api.slingacademy.com/public/sample-products/11.png',
+            quantity: 1,
+            unit_price: 199.99,
+            total_price: 199.99
+          },
+          {
+            id: 'ITEM-004',
+            product_id: 'PROD-007',
+            product_name: 'Cashmere Scarf',
+            product_image: 'https://api.slingacademy.com/public/sample-products/7.png',
+            quantity: 1,
+            unit_price: 79.99,
+            total_price: 79.99
+          }
+        ]
+      },
+      {
+        id: 'ORD-003',
+        customer: {
+          id: 'CUST-003',
+          name: 'Robert Johnson',
+          email: 'robert.johnson@example.com'
+        },
+        status: 'pending',
+        total_amount: 279.97,
+        subtotal: 259.99,
+        tax: 14.99,
+        shipping: 4.99,
+        created_at: '2025-04-13T09:45:00Z',
+        updated_at: '2025-04-13T09:45:00Z',
+        payment_status: 'pending',
+        shipping_address: {
+          street: '789 Pine Blvd',
+          city: 'Chicago',
+          state: 'IL',
+          country: 'USA',
+          postal_code: '60007'
+        },
+        billing_address: {
+          street: '789 Pine Blvd',
+          city: 'Chicago',
+          state: 'IL',
+          country: 'USA',
+          postal_code: '60007'
+        },
+        items: [
+          {
+            id: 'ITEM-005',
+            product_id: 'PROD-004',
+            product_name: 'Wool Blend Overcoat',
+            product_image: 'https://api.slingacademy.com/public/sample-products/4.png',
+            quantity: 1,
+            unit_price: 249.99,
+            total_price: 249.99
+          },
+          {
+            id: 'ITEM-006',
+            product_id: 'PROD-012',
+            product_name: 'Cashmere Beanie',
+            product_image: 'https://api.slingacademy.com/public/sample-products/12.png',
+            quantity: 0.5,
+            unit_price: 59.99,
+            total_price: 29.98
+          }
+        ]
+      },
+      {
+        id: 'ORD-004',
+        customer: {
+          id: 'CUST-004',
+          name: 'Sarah Williams',
+          email: 'sarah.williams@example.com',
+          phone: '+1 (555) 456-7890'
+        },
+        status: 'shipped',
+        total_amount: 149.97,
+        subtotal: 129.99,
+        tax: 9.99,
+        shipping: 9.99,
+        created_at: '2025-04-11T16:20:00Z',
+        updated_at: '2025-04-12T14:30:00Z',
+        payment_status: 'paid',
+        shipping_address: {
+          street: '321 Elm St',
+          city: 'Dallas',
+          state: 'TX',
+          country: 'USA',
+          postal_code: '75001'
+        },
+        billing_address: {
+          street: '321 Elm St',
+          city: 'Dallas',
+          state: 'TX',
+          country: 'USA',
+          postal_code: '75001'
+        },
+        items: [
+          {
+            id: 'ITEM-007',
+            product_id: 'PROD-015',
+            product_name: 'Canvas Sneakers',
+            product_image: 'https://api.slingacademy.com/public/sample-products/15.png',
+            quantity: 1,
+            unit_price: 79.99,
+            total_price: 79.99
+          },
+          {
+            id: 'ITEM-008',
+            product_id: 'PROD-012',
+            product_name: 'Cashmere Beanie',
+            product_image: 'https://api.slingacademy.com/public/sample-products/12.png',
+            quantity: 1,
+            unit_price: 59.99,
+            total_price: 59.99
+          }
+        ],
+        payment_method: 'PayPal',
+        tracking_number: 'TRK987654321'
+      },
+      {
+        id: 'ORD-005',
+        customer: {
+          id: 'CUST-005',
+          name: 'Michael Brown',
+          email: 'michael.brown@example.com'
+        },
+        status: 'cancelled',
+        total_amount: 229.97,
+        subtotal: 209.99,
+        tax: 12.99,
+        shipping: 6.99,
+        created_at: '2025-04-09T11:30:00Z',
+        updated_at: '2025-04-10T09:15:00Z',
+        payment_status: 'refunded',
+        shipping_address: {
+          street: '555 Maple Dr',
+          city: 'Miami',
+          state: 'FL',
+          country: 'USA',
+          postal_code: '33101'
+        },
+        billing_address: {
+          street: '555 Maple Dr',
+          city: 'Miami',
+          state: 'FL',
+          country: 'USA',
+          postal_code: '33101'
+        },
+        items: [
+          {
+            id: 'ITEM-009',
+            product_id: 'PROD-005',
+            product_name: 'Italian Leather Loafers',
+            product_image: 'https://api.slingacademy.com/public/sample-products/5.png',
+            quantity: 1,
+            unit_price: 189.99,
+            total_price: 189.99
+          },
+          {
+            id: 'ITEM-010',
+            product_id: 'PROD-008',
+            product_name: 'Aviator Sunglasses',
+            product_image: 'https://api.slingacademy.com/public/sample-products/8.png',
+            quantity: 1,
+            unit_price: 129.99,
+            total_price: 129.99
+          }
+        ],
+        staff_notes: 'Customer requested cancellation due to ordering wrong size.',
+        payment_method: 'Credit Card'
+      }
+    ];
+  },
+
+  // Get all orders with optional filtering
+  async getAll({
+    search,
+    status,
+    dateRange
+  }: {
+    search?: string;
+    status?: string;
+    dateRange?: { from?: string; to?: string };
+  } = {}) {
+    let orders = [...this.records];
+
+    // Filter by status if provided
+    if (status) {
+      orders = orders.filter((order) => order.status === status);
+    }
+
+    // Filter by date range if provided
+    if (dateRange) {
+      if (dateRange.from) {
+        const fromDate = new Date(dateRange.from);
+        orders = orders.filter((order) => new Date(order.created_at) >= fromDate);
+      }
+      
+      if (dateRange.to) {
+        const toDate = new Date(dateRange.to);
+        orders = orders.filter((order) => new Date(order.created_at) <= toDate);
+      }
+    }
+
+    // Search functionality across multiple fields
+    if (search) {
+      const searchLower = search.toLowerCase();
+      orders = orders.filter(order => 
+        order.id.toLowerCase().includes(searchLower) ||
+        order.customer.name.toLowerCase().includes(searchLower) ||
+        order.customer.email.toLowerCase().includes(searchLower) ||
+        (order.tracking_number && order.tracking_number.toLowerCase().includes(searchLower)) ||
+        order.items.some(item => item.product_name.toLowerCase().includes(searchLower))
+      );
+    }
+
+    return orders;
+  },
+
+  // Get paginated results with filtering
+  async getOrders({
+    page = 1,
+    limit = 10,
+    search,
+    status,
+    dateRange
+  }: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+    dateRange?: { from?: string; to?: string };
+  } = {}) {
+    // Simulate a short API delay
+    await delay(50);
+    
+    // Make sure we have data
+    if (this.records.length === 0) {
+      this.initialize();
+    }
+    
+    const allOrders = await this.getAll({
+      search,
+      status,
+      dateRange
+    });
+    const totalOrders = allOrders.length;
+
+    // Pagination logic
+    const offset = (page - 1) * limit;
+    const paginatedOrders = allOrders.slice(offset, offset + limit);
+
+    // Return paginated response
+    return {
+      totalOrders,
+      orders: paginatedOrders,
+      page,
+      limit
+    };
+  },
+
+  /**
+   * Get an order by ID
+   * @param id - Order ID to fetch
+   * @returns Order or null if not found
+   */
+  async getOrder(id: string): Promise<Order | null> {
+    // Simulate API delay
+    await delay(300);
+    
+    const order = this.records.find(o => o.id === id);
+    return order || null;
+  },
+  
+  /**
+   * Update order status
+   * @param id - Order ID to update
+   * @param status - New status
+   * @returns Updated order or null if not found
+   */
+  async updateOrderStatus(id: string, status: Order['status']): Promise<Order | null> {
+    // Simulate API delay
+    await delay(600);
+    
+    const index = this.records.findIndex(o => o.id === id);
+    if (index === -1) return null;
+    
+    const now = new Date().toISOString();
+    this.records[index] = {
+      ...this.records[index],
+      status,
+      updated_at: now
+    };
+    
+    return this.records[index];
+  },
+  
+  /**
+   * Delete an order (typically only for testing purposes)
+   * @param id - Order ID to delete
+   * @returns Success status
+   */
+  async deleteOrder(id: string): Promise<{ success: boolean }> {
+    // Simulate API delay
+    await delay(600);
+    
+    const initialLength = this.records.length;
+    this.records = this.records.filter(o => o.id !== id);
+    
+    return { success: this.records.length < initialLength };
+  }
+};
+
+// Initialize sample orders
+fakeOrders.initialize(); 
+
+/**
+ * Fetch all orders from the mock API
+ * 
+ * @returns Array of order objects
+ */
+export const fetchOrders = async (): Promise<Order[]> => {
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 800));
+  
+  // Return a copy of the orders array
+  return [...fakeOrders.records];
+}; 

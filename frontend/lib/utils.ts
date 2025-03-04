@@ -10,4 +10,36 @@ import { twMerge } from "tailwind-merge"
  */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+/**
+ * Format a date into a readable string
+ * 
+ * @param date - Date to format (Date object or ISO string)
+ * @returns Formatted date string
+ */
+export function formatDate(date: Date | string): string {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  
+  // Return formatted date like "Jan 12, 2023"
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(dateObj);
+}
+
+/**
+ * Format a number as currency (USD)
+ * 
+ * @param amount - Amount to format
+ * @returns Formatted currency string
+ */
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
 } 
