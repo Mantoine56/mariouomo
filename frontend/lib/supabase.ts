@@ -7,10 +7,11 @@
  * - Storage (file uploads/downloads)
  */
 import { createClient } from '@supabase/supabase-js';
+import { config } from './config';
 
 // Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = config.supabase.url;
+const supabaseAnonKey = config.supabase.anonKey;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase credentials. Please check your environment variables.');

@@ -171,4 +171,27 @@ As of the current implementation:
 - ✅ Loading and error display components are ready for use
 - ✅ Configuration is centralized and environment variables are set up
 - 🔄 Analytics Dashboard has been updated to use real API data
-- ⏳ Database seeding is required before testing to ensure proper data visualization 
+- ⏳ Database seeding is required before testing to ensure proper data visualization
+
+## Testing & Development Environment
+
+### Database Seed Script
+We've created a comprehensive database seed script for analytics testing. To populate your database with test data:
+
+```bash
+cd backend
+pnpm install
+pnpm run seed
+```
+
+The seed script generates:
+- 25 products across 5 categories with variants
+- 100 customer profiles
+- 500-1000 historical orders across a 90-day period
+- Realistic pricing, inventory, and order patterns
+
+This data will provide meaningful patterns for all dashboard analytics components.
+
+## API Endpoints
+
+// ... existing code ... 
