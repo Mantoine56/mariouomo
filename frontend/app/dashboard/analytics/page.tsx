@@ -246,10 +246,140 @@ export default function AnalyticsDashboard() {
       {isLoading && !salesData ? (
         <Loading message="Loading analytics data..." minHeight="600px" />
       ) : (
-        // ... rest of the existing UI with the fetched data
         <>
-          {/* Continue with existing UI components but use the fetched data */}
-          {/* ... existing code ... */}
+          {/* Key Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard 
+              title="Total Revenue" 
+              value={formatCurrency(keyMetrics.totalRevenue.value)}
+              change={keyMetrics.totalRevenue.change}
+              icon={<DollarSign className="h-4 w-4" />}
+            />
+            <MetricCard 
+              title="Orders" 
+              value={keyMetrics.orders.value.toString()}
+              change={keyMetrics.orders.change}
+              icon={<ShoppingCart className="h-4 w-4" />}
+            />
+            <MetricCard 
+              title="Customers" 
+              value={keyMetrics.customers.value.toString()}
+              change={keyMetrics.customers.change}
+              icon={<Users className="h-4 w-4" />}
+            />
+            <MetricCard 
+              title="Conversion Rate" 
+              value={formatPercentage(keyMetrics.conversionRate.value)}
+              change={keyMetrics.conversionRate.change}
+              icon={<TrendingUp className="h-4 w-4" />}
+            />
+          </div>
+         
+          {/* Report Tabs */}
+          <Tabs defaultValue="overview" className="w-full" onValueChange={setReportType}>
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:w-auto lg:grid-cols-4">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="sales">Sales</TabsTrigger>
+              <TabsTrigger value="customers">Customers</TabsTrigger>
+              <TabsTrigger value="products">Products</TabsTrigger>
+            </TabsList>
+            
+            {/* Overview Tab */}
+            <TabsContent value="overview" className="space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Sales Trend Chart */}
+                <div className="lg:col-span-2">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <div>
+                        <CardTitle>Sales Trend</CardTitle>
+                        <CardDescription>Sales performance over time</CardDescription>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <SalesTrendChart 
+                        period={timePeriod}
+                        isLoading={isLoading}
+                        trend="up"
+                        percentageChange={keyMetrics.totalRevenue.change}
+                        data={salesChartData}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Revenue by Category */}
+                <div>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <div>
+                        <CardTitle>Revenue by Category</CardTitle>
+                        <CardDescription>
+                          Distribution of revenue across product categories
+                        </CardDescription>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <RevenueCategoryChart 
+                        period={timePeriod}
+                        isLoading={isLoading}
+                        data={revenueData}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Top Products */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <div>
+                      <CardTitle>Top Products</CardTitle>
+                      <CardDescription>Best-selling products by revenue</CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {topProducts.map((product, i) => (
+                        <div key={i} className="flex items-center">
+                          <div className="w-[35%] truncate font-medium">
+                            {product.name}
+                          </div>
+                          <div className="w-[20%] text-muted-foreground">
+                            {product.category}
+                          </div>
+                          <div className="w-[25%] text-right">
+                            {formatCurrency(product.revenue)}
+                          </div>
+                          <div className="w-[20%] text-right">
+                            {product.orders} orders
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Customer Acquisition */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <div>
+                      <CardTitle>Customer Acquisition</CardTitle>
+                      <CardDescription>New vs returning customers</CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <CustomerAcquisitionChart
+                      period={timePeriod}
+                      isLoading={isLoading}
+                      data={customerAcquisitionData}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
         </>
       )}
     </div>
