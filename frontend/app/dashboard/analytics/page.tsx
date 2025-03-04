@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import SalesTrendChart from "@/components/analytics/sales-trend-chart";
 import RevenueCategoryChart from "@/components/analytics/revenue-category-chart";
 import CustomerAcquisitionChart from "@/components/analytics/customer-acquisition-chart";
+import { AnalyticsExport } from "@/components/analytics/analytics-export";
 
 /**
  * Analytics Dashboard Page
@@ -37,12 +38,63 @@ export default function AnalyticsDashboard() {
   const [reportType, setReportType] = useState<string>("overview");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   
-  // Mock data for demonstration purposes
-  const salesData = generateMockSalesData(timePeriod);
-  const revenueData = generateMockRevenueData(timePeriod);
-  const keyMetrics = generateMockKeyMetrics(timePeriod);
-  const topProducts = generateMockTopProducts();
-  const customerMetrics = generateMockCustomerMetrics(timePeriod);
+  // Mock data for key metrics
+  const keyMetrics = {
+    totalRevenue: { value: 24685.41, change: 12.5 },
+    orders: { value: 356, change: 8.2 },
+    customers: { value: 249, change: 14.3 },
+    conversionRate: { value: 3.45, change: -0.5 }
+  };
+
+  // Mock data for sales trend
+  const salesData = [
+    { date: "Jan 1", value: 1200 },
+    { date: "Jan 2", value: 1300 },
+    { date: "Jan 3", value: 1100 },
+    { date: "Jan 4", value: 1500 },
+    { date: "Jan 5", value: 1400 },
+    { date: "Jan 6", value: 1600 },
+    { date: "Jan 7", value: 1750 }
+  ];
+
+  // Mock data for revenue by category
+  const revenueData = [
+    { category: "Shoes", revenue: 12420, color: "#FF6384" },
+    { category: "Clothing", revenue: 8240, color: "#36A2EB" },
+    { category: "Accessories", revenue: 2860, color: "#FFCE56" },
+    { category: "Other", revenue: 1165, color: "#4BC0C0" }
+  ];
+
+  // Mock data for customer metrics
+  const customerMetrics = {
+    newCustomers: 156,
+    newCustomersChange: 12.5,
+    avgOrderValue: 98.75,
+    avgOrderValueChange: 4.2,
+    returnRate: 8.3,
+    returnRateChange: -2.1,
+    repeatPurchase: 27.8,
+    repeatPurchaseChange: 5.6,
+    // Add formatted data for export in the correct structure
+    data: [
+      { date: "Jan 1", newCustomers: 22, returningCustomers: 10 },
+      { date: "Jan 2", newCustomers: 18, returningCustomers: 12 },
+      { date: "Jan 3", newCustomers: 25, returningCustomers: 15 },
+      { date: "Jan 4", newCustomers: 20, returningCustomers: 18 },
+      { date: "Jan 5", newCustomers: 23, returningCustomers: 14 },
+      { date: "Jan 6", newCustomers: 28, returningCustomers: 16 },
+      { date: "Jan 7", newCustomers: 20, returningCustomers: 20 }
+    ]
+  };
+
+  // Mock data for top products
+  const topProducts = [
+    { name: "Air Max 270", category: "Shoes", revenue: 5840, orders: 73 },
+    { name: "Dri-FIT T-Shirt", category: "Clothing", revenue: 3240, orders: 108 },
+    { name: "Elite Socks", category: "Accessories", revenue: 1250, orders: 125 },
+    { name: "Pegasus 38", category: "Shoes", revenue: 4200, orders: 56 },
+    { name: "Tech Fleece Hoodie", category: "Clothing", revenue: 3780, orders: 42 }
+  ];
   
   // Handler for refreshing data
   const handleRefreshData = () => {
@@ -78,18 +130,19 @@ export default function AnalyticsDashboard() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
+    <div className="flex flex-col gap-4 p-4 md:p-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h1>
+          <h1 className="text-2xl font-bold">Analytics Dashboard</h1>
           <p className="text-muted-foreground">
-            Gain insights into your business performance and make data-driven decisions.
+            Monitor your store performance and make data-driven decisions
           </p>
         </div>
+        
         <div className="flex items-center gap-2">
-          <Select
-            defaultValue={timePeriod}
+          <Select 
+            defaultValue={timePeriod} 
             onValueChange={handlePeriodChange}
           >
             <SelectTrigger className="w-[180px]">
@@ -105,6 +158,15 @@ export default function AnalyticsDashboard() {
               <SelectItem value="all">All time</SelectItem>
             </SelectContent>
           </Select>
+          
+          {/* Add Export button for overview metrics */}
+          <AnalyticsExport
+            type="overview"
+            period={timePeriod}
+            data={keyMetrics}
+            size="icon"
+          />
+          
           <Button 
             variant="outline" 
             size="icon" 
@@ -123,8 +185,8 @@ export default function AnalyticsDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard 
           title="Total Revenue" 
-          value={formatCurrency(keyMetrics.revenue.value)}
-          change={keyMetrics.revenue.change}
+          value={formatCurrency(keyMetrics.totalRevenue.value)}
+          change={keyMetrics.totalRevenue.change}
           icon={<DollarSign className="h-4 w-4" />}
         />
         <MetricCard 
@@ -161,21 +223,56 @@ export default function AnalyticsDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Sales Trend Chart */}
             <div className="lg:col-span-2">
-              <SalesTrendChart 
-                period={timePeriod}
-                isLoading={isLoading}
-                trend="up"
-                percentageChange={12.5}
-              />
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <div>
+                    <CardTitle>Sales Trend</CardTitle>
+                    <CardDescription>Sales performance over time</CardDescription>
+                  </div>
+                  {/* Add Export button for sales trend data */}
+                  <AnalyticsExport
+                    type="sales"
+                    period={timePeriod}
+                    data={salesData}
+                    size="sm"
+                  />
+                </CardHeader>
+                <CardContent>
+                  <SalesTrendChart 
+                    period={timePeriod}
+                    isLoading={isLoading}
+                    trend="up"
+                    percentageChange={12.5}
+                    data={salesData}
+                  />
+                </CardContent>
+              </Card>
             </div>
 
             {/* Revenue by Category */}
             <div>
-              <RevenueCategoryChart 
-                period={timePeriod}
-                isLoading={isLoading}
-                chartType="donut"
-              />
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <div>
+                    <CardTitle>Revenue by Category</CardTitle>
+                    <CardDescription>Category breakdown</CardDescription>
+                  </div>
+                  {/* Add Export button for revenue category data */}
+                  <AnalyticsExport
+                    type="revenue-category"
+                    period={timePeriod}
+                    data={revenueData}
+                    size="sm"
+                  />
+                </CardHeader>
+                <CardContent>
+                  <RevenueCategoryChart 
+                    period={timePeriod}
+                    isLoading={isLoading}
+                    data={revenueData}
+                  />
+                </CardContent>
+              </Card>
             </div>
           </div>
 
@@ -270,23 +367,59 @@ export default function AnalyticsDashboard() {
         {/* Sales Tab */}
         <TabsContent value="sales" className="space-y-4">
           <div className="grid grid-cols-1 gap-4">
-            <SalesTrendChart 
-              title="Detailed Sales Analysis"
-              description="In-depth sales performance metrics"
-              period={timePeriod}
-              isLoading={isLoading}
-              trend={timePeriod === "30d" ? "down" : "up"}
-              percentageChange={timePeriod === "30d" ? -4.2 : 8.7}
-            />
+            <div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <div>
+                    <CardTitle>Sales Performance</CardTitle>
+                    <CardDescription>Revenue, orders and trends</CardDescription>
+                  </div>
+                  {/* Add Export button for sales data */}
+                  <AnalyticsExport
+                    type="sales"
+                    period={timePeriod}
+                    data={salesData}
+                    size="sm"
+                  />
+                </CardHeader>
+                <CardContent>
+                  <SalesTrendChart 
+                    period={timePeriod}
+                    isLoading={isLoading}
+                    trend="up"
+                    percentageChange={12.5}
+                    data={salesData}
+                  />
+                </CardContent>
+              </Card>
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <RevenueCategoryChart 
-                title="Revenue by Category" 
-                description="Category breakdown"
-                period={timePeriod}
-                isLoading={isLoading}
-                chartType="bar"
-              />
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <div>
+                    <CardTitle>Revenue by Category</CardTitle>
+                    <CardDescription>Category breakdown</CardDescription>
+                  </div>
+                  {/* Add Export button for revenue category data */}
+                  <AnalyticsExport
+                    type="revenue-category"
+                    period={timePeriod}
+                    data={revenueData}
+                    size="sm"
+                  />
+                </CardHeader>
+                <CardContent>
+                  <RevenueCategoryChart 
+                    title="Revenue by Category" 
+                    description="Category breakdown"
+                    period={timePeriod}
+                    isLoading={isLoading}
+                    chartType="bar"
+                    data={revenueData}
+                  />
+                </CardContent>
+              </Card>
               
               <Card>
                 <CardHeader>
@@ -310,12 +443,28 @@ export default function AnalyticsDashboard() {
         {/* Customers Tab */}
         <TabsContent value="customers" className="space-y-4">
           <div className="grid grid-cols-1 gap-4">
-            <CustomerAcquisitionChart 
-              title="Customer Acquisition & Retention"
-              description="New vs. returning customers"
-              period={timePeriod}
-              isLoading={isLoading}
-            />
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div>
+                  <CardTitle>Customer Acquisition & Retention</CardTitle>
+                  <CardDescription>New vs. returning customers</CardDescription>
+                </div>
+                {/* Add Export button for customer data */}
+                <AnalyticsExport
+                  type="customers"
+                  period={timePeriod}
+                  data={customerMetrics.data}
+                  size="sm"
+                />
+              </CardHeader>
+              <CardContent>
+                <CustomerAcquisitionChart 
+                  period={timePeriod}
+                  isLoading={isLoading}
+                  data={customerMetrics.data}
+                />
+              </CardContent>
+            </Card>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card>
@@ -356,9 +505,18 @@ export default function AnalyticsDashboard() {
         {/* Products Tab */}
         <TabsContent value="products" className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Product Performance</CardTitle>
-              <CardDescription>Inventory and sales by product</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle>Product Performance</CardTitle>
+                <CardDescription>Top selling products and trends</CardDescription>
+              </div>
+              {/* Add Export button for product data */}
+              <AnalyticsExport
+                type="products"
+                period={timePeriod}
+                data={topProducts}
+                size="sm"
+              />
             </CardHeader>
             <CardContent>
               <div className="h-[400px] flex items-center justify-center bg-muted/20 rounded-md">
@@ -413,59 +571,4 @@ function MetricCard({ title, value, change, icon }: MetricCardProps) {
       </CardContent>
     </Card>
   );
-}
-
-// Mock data generation functions
-function generateMockSalesData(period: string) {
-  // Generate random sales data based on the selected time period
-  return {
-    data: [/* data points would go here */],
-    labels: [/* labels would go here */],
-  };
-}
-
-function generateMockRevenueData(period: string) {
-  // Generate random revenue data by category based on the selected time period
-  return [
-    { category: "Shirts", revenue: 24500 },
-    { category: "Pants", revenue: 18300 },
-    { category: "Shoes", revenue: 12800 },
-    { category: "Accessories", revenue: 8700 },
-    { category: "Outerwear", revenue: 15200 },
-  ];
-}
-
-function generateMockKeyMetrics(period: string) {
-  // Generate key metrics based on the selected time period
-  return {
-    revenue: { value: 124356.78, change: 12.3 },
-    orders: { value: 1243, change: 8.7 },
-    customers: { value: 842, change: 5.2 },
-    conversionRate: { value: 3.2, change: -0.4 }
-  };
-}
-
-function generateMockTopProducts() {
-  // Generate top products data
-  return [
-    { name: "Premium Oxford Shirt", category: "Shirts", revenue: 12450, orders: 124 },
-    { name: "Classic Chino Pants", category: "Pants", revenue: 9800, orders: 98 },
-    { name: "Leather Derby Shoes", category: "Shoes", revenue: 7650, orders: 51 },
-    { name: "Wool Peacoat", category: "Outerwear", revenue: 6300, orders: 42 },
-    { name: "Silk Tie", category: "Accessories", revenue: 4500, orders: 75 }
-  ];
-}
-
-function generateMockCustomerMetrics(period: string) {
-  // Generate customer metrics based on the selected time period
-  return {
-    newCustomers: 156,
-    newCustomersChange: 8.4,
-    avgOrderValue: 147.32,
-    avgOrderValueChange: 3.2,
-    returnRate: 2.8,
-    returnRateChange: -0.3,
-    repeatPurchase: 34.5,
-    repeatPurchaseChange: 5.7
-  };
 } 
