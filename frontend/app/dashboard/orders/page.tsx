@@ -15,6 +15,7 @@ import { DataTable } from './components/data-table';
 import { columns } from './components/columns';
 import { useToast } from '@/components/ui/use-toast';
 import { Order, fetchOrders } from '@/lib/mock-api';
+import { useRouter } from 'next/navigation';
 
 /**
  * Orders page component with data fetching and interaction handling
@@ -23,6 +24,7 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { toast } = useToast();
+  const router = useRouter();
 
   /**
    * Load orders from API on component mount
@@ -89,7 +91,7 @@ export default function OrdersPage() {
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </Button>
-            <Button>
+            <Button onClick={() => router.push('/dashboard/orders/create')}>
               <Plus className="mr-2 h-4 w-4" />
               Create order
             </Button>
