@@ -25,24 +25,24 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CommandMenu } from "../command/command-menu";
 
 export default function Header() {
-  const { toggle, isMobile } = useSidebar();
+  const { toggleCollapsed } = useSidebar();
   const [showMobileSearch, setShowMobileSearch] = React.useState(false);
+  const isMobileView = React.useRef(typeof window !== 'undefined' && window.innerWidth < 768);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full shrink-0 items-center gap-4 border-b bg-background px-4 md:px-6">
       {/* Mobile menu button - only visible on small screens */}
-      {isMobile && (
+      <div className="md:hidden">
         <Button
           variant="ghost"
           size="icon"
-          className="md:hidden"
-          onClick={toggle}
+          onClick={toggleCollapsed}
           aria-label="Toggle Menu"
         >
           <Menu className="h-5 w-5" />
           <span className="sr-only">Toggle Menu</span>
         </Button>
-      )}
+      </div>
 
       {/* Main header content */}
       <div className="flex w-full items-center gap-2 md:gap-4">

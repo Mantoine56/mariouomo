@@ -249,7 +249,7 @@ export const CellAction: React.FC<CellActionProps> = ({
           <DropdownMenuContent>
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuItem onClick={onEdit}>
-              <Pencil className="mr-2 h-4 w-4" />
+              <Pencil className='mr-2 h-4 w-4' />
               Edit
             </DropdownMenuItem>
             <DropdownMenuItem 
@@ -257,9 +257,9 @@ export const CellAction: React.FC<CellActionProps> = ({
                 setShowDropdown(false);
                 setShowDeleteDialog(true);
               }}
-              className="text-red-600 focus:text-red-600"
+              className='text-red-600 hover:text-red-900'
             >
-              <Trash className="mr-2 h-4 w-4" />
+              <Trash className='mr-2 h-4 w-4' />
               Delete
             </DropdownMenuItem>
           </DropdownMenuContent>

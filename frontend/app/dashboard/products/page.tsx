@@ -13,6 +13,7 @@ import { Package, Plus, Search, Loader2 } from 'lucide-react';
 import { DataTable } from '@/components/ui/table/data-table';
 import { columns } from './components/columns';
 import { Product, fakeProducts } from '@/lib/mock-api';
+import Link from 'next/link';
 
 export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
@@ -108,10 +109,12 @@ export default function ProductsPage() {
           <Package className="h-6 w-6 text-gray-600" />
           <h1 className="text-2xl font-semibold text-gray-900">Products</h1>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Product
-        </Button>
+        <Link href="/dashboard/products/new">
+          <Button>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Product
+          </Button>
+        </Link>
       </div>
       
       {/* Filters and search */}

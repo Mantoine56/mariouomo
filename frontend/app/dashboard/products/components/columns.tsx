@@ -4,6 +4,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import Image from 'next/image';
 import { CellAction } from './cell-action';
 import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 
 /**
  * Column definitions for the product table
@@ -41,7 +42,14 @@ export const columns: ColumnDef<Product>[] = [
     accessorKey: 'name',
     header: 'Product Name',
     cell: ({ row }) => {
-      return <div className="font-medium">{row.getValue('name')}</div>;
+      return (
+        <Link 
+          href={`/dashboard/products/${row.original.id}`}
+          className="font-medium text-primary hover:underline"
+        >
+          {row.getValue('name')}
+        </Link>
+      );
     }
   },
   {

@@ -14,6 +14,13 @@ export type Product = {
   updated_at?: string;
   inventory: number;
   status: 'Active' | 'Low Stock' | 'Out of Stock';
+  /** Array of product images (multiple images support) */
+  images?: Array<{
+    id: string;
+    url: string;
+    name: string;
+    size: number;
+  }>;
 };
 
 export const delay = (ms: number) =>
@@ -37,6 +44,14 @@ export const fakeProducts = {
         photo_url: 'https://api.slingacademy.com/public/sample-products/1.png',
         created_at: '2024-01-15T10:30:00Z',
         updated_at: '2024-03-01T14:22:00Z',
+        images: [
+          {
+            id: 'img-001-1',
+            url: 'https://api.slingacademy.com/public/sample-products/1.png',
+            name: 'tshirt-front.png',
+            size: 45678
+          }
+        ]
       },
       { 
         id: 'PROD-002', 
@@ -49,6 +64,14 @@ export const fakeProducts = {
         photo_url: 'https://api.slingacademy.com/public/sample-products/2.png',
         created_at: '2024-01-20T11:45:00Z',
         updated_at: '2024-03-05T09:17:00Z',
+        images: [
+          {
+            id: 'img-002-1',
+            url: 'https://api.slingacademy.com/public/sample-products/2.png',
+            name: 'jeans-front.png',
+            size: 56789
+          }
+        ]
       },
       { 
         id: 'PROD-003', 
@@ -326,6 +349,81 @@ export const fakeProducts = {
     this.records = this.records.filter(p => p.id !== id);
     
     return { success: this.records.length < initialLength };
+  },
+
+  /**
+   * Get a product by ID
+   * @param id - Product ID to fetch
+   * @returns Product or null if not found
+   */
+  async getProduct(id: string): Promise<Product | null> {
+    // Simulate API delay
+    await delay(300);
+    
+    const product = this.records.find(p => p.id === id);
+    return product || null;
+  },
+
+  /**
+   * Create a new product
+   * @param product - Product data without ID
+   * @returns Created product with generated ID and timestamps
+   */
+  async createProduct(product: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product> {
+    // Simulate API delay
+    await delay(800);
+    
+    const now = new Date().toISOString();
+    
+    // If product has images but no photo_url, use the first image as photo_url
+    let photoUrl = product.photo_url;
+    if (!photoUrl && product.images && product.images.length > 0) {
+      photoUrl = product.images[0].url;
+    }
+    
+    const newProduct: Product = {
+      ...product,
+      photo_url: photoUrl,
+      id: `PROD-${String(this.records.length + 1).padStart(3, '0')}`,
+      created_at: now,
+      updated_at: now
+    };
+    
+    this.records.push(newProduct);
+    return newProduct;
+  },
+
+  /**
+   * Update an existing product
+   * @param id - Product ID to update
+   * @param updates - Partial product data to update
+   * @returns Updated product or null if not found
+   */
+  async updateProduct(id: string, updates: Partial<Omit<Product, 'id' | 'created_at' | 'updated_at'>>): Promise<Product | null> {
+    // Simulate API delay
+    await delay(600);
+    
+    const index = this.records.findIndex(p => p.id === id);
+    if (index === -1) return null;
+    
+    // If product has images but no photo_url, use the first image as photo_url
+    let photoUrl = updates.photo_url;
+    if (updates.images && updates.images.length > 0) {
+      if (!photoUrl) {
+        photoUrl = updates.images[0].url;
+      }
+    }
+    
+    const now = new Date().toISOString();
+    const updatedProduct: Product = {
+      ...this.records[index],
+      ...updates,
+      photo_url: photoUrl !== undefined ? photoUrl : this.records[index].photo_url,
+      updated_at: now
+    };
+    
+    this.records[index] = updatedProduct;
+    return updatedProduct;
   }
 };
 
