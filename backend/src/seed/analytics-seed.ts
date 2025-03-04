@@ -7,43 +7,13 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Order, OrderStatus } from '../modules/orders/entities/order.entity';
-import { OrderItem } from '../modules/orders/entities/order-item.entity';
-import { Product } from '../modules/products/entities/product.entity';
-import { Category } from '../modules/products/entities/category.entity';
-import { Profile } from '../modules/users/entities/profile.entity';
-import { Store } from '../modules/stores/entities/store.entity';
-import { ProductVariant } from '../modules/products/entities/product-variant.entity';
-import { ProductImage } from '../modules/products/entities/product-image.entity';
+import { DataSource } from 'typeorm';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AnalyticsSeedService {
   constructor(
-    @InjectRepository(Order)
-    private orderRepository: Repository<Order>,
-    
-    @InjectRepository(OrderItem)
-    private orderItemRepository: Repository<OrderItem>,
-    
-    @InjectRepository(Product)
-    private productRepository: Repository<Product>,
-    
-    @InjectRepository(Category)
-    private categoryRepository: Repository<Category>,
-    
-    @InjectRepository(Profile)
-    private profileRepository: Repository<Profile>,
-    
-    @InjectRepository(Store)
-    private storeRepository: Repository<Store>,
-    
-    @InjectRepository(ProductVariant)
-    private variantRepository: Repository<ProductVariant>,
-    
-    @InjectRepository(ProductImage)
-    private imageRepository: Repository<ProductImage>,
+    private readonly dataSource: DataSource
   ) {}
   
   /**
@@ -71,60 +41,46 @@ export class AnalyticsSeedService {
   /**
    * Create a default store for our products
    */
-  async createStore(): Promise<Store> {
-    const store = this.storeRepository.create({
+  async createStore(): Promise<any> {
+    // Create store matching the actual database schema
+    const storeData = {
+      id: uuidv4(),
       name: 'Mario Uomo Main Store',
-      description: 'Flagship store for Mario Uomo luxury products',
-      status: 'active',
-      currency: 'USD',
-      contact_email: 'store@mariouomo.com',
-      contact_phone: '+1-555-123-4567',
+      domain: 'mariouomo.com',
       metadata: {
         location: 'New York',
         established: '2020',
-        flagship: true
-      }
-    });
+        flagship: true,
+        contact_email: 'store@mariouomo.com',
+        contact_phone: '+1-555-123-4567',
+        currency: 'USD'
+      },
+      created_at: new Date(),
+      updated_at: new Date()
+    };
     
-    return await this.storeRepository.save(store);
+    return await this.dataSource.getRepository('stores').save(storeData);
   }
   
   /**
-   * Create sample product categories
+   * Define product categories (as metadata since we don't have a categories table)
    */
-  async createSampleCategories(): Promise<Category[]> {
-    const categoryData = [
-      { name: 'Shoes', slug: 'shoes', description: 'Footwear collection' },
-      { name: 'Clothing', slug: 'clothing', description: 'Apparel collection' },
-      { name: 'Accessories', slug: 'accessories', description: 'Bags, jewelry, and other accessories' },
-      { name: 'Equipment', slug: 'equipment', description: 'Sports and fitness equipment' },
-      { name: 'Electronics', slug: 'electronics', description: 'Gadgets and electronics' },
+  private getProductCategories(): string[] {
+    return [
+      'Shoes',
+      'Clothing',
+      'Accessories',
+      'Equipment',
+      'Electronics'
     ];
-    
-    const savedCategories: Category[] = [];
-    
-    for (const data of categoryData) {
-      const category = this.categoryRepository.create({
-        name: data.name,
-        slug: data.slug,
-        description: data.description,
-        isVisible: true,
-        position: savedCategories.length,
-        childCount: 0,
-        totalProducts: 0
-      });
-      
-      savedCategories.push(await this.categoryRepository.save(category));
-    }
-    
-    return savedCategories;
   }
   
   /**
-   * Create sample products in each category
+   * Create sample products with their categories stored in metadata
    */
-  async createSampleProducts(store: Store, categories: Category[]): Promise<Product[]> {
-    const products: Product[] = [];
+  async createSampleProducts(store: any): Promise<any[]> {
+    const products: any[] = [];
+    const categories = this.getProductCategories();
     
     // Sample products by category name
     const productsByCategory: Record<string, Array<{name: string, price: number, description: string}>> = {
@@ -165,49 +121,115 @@ export class AnalyticsSeedService {
       ],
     };
     
+    const productRepo = this.dataSource.getRepository('products');
+    const variantRepo = this.dataSource.getRepository('product_variants');
+    const inventoryRepo = this.dataSource.getRepository('inventory_items');
+    const imageRepo = this.dataSource.getRepository('product_images');
+    
     for (const category of categories) {
-      const categoryProducts = productsByCategory[category.name] || [];
+      const categoryProducts = productsByCategory[category] || [];
       
       for (const productData of categoryProducts) {
+        // Determine sale price (25% of products will be on sale)
+        const onSale = Math.random() > 0.75;
+        const compareAtPrice = onSale ? productData.price * 1.2 : null;
+        const costPrice = productData.price * 0.4; // 60% markup
+        
         // Create the product
-        const product = this.productRepository.create({
+        const productId = uuidv4();
+        const product = {
+          id: productId,
           store_id: store.id,
           name: productData.name,
           description: productData.description,
           status: 'active',
-          type: 'physical',
-          category: category.name,
-          base_price: productData.price,
-          tags: [category.name.toLowerCase(), 'premium', 'luxury'],
-          store: store,
-          categories: [category]
-        });
-        
-        const savedProduct = await this.productRepository.save(product);
-        
-        // Create a default variant
-        const variant = this.variantRepository.create({
-          product_id: savedProduct.id,
-          name: 'Default',
-          sku: `${category.name.substring(0, 3).toUpperCase()}-${this.randomNumber(10000, 99999)}`,
           price: productData.price,
-          inventory_quantity: this.randomNumber(10, 100),
-          product: savedProduct
-        });
+          compare_at_price: compareAtPrice,
+          cost_price: costPrice,
+          metadata: {
+            category: category,
+            tags: [category.toLowerCase(), 'premium', 'luxury'],
+            type: 'physical',
+            weight: this.randomDecimal(0.2, 5, 1),
+            dimensions: {
+              length: this.randomDecimal(5, 50, 1),
+              width: this.randomDecimal(5, 30, 1),
+              height: this.randomDecimal(2, 20, 1),
+              unit: 'cm'
+            },
+            featured: Math.random() > 0.8
+          },
+          created_at: new Date(),
+          updated_at: new Date()
+        };
         
-        await this.variantRepository.save(variant);
+        const savedProduct = await productRepo.save(product);
+        
+        // Create variants (1-3 per product)
+        const variantCount = this.randomNumber(1, 3);
+        
+        for (let i = 0; i < variantCount; i++) {
+          // Define size options based on product category
+          let sizeOptions;
+          if (category === 'Shoes') {
+            sizeOptions = ['7', '8', '9', '10', '11', '12'];
+          } else if (category === 'Clothing') {
+            sizeOptions = ['S', 'M', 'L', 'XL'];
+          } else {
+            sizeOptions = ['One Size'];
+          }
+          
+          // Define color options
+          const colorOptions = ['Black', 'Brown', 'Navy', 'Tan', 'Grey', 'White'];
+          
+          // Select random options
+          const size = sizeOptions[Math.floor(Math.random() * sizeOptions.length)];
+          const color = colorOptions[Math.floor(Math.random() * colorOptions.length)];
+          
+          // Create variant
+          const variantId = uuidv4();
+          const variant = {
+            id: variantId,
+            product_id: savedProduct.id,
+            sku: `${category.substring(0, 3).toUpperCase()}-${color.substring(0, 1)}${size}-${this.randomNumber(1000, 9999)}`,
+            barcode: `${this.randomNumber(100000000000, 999999999999)}`,
+            price_adjustment: i === 0 ? 0 : this.randomDecimal(5, 30), // First variant is base price, others have adjustments
+            position: i,
+            option_values: {
+              size: size,
+              color: color
+            },
+            created_at: new Date(),
+            updated_at: new Date()
+          };
+          
+          const savedVariant = await variantRepo.save(variant);
+          
+          // Create inventory for this variant
+          const inventoryItem = {
+            id: uuidv4(),
+            variant_id: savedVariant.id,
+            quantity: this.randomNumber(10, 100),
+            reserved: this.randomNumber(0, 5),
+            created_at: new Date(),
+            updated_at: new Date()
+          };
+          
+          await inventoryRepo.save(inventoryItem);
+        }
         
         // Create a product image
-        const image = this.imageRepository.create({
+        const image = {
+          id: uuidv4(),
           product_id: savedProduct.id,
-          url: `https://source.unsplash.com/random/800x600/?${category.name.toLowerCase()},${productData.name.split(' ')[0].toLowerCase()}`,
+          url: `https://source.unsplash.com/random/800x600/?${category.toLowerCase()},${productData.name.split(' ')[0].toLowerCase()}`,
           alt_text: productData.name,
           position: 0,
-          is_primary: true,
-          product: savedProduct
-        });
+          created_at: new Date(),
+          updated_at: new Date()
+        };
         
-        await this.imageRepository.save(image);
+        await imageRepo.save(image);
         
         products.push(savedProduct);
       }
@@ -217,39 +239,45 @@ export class AnalyticsSeedService {
   }
   
   /**
-   * Create sample users for orders
+   * Create sample profiles for orders
    */
-  async createSampleUsers(): Promise<Profile[]> {
-    const users: Profile[] = [];
+  async createSampleProfiles(): Promise<any[]> {
+    const profiles: any[] = [];
+    const profileRepo = this.dataSource.getRepository('profiles');
     
     for (let i = 0; i < 100; i++) {
-      const user = this.profileRepository.create({
-        full_name: `User ${i}`,
-        role: 'customer',
+      // Create profile
+      const profile = {
+        id: uuidv4(),
+        first_name: `User`,
+        last_name: `${i}`,
+        phone_number: `+1-555-${this.randomNumber(100, 999)}-${this.randomNumber(1000, 9999)}`,
         status: 'active',
-        email: `user${i}@example.com`,
-        phone: `+1-555-${this.randomNumber(100, 999)}-${this.randomNumber(1000, 9999)}`,
-        preferences: {
-          newsletter: Math.random() > 0.5,
-          marketing: Math.random() > 0.7,
-          theme: Math.random() > 0.5 ? 'light' : 'dark'
-        },
+        role: 'customer',
         metadata: {
+          preferences: {
+            newsletter: Math.random() > 0.5,
+            marketing: Math.random() > 0.7,
+            theme: Math.random() > 0.5 ? 'light' : 'dark'
+          },
+          email: `user${i}@example.com`,
           registration_date: this.randomDate(new Date(Date.now() - 180 * 24 * 60 * 60 * 1000), new Date()).toISOString(),
           source: ['direct', 'search', 'referral', 'social'][Math.floor(Math.random() * 4)]
-        }
-      });
+        },
+        created_at: new Date(),
+        updated_at: new Date()
+      };
       
-      users.push(await this.profileRepository.save(user));
+      profiles.push(await profileRepo.save(profile));
     }
     
-    return users;
+    return profiles;
   }
   
   /**
    * Generate historical orders with reasonable patterns
    */
-  async generateOrders(users: Profile[], products: Product[]): Promise<void> {
+  async generateOrders(store: any, profiles: any[], products: any[]): Promise<void> {
     // Start date: 90 days ago
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 90);
@@ -260,47 +288,56 @@ export class AnalyticsSeedService {
     // Create 500-1000 orders 
     const totalOrders = this.randomNumber(500, 1000);
     
+    const orderRepo = this.dataSource.getRepository('orders');
+    const orderItemRepo = this.dataSource.getRepository('order_items');
+    const variantRepo = this.dataSource.getRepository('product_variants');
+    const inventoryRepo = this.dataSource.getRepository('inventory_items');
+    
     for (let i = 0; i < totalOrders; i++) {
       // Create order with random date
       const orderDate = this.randomDate(startDate, endDate);
       
-      // Get random user
-      const user = users[this.randomNumber(0, users.length - 1)];
+      // Get random profile
+      const profile = profiles[this.randomNumber(0, profiles.length - 1)];
+      
+      const shippingAddress = {
+        street: `${this.randomNumber(100, 9999)} Main St`,
+        city: 'New York',
+        state: 'NY',
+        country: 'USA',
+        postal_code: `${this.randomNumber(10000, 99999)}`
+      };
+      
+      // Create the order
+      const order = {
+        id: uuidv4(),
+        store_id: store.id,
+        user_id: profile.id,
+        status: 'delivered', // Will update later based on date
+        total_amount: 0, // Will update after adding items
+        subtotal_amount: 0, // Will update after adding items
+        tax_amount: 0, // Will update after adding items
+        shipping_amount: this.randomDecimal(5, 25),
+        discount_amount: 0, // Will update if discounts applied
+        shipping_address: shippingAddress,
+        billing_address: shippingAddress, // Use same address for billing
+        metadata: {
+          notes: Math.random() > 0.7 ? 'Please deliver in the afternoon' : null,
+          gift: Math.random() > 0.9,
+          source: 'web',
+        },
+        created_at: orderDate,
+        updated_at: orderDate
+      };
+      
+      const savedOrder = await orderRepo.save(order);
       
       // Create 1-5 order items
       const itemCount = this.randomNumber(1, 5);
-      const orderItems: OrderItem[] = [];
-      let subtotal = 0;
-      
-      // Create the order first
-      const order = this.orderRepository.create({
-        user_id: user.id,
-        status: OrderStatus.DELIVERED,
-        total_amount: 0, // Will update after adding items
-        subtotal: 0, // Will update after adding items
-        tax: 0, // Will update after adding items
-        shipping: this.randomDecimal(5, 25),
-        shipping_address: {
-          street: `${this.randomNumber(100, 9999)} Main St`,
-          city: 'New York',
-          state: 'NY',
-          country: 'USA',
-          postal_code: `${this.randomNumber(10000, 99999)}`
-        },
-        billing_address: {
-          street: `${this.randomNumber(100, 9999)} Main St`,
-          city: 'New York',
-          state: 'NY',
-          country: 'USA',
-          postal_code: `${this.randomNumber(10000, 99999)}`
-        },
-        user: user
-      });
-      
-      const savedOrder = await this.orderRepository.save(order);
+      let subtotalAmount = 0;
       
       // Select random products for this order
-      const selectedProducts: Product[] = [];
+      const selectedProducts: any[] = [];
       while (selectedProducts.length < itemCount) {
         const product = products[this.randomNumber(0, products.length - 1)];
         if (!selectedProducts.includes(product)) {
@@ -310,62 +347,79 @@ export class AnalyticsSeedService {
       
       // Create order items for selected products
       for (const product of selectedProducts) {
-        // Get the first variant
-        const variants = await this.variantRepository.find({ 
-          where: { product_id: product.id },
-          take: 1
+        // Get a random variant for this product
+        const variants = await variantRepo.find({ 
+          where: { product_id: product.id }
         });
         
         if (variants.length > 0) {
-          const variant = variants[0];
+          const variant = variants[this.randomNumber(0, variants.length - 1)];
           const quantity = this.randomNumber(1, 3);
-          const unitPrice = variant.price;
           
-          const orderItem = this.orderItemRepository.create({
+          // Calculate unit price based on product price and variant adjustment
+          const unitPrice = product.price + variant.price_adjustment;
+          const totalPrice = unitPrice * quantity;
+          
+          // Create order item
+          const orderItem = {
+            id: uuidv4(),
             order_id: savedOrder.id,
             variant_id: variant.id,
             quantity: quantity,
             unit_price: unitPrice,
-            subtotal: unitPrice * quantity,
-            product_name: product.name,
-            variant_name: variant.name,
-            product_metadata: {
+            total_price: totalPrice,
+            metadata: {
+              product_name: product.name,
+              variant_name: `${product.name} - ${variant.option_values.color} (${variant.option_values.size})`,
               sku: variant.sku
             },
-            order: savedOrder,
-            variant: variant
+            created_at: orderDate,
+            updated_at: orderDate
+          };
+          
+          await orderItemRepo.save(orderItem);
+          subtotalAmount += totalPrice;
+          
+          // Update inventory (decrease available quantity)
+          const inventory = await inventoryRepo.findOne({
+            where: { variant_id: variant.id }
           });
           
-          const savedItem = await this.orderItemRepository.save(orderItem);
-          orderItems.push(savedItem);
-          subtotal += unitPrice * quantity;
+          if (inventory) {
+            inventory.quantity = Math.max(0, inventory.quantity - quantity);
+            inventory.updated_at = new Date();
+            await inventoryRepo.save(inventory);
+          }
         }
       }
       
-      // Calculate tax
-      const tax = subtotal * 0.08; // 8% tax
+      // Calculate tax and discount
+      const taxAmount = subtotalAmount * 0.08; // 8% tax
+      
+      // Apply discount to ~25% of orders
+      let discountAmount = 0;
+      if (Math.random() > 0.75) {
+        discountAmount = this.randomDecimal(5, subtotalAmount * 0.15);
+      }
       
       // Update order with final amounts
-      savedOrder.subtotal = subtotal;
-      savedOrder.tax = tax;
-      savedOrder.total_amount = subtotal + tax + savedOrder.shipping;
+      savedOrder.subtotal_amount = subtotalAmount;
+      savedOrder.tax_amount = taxAmount;
+      savedOrder.discount_amount = discountAmount;
+      savedOrder.total_amount = subtotalAmount + taxAmount + savedOrder.shipping_amount - discountAmount;
       
       // Set status based on date
       const daysDiff = Math.floor((endDate.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24));
       
       if (daysDiff < 2) {
-        savedOrder.status = Math.random() > 0.5 ? OrderStatus.PROCESSING : OrderStatus.SHIPPED;
+        savedOrder.status = Math.random() > 0.5 ? 'processing' : 'shipped';
       } else if (daysDiff < 5 && Math.random() > 0.8) {
-        savedOrder.status = OrderStatus.CANCELLED;
+        savedOrder.status = 'cancelled';
       } else {
-        savedOrder.status = OrderStatus.DELIVERED;
+        savedOrder.status = 'delivered';
       }
       
-      // Set the created_at date to match our random order date
-      savedOrder.created_at = orderDate;
-      savedOrder.updated_at = orderDate;
-      
-      await this.orderRepository.save(savedOrder);
+      await orderRepo.save(savedOrder);
     }
   }
   
@@ -373,19 +427,32 @@ export class AnalyticsSeedService {
    * Run the full seed operation
    */
   async seed(): Promise<void> {
-    // Create store
-    const store = await this.createStore();
-    
-    // Create categories
-    const categories = await this.createSampleCategories();
-    
-    // Create products in each category
-    const products = await this.createSampleProducts(store, categories);
-    
-    // Create users
-    const users = await this.createSampleUsers();
-    
-    // Generate orders
-    await this.generateOrders(users, products);
+    try {
+      console.log('Starting seed operation...');
+      
+      // Create store
+      console.log('Creating store...');
+      const store = await this.createStore();
+      
+      // Create products (with variants and images)
+      console.log('Creating products with variants and images...');
+      const products = await this.createSampleProducts(store);
+      console.log(`Created ${products.length} products.`);
+      
+      // Create profiles
+      console.log('Creating customer profiles...');
+      const profiles = await this.createSampleProfiles();
+      console.log(`Created ${profiles.length} customer profiles.`);
+      
+      // Generate orders
+      console.log('Generating orders...');
+      await this.generateOrders(store, profiles, products);
+      console.log('Orders generated successfully.');
+      
+      console.log('Seed operation completed successfully!');
+    } catch (error) {
+      console.error('Error during seed operation:', error);
+      throw error;
+    }
   }
 } 

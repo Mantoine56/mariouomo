@@ -18,7 +18,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "seed": "nest start --entryFile seed/seed-command"
+    "seed": "nest start --entryFile dist/seed/seed-command"
   },
   "dependencies": {
     "@keystonejs/keystone": "^19.3.4",
@@ -46,6 +46,8 @@
     "ioredis": "^5.5.0",
     "multer": "1.4.5-lts.1",
     "nanoid": "3.3.7",
+    "nest-commander": "^3.16.1",
+    "nestjs-typeorm-paginate": "^4.0.4",
     "newrelic": "^12.14.0",
     "passport": "^0.6.0",
     "passport-jwt": "^4.0.1",

@@ -5,30 +5,32 @@
  * Usage: nest start --entryFile seed/seed-command
  */
 
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from '../app.module';
+import { Command, CommandRunner } from 'nest-commander';
+import { Injectable } from '@nestjs/common';
 import { AnalyticsSeedService } from './analytics-seed';
-import { Logger } from '@nestjs/common';
 
-async function bootstrap() {
-  const logger = new Logger('Seed');
-  logger.log('Starting database seed process...');
-  
-  try {
-    const app = await NestFactory.createApplicationContext(AppModule);
-    const seedService = app.get(AnalyticsSeedService);
-    
-    logger.log('Seed service initialized. Beginning data generation...');
-    await seedService.seed();
-    
-    logger.log('Database seeding completed successfully!');
-    await app.close();
-  } catch (error) {
-    logger.error(`Error during seeding process: ${error.message}`, error.stack);
-    process.exit(1);
+/**
+ * SeedCommand provides a CLI command for database seeding
+ * This allows easy population of test data via command line
+ */
+@Injectable()
+@Command({ name: 'seed', description: 'Seed database with test data for analytics' })
+export class SeedCommand extends CommandRunner {
+  constructor(private readonly seedService: AnalyticsSeedService) {
+    super();
   }
-  
-  process.exit(0);
-}
 
-bootstrap(); 
+  /**
+   * Run the seed command
+   */
+  async run(): Promise<void> {
+    console.log('Starting database seed process...');
+    try {
+      await this.seedService.seed();
+      console.log('Database seeding completed successfully!');
+    } catch (error) {
+      console.error('Error during database seeding:', error);
+      process.exit(1);
+    }
+  }
+} 

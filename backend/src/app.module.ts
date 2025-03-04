@@ -1,46 +1,45 @@
+import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_INTERCEPTOR, APP_GUARD } from '@nestjs/core';
-import configuration from './config/configuration';
-import { LoggingModule } from './common/logging/logging.module';
-import { MonitoringModule } from './common/monitoring/monitoring.module';
-import { SentryInterceptor } from './common/interceptors/sentry.interceptor';
-import { RedisCacheModule } from './common/cache/cache.module';
-import { RateLimitingModule } from './common/rate-limiting/rate-limiting.module';
-import { CustomThrottlerGuard } from './common/guards/throttler.guard';
-import { CompressionModule } from './common/compression/compression.module';
-import { CorsModule } from './common/cors/cors.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { DatabaseConfig } from './config/database.config';
+import { AuthModule } from './auth/auth.module';
+import { StripeModule } from './modules/payments/stripe/stripe.module';
+import { SubscriptionModule } from './modules/subscription/subscription.module';
+import { SmtpModule } from './modules/smtp/smtp.module';
+import { CorsModule } from './cors/cors.module';
 import { CachePolicyModule } from './common/cache-policy/cache-policy.module';
 import { SeedModule } from './seed/seed.module';
 
 @Module({
   imports: [
-    // Configuration
+    // Core Modules
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [configuration],
+    }),
+    TypeOrmModule.forRootAsync({
+      useClass: DatabaseConfig,
+    }),
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'public'),
     }),
     
-    // Core Modules
-    LoggingModule,
-    MonitoringModule,
-    RedisCacheModule,
-    RateLimitingModule,
-    CompressionModule,
+    // Feature Modules
+    AuthModule,
+    StripeModule,
+    SubscriptionModule,
+    SmtpModule,
     CorsModule,
     CachePolicyModule,
     
     // Development Modules (not used in production)
-    ...(process.env.NODE_ENV !== 'production' ? [SeedModule] : []),
-  ],
+    process.env.NODE_ENV !== 'production' ? SeedModule : undefined,
+  ].filter(Boolean),
   providers: [
     {
-      provide: APP_INTERCEPTOR,
-      useClass: SentryInterceptor,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: CustomThrottlerGuard,
+      provide: 'APP_GUARD',
+      useClass: AuthModule,
     },
   ],
 })
