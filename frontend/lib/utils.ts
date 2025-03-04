@@ -42,4 +42,18 @@ export function formatCurrency(amount: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
+}
+
+/**
+ * Format a number with thousands separators and optional decimal places
+ * 
+ * @param value - Number to format
+ * @param decimals - Number of decimal places (default: 0)
+ * @returns Formatted number string
+ */
+export function formatNumber(value: number, decimals: number = 0): string {
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
 } 

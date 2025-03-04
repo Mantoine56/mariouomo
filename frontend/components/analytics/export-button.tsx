@@ -7,6 +7,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { exportToCSV } from "@/lib/csv-export";
+import { exportAnalyticsToPDF } from "@/lib/pdf-export";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,12 +78,20 @@ export function ExportButton({
   };
 
   /**
-   * Placeholder for additional export formats (like Excel, PDF)
+   * Handles export to PDF format
+   */
+  const handleExportPDF = () => {
+    // Call the PDF export utility with the data and type
+    exportAnalyticsToPDF(dataType, data, periodLabel);
+  };
+  
+  /**
+   * Placeholder for additional export formats (like Excel)
    * To be implemented in future sprints
    */
   const handleExportOtherFormats = (format: string) => {
     console.log(`Export to ${format} not yet implemented`);
-    // This would integrate with libraries like jspdf or xlsx in the future
+    // This would integrate with libraries like xlsx in the future
   };
 
   return (
@@ -97,18 +106,17 @@ export function ExportButton({
         <DropdownMenuItem onClick={handleExportCSV}>
           Export to CSV
         </DropdownMenuItem>
+        <DropdownMenuItem 
+          onClick={handleExportPDF}
+        >
+          Export to PDF
+        </DropdownMenuItem>
         {/* Future export options could be added here */}
         <DropdownMenuItem 
           onClick={() => handleExportOtherFormats("excel")}
           disabled={true}
         >
           Export to Excel
-        </DropdownMenuItem>
-        <DropdownMenuItem 
-          onClick={() => handleExportOtherFormats("pdf")}
-          disabled={true}
-        >
-          Export to PDF
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

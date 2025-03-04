@@ -17,7 +17,9 @@ import {
   Package, 
   RefreshCw,
   UserPlus,
-  UserCheck
+  UserCheck,
+  FileText,
+  Download
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,6 +27,7 @@ import SalesTrendChart from "@/components/analytics/sales-trend-chart";
 import RevenueCategoryChart from "@/components/analytics/revenue-category-chart";
 import CustomerAcquisitionChart from "@/components/analytics/customer-acquisition-chart";
 import { AnalyticsExport } from "@/components/analytics/analytics-export";
+import { ExportButton } from "@/components/analytics/export-button";
 
 /**
  * Analytics Dashboard Page
@@ -159,12 +162,18 @@ export default function AnalyticsDashboard() {
             </SelectContent>
           </Select>
           
-          {/* Add Export button for overview metrics */}
-          <AnalyticsExport
-            type="overview"
-            period={timePeriod}
-            data={keyMetrics}
-            size="icon"
+          {/* Use ExportButton for overview metrics */}
+          <ExportButton
+            data={Object.entries(keyMetrics).map(([key, metrics]) => ({
+              metric: key
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/^./, str => str.toUpperCase()),
+              value: metrics.value,
+              change: metrics.change
+            }))}
+            dataType="overview"
+            periodLabel={timePeriod}
+            size="sm"
           />
           
           <Button 
@@ -229,13 +238,25 @@ export default function AnalyticsDashboard() {
                     <CardTitle>Sales Trend</CardTitle>
                     <CardDescription>Sales performance over time</CardDescription>
                   </div>
-                  {/* Add Export button for sales trend data */}
-                  <AnalyticsExport
-                    type="sales"
-                    period={timePeriod}
-                    data={salesData}
-                    size="sm"
-                  />
+                  {/* Add both CSV and PDF export options */}
+                  <div className="flex gap-1">
+                    <AnalyticsExport
+                      type="sales"
+                      period={timePeriod}
+                      data={salesData}
+                      size="icon"
+                      format="csv"
+                      icon={<Download className="h-4 w-4" />}
+                    />
+                    <AnalyticsExport
+                      type="sales"
+                      period={timePeriod}
+                      data={salesData}
+                      size="icon"
+                      format="pdf"
+                      icon={<FileText className="h-4 w-4" />}
+                    />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <SalesTrendChart 
@@ -255,15 +276,29 @@ export default function AnalyticsDashboard() {
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <div>
                     <CardTitle>Revenue by Category</CardTitle>
-                    <CardDescription>Category breakdown</CardDescription>
+                    <CardDescription>
+                      Distribution of revenue across product categories
+                    </CardDescription>
                   </div>
-                  {/* Add Export button for revenue category data */}
-                  <AnalyticsExport
-                    type="revenue-category"
-                    period={timePeriod}
-                    data={revenueData}
-                    size="sm"
-                  />
+                  {/* Add both CSV and PDF export options */}
+                  <div className="flex gap-1">
+                    <AnalyticsExport
+                      type="revenue-category"
+                      period={timePeriod}
+                      data={revenueData}
+                      size="icon"
+                      format="csv"
+                      icon={<Download className="h-4 w-4" />}
+                    />
+                    <AnalyticsExport
+                      type="revenue-category"
+                      period={timePeriod}
+                      data={revenueData}
+                      size="icon"
+                      format="pdf"
+                      icon={<FileText className="h-4 w-4" />}
+                    />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <RevenueCategoryChart 
@@ -279,24 +314,46 @@ export default function AnalyticsDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Top Products */}
             <Card>
-              <CardHeader>
-                <CardTitle>Top Products</CardTitle>
-                <CardDescription>Best performing products</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div>
+                  <CardTitle>Top Products</CardTitle>
+                  <CardDescription>Best-selling products by revenue</CardDescription>
+                </div>
+                {/* Add both CSV and PDF export options */}
+                <div className="flex gap-1">
+                  <AnalyticsExport
+                    type="products"
+                    period={timePeriod}
+                    data={topProducts}
+                    size="icon"
+                    format="csv"
+                    icon={<Download className="h-4 w-4" />}
+                  />
+                  <AnalyticsExport
+                    type="products"
+                    period={timePeriod}
+                    data={topProducts}
+                    size="icon"
+                    format="pdf"
+                    icon={<FileText className="h-4 w-4" />}
+                  />
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {topProducts.map((product, index) => (
-                    <div key={index} className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-muted rounded-md flex items-center justify-center">
-                        <Package className="h-5 w-5 text-muted-foreground" />
+                  {topProducts.map((product, i) => (
+                    <div key={i} className="flex items-center">
+                      <div className="w-[35%] truncate font-medium">
+                        {product.name}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{product.name}</p>
-                        <p className="text-xs text-muted-foreground">{product.category}</p>
+                      <div className="w-[20%] text-muted-foreground">
+                        {product.category}
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium">{formatCurrency(product.revenue)}</p>
-                        <p className="text-xs text-muted-foreground">{product.orders} orders</p>
+                      <div className="w-[25%] text-right">
+                        {formatCurrency(product.revenue)}
+                      </div>
+                      <div className="w-[20%] text-right">
+                        {product.orders} orders
                       </div>
                     </div>
                   ))}
@@ -306,58 +363,58 @@ export default function AnalyticsDashboard() {
 
             {/* Customer Acquisition */}
             <Card>
-              <CardHeader>
-                <CardTitle>Customer Metrics</CardTitle>
-                <CardDescription>Acquisition and behavior</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div>
+                  <CardTitle>Customer Acquisition</CardTitle>
+                  <CardDescription>New vs returning customers</CardDescription>
+                </div>
+                {/* Add both CSV and PDF export options */}
+                <div className="flex gap-1">
+                  <AnalyticsExport
+                    type="customers"
+                    period={timePeriod}
+                    data={customerMetrics.data}
+                    size="icon"
+                    format="csv"
+                    icon={<Download className="h-4 w-4" />}
+                  />
+                  <AnalyticsExport
+                    type="customers"
+                    period={timePeriod}
+                    data={customerMetrics.data}
+                    size="icon"
+                    format="pdf"
+                    icon={<FileText className="h-4 w-4" />}
+                  />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-muted/20 p-4 rounded-md">
-                      <p className="text-sm text-muted-foreground">New Customers</p>
-                      <p className="text-2xl font-bold">{customerMetrics.newCustomers}</p>
-                      <p className={cn(
-                        "text-xs mt-1",
-                        customerMetrics.newCustomersChange > 0 ? "text-green-600" : "text-red-600"
-                      )}>
-                        {customerMetrics.newCustomersChange > 0 ? "+" : ""}
-                        {formatPercentage(customerMetrics.newCustomersChange)}
-                      </p>
-                    </div>
-                    <div className="bg-muted/20 p-4 rounded-md">
-                      <p className="text-sm text-muted-foreground">Avg. Order Value</p>
-                      <p className="text-2xl font-bold">{formatCurrency(customerMetrics.avgOrderValue)}</p>
-                      <p className={cn(
-                        "text-xs mt-1",
-                        customerMetrics.avgOrderValueChange > 0 ? "text-green-600" : "text-red-600"
-                      )}>
-                        {customerMetrics.avgOrderValueChange > 0 ? "+" : ""}
-                        {formatPercentage(customerMetrics.avgOrderValueChange)}
-                      </p>
-                    </div>
-                    <div className="bg-muted/20 p-4 rounded-md">
-                      <p className="text-sm text-muted-foreground">Return Rate</p>
-                      <p className="text-2xl font-bold">{formatPercentage(customerMetrics.returnRate)}</p>
-                      <p className={cn(
-                        "text-xs mt-1",
-                        customerMetrics.returnRateChange < 0 ? "text-green-600" : "text-red-600"
-                      )}>
-                        {customerMetrics.returnRateChange > 0 ? "+" : ""}
-                        {formatPercentage(customerMetrics.returnRateChange)}
-                      </p>
-                    </div>
-                    <div className="bg-muted/20 p-4 rounded-md">
-                      <p className="text-sm text-muted-foreground">Repeat Purchase</p>
-                      <p className="text-2xl font-bold">{formatPercentage(customerMetrics.repeatPurchase)}</p>
-                      <p className={cn(
-                        "text-xs mt-1",
-                        customerMetrics.repeatPurchaseChange > 0 ? "text-green-600" : "text-red-600"
-                      )}>
-                        {customerMetrics.repeatPurchaseChange > 0 ? "+" : ""}
-                        {formatPercentage(customerMetrics.repeatPurchaseChange)}
-                      </p>
-                    </div>
-                  </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <MetricCard
+                    title="New Customers" 
+                    value={customerMetrics.newCustomers.toString()}
+                    change={customerMetrics.newCustomersChange}
+                    icon={<UserPlus className="h-4 w-4" />}
+                  />
+                  <MetricCard
+                    title="Average Order Value" 
+                    value={formatCurrency(customerMetrics.avgOrderValue)}
+                    change={customerMetrics.avgOrderValueChange}
+                    icon={<ShoppingCart className="h-4 w-4" />}
+                  />
+                  <MetricCard
+                    title="Return Rate" 
+                    value={`${customerMetrics.returnRate}%`}
+                    change={customerMetrics.returnRateChange * -1} // Invert since lower is better
+                    invertColor={true}
+                    icon={<Package className="h-4 w-4" />}
+                  />
+                  <MetricCard
+                    title="Repeat Purchase Rate" 
+                    value={`${customerMetrics.repeatPurchase}%`}
+                    change={customerMetrics.repeatPurchaseChange}
+                    icon={<UserCheck className="h-4 w-4" />}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -374,13 +431,25 @@ export default function AnalyticsDashboard() {
                     <CardTitle>Sales Performance</CardTitle>
                     <CardDescription>Revenue, orders and trends</CardDescription>
                   </div>
-                  {/* Add Export button for sales data */}
-                  <AnalyticsExport
-                    type="sales"
-                    period={timePeriod}
-                    data={salesData}
-                    size="sm"
-                  />
+                  {/* Add both CSV and PDF export options */}
+                  <div className="flex gap-1">
+                    <AnalyticsExport
+                      type="sales"
+                      period={timePeriod}
+                      data={salesData}
+                      size="icon"
+                      format="csv"
+                      icon={<Download className="h-4 w-4" />}
+                    />
+                    <AnalyticsExport
+                      type="sales"
+                      period={timePeriod}
+                      data={salesData}
+                      size="icon"
+                      format="pdf"
+                      icon={<FileText className="h-4 w-4" />}
+                    />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <SalesTrendChart 
@@ -399,15 +468,29 @@ export default function AnalyticsDashboard() {
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <div>
                     <CardTitle>Revenue by Category</CardTitle>
-                    <CardDescription>Category breakdown</CardDescription>
+                    <CardDescription>
+                      Distribution of revenue across product categories
+                    </CardDescription>
                   </div>
-                  {/* Add Export button for revenue category data */}
-                  <AnalyticsExport
-                    type="revenue-category"
-                    period={timePeriod}
-                    data={revenueData}
-                    size="sm"
-                  />
+                  {/* Add both CSV and PDF export options */}
+                  <div className="flex gap-1">
+                    <AnalyticsExport
+                      type="revenue-category"
+                      period={timePeriod}
+                      data={revenueData}
+                      size="icon"
+                      format="csv"
+                      icon={<Download className="h-4 w-4" />}
+                    />
+                    <AnalyticsExport
+                      type="revenue-category"
+                      period={timePeriod}
+                      data={revenueData}
+                      size="icon"
+                      format="pdf"
+                      icon={<FileText className="h-4 w-4" />}
+                    />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <RevenueCategoryChart 
@@ -449,13 +532,25 @@ export default function AnalyticsDashboard() {
                   <CardTitle>Customer Acquisition & Retention</CardTitle>
                   <CardDescription>New vs. returning customers</CardDescription>
                 </div>
-                {/* Add Export button for customer data */}
-                <AnalyticsExport
-                  type="customers"
-                  period={timePeriod}
-                  data={customerMetrics.data}
-                  size="sm"
-                />
+                {/* Add both CSV and PDF export options */}
+                <div className="flex gap-1">
+                  <AnalyticsExport
+                    type="customers"
+                    period={timePeriod}
+                    data={customerMetrics.data}
+                    size="icon"
+                    format="csv"
+                    icon={<Download className="h-4 w-4" />}
+                  />
+                  <AnalyticsExport
+                    type="customers"
+                    period={timePeriod}
+                    data={customerMetrics.data}
+                    size="icon"
+                    format="pdf"
+                    icon={<FileText className="h-4 w-4" />}
+                  />
+                </div>
               </CardHeader>
               <CardContent>
                 <CustomerAcquisitionChart 
@@ -510,13 +605,25 @@ export default function AnalyticsDashboard() {
                 <CardTitle>Product Performance</CardTitle>
                 <CardDescription>Top selling products and trends</CardDescription>
               </div>
-              {/* Add Export button for product data */}
-              <AnalyticsExport
-                type="products"
-                period={timePeriod}
-                data={topProducts}
-                size="sm"
-              />
+              {/* Add both CSV and PDF export options */}
+              <div className="flex gap-1">
+                <AnalyticsExport
+                  type="products"
+                  period={timePeriod}
+                  data={topProducts}
+                  size="icon"
+                  format="csv"
+                  icon={<Download className="h-4 w-4" />}
+                />
+                <AnalyticsExport
+                  type="products"
+                  period={timePeriod}
+                  data={topProducts}
+                  size="icon"
+                  format="pdf"
+                  icon={<FileText className="h-4 w-4" />}
+                />
+              </div>
             </CardHeader>
             <CardContent>
               <div className="h-[400px] flex items-center justify-center bg-muted/20 rounded-md">
@@ -544,15 +651,22 @@ interface MetricCardProps {
   value: string;
   change: number;
   icon: React.ReactNode;
+  invertColor?: boolean;
 }
 
-function MetricCard({ title, value, change, icon }: MetricCardProps) {
+function MetricCard({ title, value, change, icon, invertColor = false }: MetricCardProps) {
+  // Determine if change is positive (based on invertColor)
+  const isPositive = invertColor ? change < 0 : change > 0;
+  
   return (
     <Card>
       <CardContent className="p-6">
         <div className="flex items-center justify-between space-x-4">
           <div className="flex items-center space-x-4">
-            <div className="bg-primary/10 p-2 rounded-full">
+            <div className={cn(
+              "bg-primary/10 p-2 rounded-full",
+              isPositive ? "bg-green-100" : "bg-red-100"
+            )}>
               {icon}
             </div>
             <div>
@@ -562,7 +676,7 @@ function MetricCard({ title, value, change, icon }: MetricCardProps) {
           </div>
           <div className={cn(
             "px-2.5 py-1 rounded-full text-xs font-medium",
-            change > 0 ? "bg-green-100 text-green-700 dark:bg-green-700/20 dark:text-green-400" : 
+            isPositive ? "bg-green-100 text-green-700 dark:bg-green-700/20 dark:text-green-400" : 
                       "bg-red-100 text-red-700 dark:bg-red-700/20 dark:text-red-400"
           )}>
             {change > 0 ? "+" : ""}{change.toFixed(1)}%

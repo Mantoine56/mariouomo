@@ -4,11 +4,12 @@
  * Higher-level component that prepares different types of analytics data for export
  * It formats data for each chart/report type and provides appropriate column definitions
  */
-import React from "react";
+import React, { useState } from "react";
 import { ExportButton } from "./export-button";
-import { Download } from 'lucide-react';
+import { Download, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { exportAnalyticsToPDF } from '@/lib/pdf-export';
 
 // Type definitions for the different data formats
 type SalesData = { date: string; value: number }[];
@@ -50,6 +51,16 @@ interface AnalyticsExportProps {
    * Optional className for styling
    */
   className?: string;
+  
+  /**
+   * Optional format override - if specified, will only export to this format
+   */
+  format?: "csv" | "pdf";
+  
+  /**
+   * Optional icon override
+   */
+  icon?: React.ReactNode;
 }
 
 /**
@@ -62,7 +73,11 @@ export function AnalyticsExport({
   variant = "ghost",
   size = "icon",
   className = "",
+  format,
+  icon
 }: AnalyticsExportProps) {
+  const [isExporting, setIsExporting] = useState(false);
+  
   // Format the period label for the filename
   const periodMap: Record<string, string> = {
     "today": "daily",
@@ -188,6 +203,73 @@ export function AnalyticsExport({
   };
 
   /**
+   * Handle the CSV export action
+   */
+  const handleExport = () => {
+    setIsExporting(true);
+    
+    try {
+      let csvContent = '';
+
+      // Format data based on type
+      switch (type) {
+        case 'sales':
+          csvContent = formatSalesTrendData(data as SalesData);
+          break;
+        case 'revenue-category':
+          csvContent = formatRevenueCategoryData(data as RevenueCategoryData);
+          break;
+        case 'customers':
+          csvContent = formatCustomerData(data as CustomerData);
+          break;
+        case 'products':
+          csvContent = formatProductData(data as ProductData);
+          break;
+        case 'overview':
+          csvContent = formatOverviewData(data as OverviewData);
+          break;
+        default:
+          csvContent = 'No data\n';
+      }
+
+      // Create a blob with the CSV content
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      
+      // Create a temporary link and trigger download
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', getFileName());
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error exporting data:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+  
+  /**
+   * Handle PDF export action
+   */
+  const handlePDFExport = () => {
+    setIsExporting(true);
+    
+    try {
+      // Use the PDF export utility
+      exportAnalyticsToPDF(type, data, period);
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+  
+  /**
    * Generate a filename based on the data type and period
    */
   const getFileName = (): string => {
@@ -196,49 +278,18 @@ export function AnalyticsExport({
     
     return `mariouomo-${type}-${periodLabel}-${timestamp}.csv`;
   };
-
-  /**
-   * Handle the export action
-   */
-  const handleExport = () => {
-    let csvContent = '';
-
-    // Format data based on type
-    switch (type) {
-      case 'sales':
-        csvContent = formatSalesTrendData(data as SalesData);
-        break;
-      case 'revenue-category':
-        csvContent = formatRevenueCategoryData(data as RevenueCategoryData);
-        break;
-      case 'customers':
-        csvContent = formatCustomerData(data as CustomerData);
-        break;
-      case 'products':
-        csvContent = formatProductData(data as ProductData);
-        break;
-      case 'overview':
-        csvContent = formatOverviewData(data as OverviewData);
-        break;
-      default:
-        csvContent = 'No data\n';
-    }
-
-    // Create a blob with the CSV content
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    
-    // Create a temporary link and trigger download
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', getFileName());
-    document.body.appendChild(link);
-    link.click();
-    
-    // Clean up
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
+  
+  // Determine which export function to use based on format prop
+  const handleButtonClick = format === 'pdf' ? handlePDFExport : handleExport;
+  
+  // Determine tooltip text based on format
+  const tooltipText = format === 'pdf' ? 'Export as PDF' : 'Export as CSV';
+  
+  // Set icon based on format or use provided icon
+  const buttonIcon = icon ? icon : 
+                    format === 'pdf' ? 
+                    <FileText className="h-4 w-4" /> : 
+                    <Download className="h-4 w-4" />;
 
   return (
     <TooltipProvider>
@@ -247,14 +298,16 @@ export function AnalyticsExport({
           <Button
             variant={variant}
             size={size}
-            onClick={handleExport}
-            aria-label={`Export ${type} data as CSV`}
+            onClick={handleButtonClick}
+            aria-label={`Export ${type} data as ${format || 'CSV'}`}
+            disabled={isExporting}
+            className={className}
           >
-            <Download className="h-4 w-4" />
+            {buttonIcon}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          <p>Export as CSV</p>
+          <p>{tooltipText}</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
