@@ -120,7 +120,7 @@ export const columns: ColumnDef<Order>[] = [
   
   // Customer column
   {
-    accessorKey: 'customer.name',
+    accessorKey: 'customer',
     header: 'Customer',
     cell: ({ row }) => (
       <div>

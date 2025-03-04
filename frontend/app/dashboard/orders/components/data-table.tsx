@@ -86,7 +86,7 @@ export function DataTable<TData, TValue>({
   const handleStatusFilterChange = (value: string) => {
     setStatusFilter(value)
     
-    if (value) {
+    if (value && value !== "all") {
       table.getColumn("status")?.setFilterValue(value)
     } else {
       table.getColumn("status")?.setFilterValue(undefined)
@@ -99,7 +99,7 @@ export function DataTable<TData, TValue>({
   const handlePaymentFilterChange = (value: string) => {
     setPaymentFilter(value)
     
-    if (value) {
+    if (value && value !== "all") {
       table.getColumn("payment_status")?.setFilterValue(value)
     } else {
       table.getColumn("payment_status")?.setFilterValue(undefined)
@@ -122,9 +122,9 @@ export function DataTable<TData, TValue>({
         {/* Customer Search */}
         <Input
           placeholder="Search customer..."
-          value={(table.getColumn("customer.name")?.getFilterValue() as string) ?? ""}
+          value={(table.getColumn("customer")?.getFilterValue() as string) ?? ""}
           onChange={(event) =>
-            table.getColumn("customer.name")?.setFilterValue(event.target.value)
+            table.getColumn("customer")?.setFilterValue(event.target.value)
           }
           className="max-w-sm"
         />
@@ -136,7 +136,7 @@ export function DataTable<TData, TValue>({
               <SelectValue placeholder="Order Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Statuses</SelectItem>
+              <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="confirmed">Confirmed</SelectItem>
               <SelectItem value="processing">Processing</SelectItem>
@@ -155,7 +155,7 @@ export function DataTable<TData, TValue>({
               <SelectValue placeholder="Payment Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Payment Statuses</SelectItem>
+              <SelectItem value="all">All Payment Statuses</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="paid">Paid</SelectItem>
               <SelectItem value="refunded">Refunded</SelectItem>
@@ -186,7 +186,7 @@ export function DataTable<TData, TValue>({
                         column.toggleVisibility(!!value)
                       }
                     >
-                      {column.id === "customer.name" ? "Customer" : column.id}
+                      {column.id === "customer" ? "Customer" : column.id}
                     </DropdownMenuCheckboxItem>
                   )
                 })}
