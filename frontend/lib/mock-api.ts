@@ -21,6 +21,8 @@ export type Product = {
     name: string;
     size: number;
   }>;
+  /** Cost per item for profit calculation */
+  cost?: number;
 };
 
 export const delay = (ms: number) =>
@@ -38,6 +40,7 @@ export const fakeProducts = {
         name: 'Classic Cotton T-Shirt',
         category: 'Apparel',
         price: 29.99,
+        cost: 12.50,
         inventory: 125,
         status: 'Active',
         description: 'Premium cotton t-shirt with classic fit and reinforced seams.',
@@ -55,10 +58,11 @@ export const fakeProducts = {
       },
       { 
         id: 'PROD-002', 
-        name: 'Slim Fit Denim Jeans',
-        category: 'Apparel',
-        price: 79.99,
-        inventory: 83,
+        name: 'Slim Fit Jeans',
+        category: 'Pants',
+        price: 59.99,
+        cost: 22.75,
+        inventory: 89,
         status: 'Active',
         description: 'Modern slim-fit jeans with stretch denim for ultimate comfort.',
         photo_url: 'https://api.slingacademy.com/public/sample-products/2.png',

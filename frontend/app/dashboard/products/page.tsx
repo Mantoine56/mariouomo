@@ -9,11 +9,12 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { DashboardCard } from '@/components/ui/dashboard-card';
-import { Package, Plus, Search, Loader2 } from 'lucide-react';
+import { Package, Plus, Search, Loader2, Trash2, Archive, CheckCircle } from 'lucide-react';
 import { DataTable } from '@/components/ui/table/data-table';
 import { columns } from './components/columns';
 import { Product, fakeProducts } from '@/lib/mock-api';
 import Link from 'next/link';
+import { useToast } from '@/components/ui/use-toast';
 
 export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
@@ -24,6 +25,9 @@ export default function ProductsPage() {
   const [selectedStatus, setSelectedStatus] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const { toast } = useToast();
 
   /**
    * Fetch products based on filters
@@ -102,6 +106,117 @@ export default function ProductsPage() {
     setCurrentPage(1); // Reset to first page when changing items per page
   };
 
+  /**
+   * Handle bulk delete action
+   */
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete ${Object.keys(selectedRows).length} products?`)) {
+      return;
+    }
+
+    setBulkActionLoading(true);
+    try {
+      // Get array of selected product IDs
+      const productIds = Object.keys(selectedRows);
+      
+      // Call API to delete products
+      await Promise.all(productIds.map(id => fakeProducts.deleteProduct(id)));
+      
+      // Show success message
+      toast({
+        title: "Products deleted",
+        description: `Successfully deleted ${productIds.length} products`,
+        variant: "default",
+      });
+      
+      // Clear selection and refresh products
+      setSelectedRows({});
+      fetchProducts();
+    } catch (error) {
+      console.error('Error deleting products:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete products. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  /**
+   * Handle bulk status update action
+   */
+  const handleBulkStatusUpdate = async (status: 'Active' | 'Low Stock' | 'Out of Stock') => {
+    setBulkActionLoading(true);
+    try {
+      // Get array of selected product IDs
+      const productIds = Object.keys(selectedRows);
+      
+      // Call API to update product status
+      await Promise.all(productIds.map(id => 
+        fakeProducts.updateProduct(id, { status })
+      ));
+      
+      // Show success message
+      toast({
+        title: "Products updated",
+        description: `Successfully updated ${productIds.length} products to ${status}`,
+        variant: "default",
+      });
+      
+      // Clear selection and refresh products
+      setSelectedRows({});
+      fetchProducts();
+    } catch (error) {
+      console.error('Error updating products:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update products. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  /**
+   * Render bulk action buttons
+   */
+  const renderBulkActions = (selectedRows: Record<string, boolean>) => {
+    return (
+      <>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => handleBulkStatusUpdate('Active')}
+          disabled={bulkActionLoading}
+        >
+          <CheckCircle className="h-4 w-4 mr-2" />
+          Set Active
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => handleBulkStatusUpdate('Out of Stock')}
+          disabled={bulkActionLoading}
+        >
+          <Archive className="h-4 w-4 mr-2" />
+          Set Out of Stock
+        </Button>
+        <Button 
+          variant="destructive" 
+          size="sm" 
+          onClick={handleBulkDelete}
+          disabled={bulkActionLoading}
+        >
+          <Trash2 className="h-4 w-4 mr-2" />
+          Delete
+        </Button>
+      </>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -175,6 +290,10 @@ export default function ProductsPage() {
             onPageSizeChange={handlePageSizeChange}
             currentPage={currentPage - 1} // Convert 1-based to 0-based for DataTable
             pageSize={itemsPerPage}
+            enableRowSelection={true}
+            selectedRows={selectedRows}
+            onSelectedRowsChange={setSelectedRows}
+            renderBulkActions={renderBulkActions}
           />
         </div>
       </DashboardCard>

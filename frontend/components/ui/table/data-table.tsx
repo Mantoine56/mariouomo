@@ -12,7 +12,8 @@ import {
   ColumnDef,
   flexRender,
   getCoreRowModel,
-  useReactTable
+  useReactTable,
+  Row
 } from '@tanstack/react-table';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -28,6 +29,10 @@ import { useEffect, useState } from 'react';
  * @param pageSize - Number of items per page
  * @param onPageChange - Callback for page changes
  * @param onPageSizeChange - Callback for page size changes
+ * @param enableRowSelection - Enable row selection functionality
+ * @param selectedRows - Currently selected rows (controlled mode)
+ * @param onSelectedRowsChange - Callback when selected rows change
+ * @param renderBulkActions - Render function for bulk actions when rows are selected
  */
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -38,6 +43,11 @@ interface DataTableProps<TData, TValue> {
   pageSize?: number;
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (size: number) => void;
+  // Selection props
+  enableRowSelection?: boolean;
+  selectedRows?: Record<string, boolean>;
+  onSelectedRowsChange?: (selectedRows: Record<string, boolean>) => void;
+  renderBulkActions?: (selectedRows: Record<string, boolean>) => React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
@@ -48,17 +58,70 @@ export function DataTable<TData, TValue>({
   currentPage: externalPageIndex,
   pageSize: externalPageSize,
   onPageChange,
-  onPageSizeChange
+  onPageSizeChange,
+  // Selection props
+  enableRowSelection = false,
+  selectedRows: externalSelectedRows,
+  onSelectedRowsChange,
+  renderBulkActions
 }: DataTableProps<TData, TValue>) {
   // Pagination state using React useState
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(10);
+  // Internal selection state (if not controlled)
+  const [internalSelectedRows, setInternalSelectedRows] = useState<Record<string, boolean>>({});
 
   // Use external pagination state if provided
   const currentPageIndex = externalPageIndex !== undefined ? externalPageIndex : pageIndex;
   const currentPageSize = externalPageSize !== undefined ? externalPageSize : pageSize;
+  // Use external selection state if provided
+  const currentSelectedRows = externalSelectedRows !== undefined ? externalSelectedRows : internalSelectedRows;
 
   const pageCount = Math.ceil(totalItems / currentPageSize);
+  
+  // Row selection handlers
+  const handleRowSelectionChange = (rowId: string, isSelected: boolean) => {
+    const newSelectedRows = { ...currentSelectedRows, [rowId]: isSelected };
+    
+    if (!isSelected) {
+      // Remove the row if it's being deselected
+      delete newSelectedRows[rowId];
+    }
+    
+    if (onSelectedRowsChange) {
+      onSelectedRowsChange(newSelectedRows);
+    } else {
+      setInternalSelectedRows(newSelectedRows);
+    }
+  };
+  
+  // Select/deselect all rows on current page
+  const handleSelectAllRows = (isSelected: boolean) => {
+    const newSelectedRows = { ...currentSelectedRows };
+    
+    data.forEach((row: any) => {
+      const rowId = row.id as string;
+      if (isSelected) {
+        newSelectedRows[rowId] = true;
+      } else {
+        delete newSelectedRows[rowId];
+      }
+    });
+    
+    if (onSelectedRowsChange) {
+      onSelectedRowsChange(newSelectedRows);
+    } else {
+      setInternalSelectedRows(newSelectedRows);
+    }
+  };
+  
+  // Check if all rows on current page are selected
+  const areAllRowsSelected = data.length > 0 && data.every((row: any) => 
+    currentSelectedRows[row.id as string]
+  );
+  
+  // Get count of selected rows
+  const selectedRowsCount = Object.keys(currentSelectedRows).length;
   
   // Initialize table with React Table
   const table = useReactTable({
@@ -101,6 +164,18 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className='flex flex-1 flex-col space-y-4'>
+      {/* Bulk Actions Bar */}
+      {enableRowSelection && selectedRowsCount > 0 && renderBulkActions && (
+        <div className="bg-muted/80 py-2 px-4 rounded-md flex items-center justify-between">
+          <div className="text-sm font-medium">
+            {selectedRowsCount} {selectedRowsCount === 1 ? 'item' : 'items'} selected
+          </div>
+          <div className="flex gap-2">
+            {renderBulkActions(currentSelectedRows)}
+          </div>
+        </div>
+      )}
+    
       {/* Table */}
       <div className='w-full'>
         <div className='w-full overflow-x-auto rounded-md border'>
@@ -108,6 +183,18 @@ export function DataTable<TData, TValue>({
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
+                  {/* Select All Checkbox Column */}
+                  {enableRowSelection && (
+                    <TableHead className="w-[50px] bg-gray-50 p-4">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        checked={areAllRowsSelected}
+                        onChange={(e) => handleSelectAllRows(e.target.checked)}
+                      />
+                    </TableHead>
+                  )}
+                  {/* Regular Columns */}
                   {headerGroup.headers.map((header) => (
                     <TableHead key={header.id} className="bg-gray-50 p-4">
                       {header.isPlaceholder
@@ -128,6 +215,18 @@ export function DataTable<TData, TValue>({
                     key={row.id}
                     className="hover:bg-gray-50 border-b"
                   >
+                    {/* Row Selection Checkbox */}
+                    {enableRowSelection && (
+                      <TableCell className="w-[50px] p-0 text-center">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                          checked={Boolean(currentSelectedRows[(row.original as any).id])}
+                          onChange={(e) => handleRowSelectionChange((row.original as any).id, e.target.checked)}
+                        />
+                      </TableCell>
+                    )}
+                    {/* Regular Row Cells */}
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id} className="py-3 px-4">
                         {flexRender(
@@ -141,7 +240,7 @@ export function DataTable<TData, TValue>({
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={columns.length}
+                    colSpan={enableRowSelection ? columns.length + 1 : columns.length}
                     className='h-24 text-center'
                   >
                     No results.

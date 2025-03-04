@@ -43,6 +43,7 @@ import { ImageUpload, UploadedImage } from "@/components/ui/image-upload";
 const productFormSchema = z.object({
   name: z.string().min(1, "Product name is required"),
   price: z.string().min(1, "Price is required"),
+  cost: z.string().optional(),
   inventory: z.coerce.number().min(0, "Inventory must be 0 or greater"),
   category: z.string().min(1, "Category is required"),
   description: z.string().optional(),
@@ -101,12 +102,18 @@ export function ProductForm({
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
     defaultValues: initialData ? {
-      ...initialData,
-      price: String(initialData.price), // Convert number to string for the form
+      name: initialData.name,
+      price: String(initialData.price),
+      cost: initialData.cost ? String(initialData.cost) : '',
+      inventory: initialData.inventory,
+      category: initialData.category,
+      description: initialData.description || '',
+      status: initialData.status,
       images: initialImages
     } : {
       name: "",
       price: "",
+      cost: "",
       inventory: 0,
       category: "",
       description: "",
@@ -115,12 +122,25 @@ export function ProductForm({
     }
   });
 
+  // Calculate profit and profit margin when price or cost changes
+  const price = parseFloat(form.watch("price") || "0");
+  const cost = parseFloat(form.watch("cost") || "0");
+  const profit = isNaN(price) || isNaN(cost) ? 0 : price - cost;
+  const profitMargin = price <= 0 ? 0 : (profit / price) * 100;
+
   // Handle form submission
   const onSubmit = async (data: ProductFormValues) => {
     try {
       setIsSubmitting(true);
       
-      await onSubmitProp(data);
+      // Convert string price and cost to numbers for the API
+      const formattedData = {
+        ...data,
+        price: parseFloat(data.price),
+        cost: data.cost ? parseFloat(data.cost) : undefined
+      };
+      
+      await onSubmitProp(formattedData as any);
       toast.success(initialData ? "Product updated successfully" : "Product created successfully");
     } catch (error) {
       console.error("Error submitting form:", error);
@@ -169,6 +189,38 @@ export function ProductForm({
               </FormItem>
             )}
           />
+
+          {/* Cost */}
+          <FormField
+            control={form.control}
+            name="cost"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Cost per item</FormLabel>
+                <FormControl>
+                  <Input placeholder="0.00" {...field} />
+                </FormControl>
+                <FormDescription>
+                  Your cost per item for profit calculation.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Profit calculation display */}
+          <div className="col-span-1 md:col-span-2 p-4 bg-muted/50 rounded-md">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <h4 className="text-sm font-medium mb-1">Profit</h4>
+                <p className="text-lg font-bold">${profit.toFixed(2)}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium mb-1">Margin</h4>
+                <p className="text-lg font-bold">{profitMargin.toFixed(1)}%</p>
+              </div>
+            </div>
+          </div>
 
           {/* Inventory */}
           <FormField
