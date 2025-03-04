@@ -25,6 +25,7 @@ This document outlines the comprehensive plan for replacing mock data in the ana
 - JWT authentication required for all endpoints via `JwtAuthGuard` and `RolesGuard` in `backend/src/modules/auth/guards/`
 - All endpoints restricted to Admin role using `@Roles(Role.ADMIN)` decorator
 - API responses from `AnalyticsQueryService` and `RealTimeTrackingService` in `backend/src/modules/analytics/services/`
+- Database seed script created at `backend/src/seed/analytics-seed.ts` to generate test data for API integration testing
 
 ## Implementation Plan
 
@@ -49,7 +50,23 @@ This document outlines the comprehensive plan for replacing mock data in the ana
 1. **Create Date Utility for Period Parsing** (New file) ✅
    Created: `frontend/lib/date-utils.ts`
 
-### 4. Implementing Real Data in the Dashboard (In Progress - 50% Complete)
+### 4. Database Seeding for Testing 🆕
+
+1. **Create Database Seed Script** (New file) ✅
+   Created: `backend/src/seed/analytics-seed.ts`
+   
+2. **Run Seed Script to Generate Test Data** 🔄
+   Command: `cd backend && pnpm run seed`
+   
+   This script generates:
+   - 5 product categories
+   - 25 products with variants and images
+   - 100 user profiles
+   - 500-1000 historical orders with varying statuses and dates
+   
+   The generated data provides realistic patterns for testing the analytics dashboard with real API endpoints.
+
+### 5. Implementing Real Data in the Dashboard (In Progress - 50% Complete)
 
 1. **Update Analytics Dashboard to Use Real Data** (In Progress) 🔄
    Modified: `frontend/app/dashboard/analytics/page.tsx`
@@ -59,12 +76,12 @@ This document outlines the comprehensive plan for replacing mock data in the ana
    - ✅ Implemented data transformation for charts and metrics
    - ⏳ Testing with real backend data (blocked by empty database)
 
-### 5. Data Transformation Utilities ✅
+### 6. Data Transformation Utilities ✅
 
 1. **Create Data Transformation Helper** (New file) ✅
    Created: `frontend/lib/analytics-transformers.ts`
 
-### 6. Error Handling & Loading States ✅
+### 7. Error Handling & Loading States ✅
 
 1. **Create Loading Component** (New file) ✅
    Created: `frontend/components/ui/loading.tsx`
@@ -72,7 +89,7 @@ This document outlines the comprehensive plan for replacing mock data in the ana
 2. **Create Error Display Component** (New file) ✅
    Created: `frontend/components/ui/error-display.tsx`
 
-### 7. Environment Configuration ✅
+### 8. Environment Configuration ✅
 
 1. **Update Environment Variables** (Modified existing file) ✅
    Modified: `frontend/.env.local`

@@ -11,6 +11,7 @@ import { CustomThrottlerGuard } from './common/guards/throttler.guard';
 import { CompressionModule } from './common/compression/compression.module';
 import { CorsModule } from './common/cors/cors.module';
 import { CachePolicyModule } from './common/cache-policy/cache-policy.module';
+import { SeedModule } from './seed/seed.module';
 
 @Module({
   imports: [
@@ -28,6 +29,9 @@ import { CachePolicyModule } from './common/cache-policy/cache-policy.module';
     CompressionModule,
     CorsModule,
     CachePolicyModule,
+    
+    // Development Modules (not used in production)
+    ...(process.env.NODE_ENV !== 'production' ? [SeedModule] : []),
   ],
   providers: [
     {
