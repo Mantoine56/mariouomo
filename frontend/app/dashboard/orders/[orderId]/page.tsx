@@ -31,6 +31,10 @@ import { Order } from '@/lib/mock-api';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';
 import Link from 'next/link';
+import { OrderStatusTimeline } from '@/components/orders/order-status-timeline';
+import { OrderFulfillment } from '@/components/orders/order-fulfillment';
+import { OrderStatusManagement } from '@/components/orders/order-status-management';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Helper functions
 const getStatusVariant = (status: Order['status']) => {
@@ -165,10 +169,10 @@ export default function OrderDetailsPage() {
   }, [params.orderId]);
 
   // Handle order status update
-  const handleStatusUpdate = (newStatus: Order['status']) => {
+  const handleStatusUpdate = (newStatus: Order['status'], note?: string) => {
     if (!order) return;
     
-    // In a real app, this would be an API call
+    // In a real app, this would be an API call with the note
     toast({
       title: "Status Updated",
       description: `Order status changed to ${formatStatus(newStatus)}`,
@@ -179,6 +183,25 @@ export default function OrderDetailsPage() {
     setOrder({
       ...order,
       status: newStatus,
+      updated_at: new Date().toISOString()
+    });
+  };
+
+  // Handle tracking update
+  const handleTrackingUpdate = (trackingNumber: string, carrier: string) => {
+    if (!order) return;
+    
+    // In a real app, this would be an API call
+    toast({
+      title: "Tracking Updated",
+      description: `Tracking information updated for order #${order.id}`,
+      variant: "success"
+    });
+    
+    // Update local state
+    setOrder({
+      ...order,
+      tracking_number: trackingNumber,
       updated_at: new Date().toISOString()
     });
   };
@@ -277,161 +300,215 @@ export default function OrderDetailsPage() {
         
         <Separator />
         
-        {/* Order Summary Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Customer and Shipping Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center text-lg">
-                <User className="mr-2 h-5 w-5" />
-                Customer Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <h3 className="font-medium">{order.customer.name}</h3>
-                <p className="text-sm text-muted-foreground">{order.customer.email}</p>
-                {order.customer.phone && (
-                  <p className="text-sm text-muted-foreground">{order.customer.phone}</p>
-                )}
-              </div>
-              
-              <div>
-                <h3 className="font-medium mb-1">Shipping Address</h3>
-                <div className="text-sm text-muted-foreground">
-                  <p>{order.shipping_address.street}</p>
-                  <p>
-                    {order.shipping_address.city}, {order.shipping_address.state} {order.shipping_address.postal_code}
-                  </p>
-                  <p>{order.shipping_address.country}</p>
-                </div>
-              </div>
-              
-              {order.customer_notes && (
-                <div>
-                  <h3 className="font-medium mb-1">Customer Notes</h3>
-                  <p className="text-sm text-muted-foreground">{order.customer_notes}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {/* Order Processing and Summary Tabs */}
+        <Tabs defaultValue="summary" className="w-full">
+          <TabsList className="grid w-full md:w-auto grid-cols-2 md:inline-flex">
+            <TabsTrigger value="summary">Order Summary</TabsTrigger>
+            <TabsTrigger value="processing">Processing & Fulfillment</TabsTrigger>
+          </TabsList>
           
-          {/* Order Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center text-lg">
-                <Package className="mr-2 h-5 w-5" />
-                Order Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Order Date</span>
-                <span>{formatDate(order.created_at)}</span>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Payment Method</span>
-                <div className="flex items-center">
-                  <CreditCard className="mr-1 h-4 w-4" />
-                  <span>{order.payment_method}</span>
-                </div>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Payment Status</span>
-                <Badge variant={getPaymentStatusVariant(order.payment_status)}>
-                  {formatStatus(order.payment_status)}
-                </Badge>
-              </div>
-              
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tracking Number</span>
-                <span className="font-mono">{order.tracking_number || 'N/A'}</span>
-              </div>
-              
-              <Separator />
-              
-              <div className="flex justify-between font-medium">
-                <span>Subtotal</span>
-                <span>{formatCurrency(order.subtotal)}</span>
-              </div>
-              
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Tax</span>
-                <span>{formatCurrency(order.tax)}</span>
-              </div>
-              
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Shipping</span>
-                <span>{formatCurrency(order.shipping)}</span>
-              </div>
-              
-              <Separator />
-              
-              <div className="flex justify-between font-semibold">
-                <span>Total</span>
-                <span>{formatCurrency(order.total_amount)}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        {/* Order Items */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Package className="mr-2 h-5 w-5" />
-              Order Items
-            </CardTitle>
-            <CardDescription>
-              {order.items.length} {order.items.length === 1 ? 'item' : 'items'} in this order
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="border rounded-md divide-y">
-              {order.items.map((item) => (
-                <div key={item.id} className="flex items-center p-4">
-                  <div className="h-16 w-16 bg-gray-100 rounded-md flex items-center justify-center mr-4">
-                    {item.product_image ? (
-                      <img 
-                        src={item.product_image} 
-                        alt={item.product_name} 
-                        className="max-h-14 max-w-14 object-contain"
-                      />
-                    ) : (
-                      <Package className="h-8 w-8 text-gray-400" />
+          {/* Order Summary Tab */}
+          <TabsContent value="summary" className="space-y-6 pt-4">
+            {/* Order Summary Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Customer and Shipping Info */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg">
+                    <User className="mr-2 h-5 w-5" />
+                    Customer Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <h3 className="font-medium">{order.customer.name}</h3>
+                    <p className="text-sm text-muted-foreground">{order.customer.email}</p>
+                    {order.customer.phone && (
+                      <p className="text-sm text-muted-foreground">{order.customer.phone}</p>
                     )}
                   </div>
-                  <div className="flex-1">
-                    <Link href={`/dashboard/products/${item.product_id}`} className="font-medium hover:underline">
-                      {item.product_name}
-                    </Link>
+                  
+                  <div>
+                    <h3 className="font-medium mb-1">Shipping Address</h3>
                     <div className="text-sm text-muted-foreground">
-                      {item.quantity} × {formatCurrency(item.unit_price)}
+                      <p>{order.shipping_address.street}</p>
+                      <p>
+                        {order.shipping_address.city}, {order.shipping_address.state} {order.shipping_address.postal_code}
+                      </p>
+                      <p>{order.shipping_address.country}</p>
                     </div>
                   </div>
-                  <div className="font-medium">
-                    {formatCurrency(item.total_price)}
+                  
+                  {order.customer_notes && (
+                    <div>
+                      <h3 className="font-medium mb-1">Customer Notes</h3>
+                      <p className="text-sm text-muted-foreground">{order.customer_notes}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              
+              {/* Order Details */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg">
+                    <Package className="mr-2 h-5 w-5" />
+                    Order Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Order Date</span>
+                    <span>{formatDate(order.created_at)}</span>
                   </div>
-                </div>
-              ))}
+                  
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Payment Method</span>
+                    <div className="flex items-center">
+                      <CreditCard className="mr-1 h-4 w-4" />
+                      <span>{order.payment_method}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Payment Status</span>
+                    <Badge variant={getPaymentStatusVariant(order.payment_status)}>
+                      {formatStatus(order.payment_status)}
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tracking Number</span>
+                    <span className="font-mono">{order.tracking_number || 'N/A'}</span>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="flex justify-between font-medium">
+                    <span>Subtotal</span>
+                    <span>{formatCurrency(order.subtotal)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Tax</span>
+                    <span>{formatCurrency(order.tax)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Shipping</span>
+                    <span>{formatCurrency(order.shipping)}</span>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="flex justify-between font-semibold">
+                    <span>Total</span>
+                    <span>{formatCurrency(order.total_amount)}</span>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
-        
-        {/* Order Timeline (Optional, could be added later) */}
-        {/* <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Calendar className="mr-2 h-5 w-5" />
-              Order Timeline
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {/* Timeline implementation */}
-        {/* </CardContent>
-        </Card> */}
+            
+            {/* Order Items */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Package className="mr-2 h-5 w-5" />
+                  Order Items
+                </CardTitle>
+                <CardDescription>
+                  {order.items.length} {order.items.length === 1 ? 'item' : 'items'} in this order
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="border rounded-md divide-y">
+                  {order.items.map((item) => (
+                    <div key={item.id} className="flex items-center p-4">
+                      <div className="h-16 w-16 bg-gray-100 rounded-md flex items-center justify-center mr-4">
+                        {item.product_image ? (
+                          <img 
+                            src={item.product_image} 
+                            alt={item.product_name} 
+                            className="max-h-14 max-w-14 object-contain"
+                          />
+                        ) : (
+                          <Package className="h-8 w-8 text-gray-400" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <Link href={`/dashboard/products/${item.product_id}`} className="font-medium hover:underline">
+                          {item.product_name}
+                        </Link>
+                        <div className="text-sm text-muted-foreground">
+                          {item.quantity} × {formatCurrency(item.unit_price)}
+                        </div>
+                      </div>
+                      <div className="font-medium">
+                        {formatCurrency(item.total_price)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          {/* Processing & Fulfillment Tab */}
+          <TabsContent value="processing" className="space-y-6 pt-4">
+            <div className="grid grid-cols-1 gap-6">
+              {/* Order Timeline */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Calendar className="mr-2 h-5 w-5" />
+                    Order Timeline
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <OrderStatusTimeline 
+                    status={order.status}
+                    createdAt={order.created_at}
+                    updatedAt={order.updated_at}
+                    paymentStatus={order.payment_status}
+                  />
+                </CardContent>
+              </Card>
+              
+              {/* Order Fulfillment */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Truck className="mr-2 h-5 w-5" />
+                    Order Fulfillment
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <OrderFulfillment 
+                    order={order}
+                    onTrackingUpdate={handleTrackingUpdate}
+                    onStatusUpdate={handleStatusUpdate}
+                  />
+                </CardContent>
+              </Card>
+              
+              {/* Order Status Management */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Edit className="mr-2 h-5 w-5" />
+                    Status Management
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <OrderStatusManagement
+                    order={order}
+                    onStatusUpdate={handleStatusUpdate}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
