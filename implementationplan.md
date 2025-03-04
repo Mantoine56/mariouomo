@@ -530,7 +530,8 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
   - [x] Product form with validation (Complete)
   - [x] Product detail view (Complete)
   - [x] Image management for products (Complete)
-  - [🔄] Bulk actions for products (In Progress)
+  - [x] Cost/profit calculation functionality (Complete)
+  - [x] Bulk actions for products (Complete)
 - [ ] Order management interface
 - [ ] Customer management components
 - [ ] Basic analytics visualizations
@@ -539,7 +540,8 @@ Below is a **comprehensive, task-focused implementation plan** broken into disti
 - ✅ Completing the product form functionality
 - ✅ Enhancing the product detail view
 - ✅ Implementing image upload and management
-- 🔄 Adding bulk actions for product management
+- ✅ Adding cost/profit calculation functionality
+- ✅ Adding bulk actions for product management
 - 🔄 Starting on order management interface
 
 _Last Updated: April 17th, 2025_
@@ -589,9 +591,16 @@ _Last Updated: April 17th, 2025_
    - [🔄] Create product editor
      - [ ] Rich text editor integration
      - [x] Supabase Storage image management
-     - [ ] Store-specific variant management
-     - [ ] Cross-store inventory tracking
+     - [✅] Store-specific variant management
+     - [✅] Cross-store inventory tracking
      - [ ] SEO optimization tools
+     - [✅] Cost/profit calculation functionality
+     - [🔄] Multi-location inventory tracking
+     - [ ] Enhanced media management with video support
+     - [ ] Product tags and vendor fields
+     - [ ] Product status toggle
+     - [ ] Sales channels integration
+     - [ ] SKU/Barcode support
 
 ### Phase 4: Optimization & Polish (Week 7-8)
 1. **Performance Optimization**
@@ -916,10 +925,11 @@ _Last Updated: April 17th, 2025_
    - Complete products management interface
      - Connect product form to mock API
      - ✅ Implement image upload functionality
+     - ✅ Implement cost/profit calculation functionality
+     - ✅ Implement bulk selection and actions
      - Add inventory and status management to form
      - Create success/error notifications for form submission
      - Enhance product view page with tabbed interface
-     - Implement bulk selection and actions
    - Begin orders management page
      - Order listing with advanced filtering
      - Order details with status management
@@ -986,7 +996,8 @@ For detailed documentation, please refer to:
   - [x] Product form with validation (Complete)
   - [x] Product detail view (Complete)
   - [x] Image management for products (Complete)
-  - [🔄] Bulk actions for products (In Progress)
+  - [x] Cost/profit calculation functionality (Complete)
+  - [x] Bulk actions for products (Complete)
 - [ ] Order management interface
 - [ ] Customer management components
 - [ ] Basic analytics visualizations
@@ -995,7 +1006,8 @@ For detailed documentation, please refer to:
 - ✅ Completing the product form functionality
 - ✅ Enhancing the product detail view
 - ✅ Implementing image upload and management
-- 🔄 Adding bulk actions for product management
+- ✅ Adding cost/profit calculation functionality
+- ✅ Adding bulk actions for product management
 - 🔄 Starting on order management interface
 
 _Last Updated: April 17th, 2025_

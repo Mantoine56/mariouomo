@@ -379,6 +379,8 @@ RootLayout
    - [x] Image upload functionality with drag-and-drop support
    - [x] Multiple image management with previews
    - [x] Supabase Storage integration for image uploads
+   - [x] Cost/profit calculation for products
+   - [x] Bulk selection and actions for product management
 
 ### Component Development Status
 
@@ -399,6 +401,7 @@ RootLayout
 | ProductsTable          | Completed   | Products listing with filtering and search        |
 | ProductFilters         | Completed   | Category, status, and price range filtering       |
 | ProductActions         | Completed   | Product edit and delete functionality             |
+| BulkActions            | Completed   | Bulk selection and actions for products           |
 | StatusBadge            | Completed   | Styled status indicators with color variants      |
 | LoadingIndicator       | Completed   | Visual feedback during data fetching              |
 | ProductForm            | Completed   | Form for creating and editing products            |
@@ -419,7 +422,14 @@ RootLayout
    - ✅ Build product detail view with editing capabilities
    - ✅ Implement product creation/editing forms with validation
    - ✅ Add image management component for product photos
-   - 🔄 Implement bulk actions for product management
+   - ✅ Implement cost/profit calculation functionality
+   - ✅ Implement bulk selection and actions
+   - 🔄 Implement multi-location inventory tracking
+   - 🔄 Enhance media management with video support
+   - 🔄 Add product tags and vendor fields
+   - 🔄 Implement product status toggle
+   - 🔄 Add sales channels integration
+   - 🔄 Add SKU/Barcode support
 
 2. **Order Management Components** (Next Focus)
    - Implement order listing with advanced filtering
