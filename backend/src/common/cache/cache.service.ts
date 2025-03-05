@@ -41,6 +41,17 @@ export class CacheService {
   }
 
   /**
+   * Remove all values matching a pattern from the cache.
+   * @param pattern - The pattern to match keys against (e.g., "user:*")
+   */
+  async delPattern(pattern: string): Promise<void> {
+    const keys = await this.redis.keys(pattern);
+    if (keys.length > 0) {
+      await this.redis.del(...keys);
+    }
+  }
+
+  /**
    * Clear all entries from the cache.
    * WARNING: This will remove ALL data from Redis.
    */

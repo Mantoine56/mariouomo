@@ -158,16 +158,13 @@ function SidebarMenuItem({
   );
 }
 
-function SidebarMenuButton({
-  className,
-  children,
-  isActive,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  isActive?: boolean;
-}) {
+const SidebarMenuButton = React.forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { isActive?: boolean }
+>(({ className, children, isActive, ...props }, ref) => {
   return (
     <button
+      ref={ref}
       className={cn(
         "flex w-full items-center rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
         isActive
@@ -180,7 +177,9 @@ function SidebarMenuButton({
       {children}
     </button>
   );
-}
+});
+
+SidebarMenuButton.displayName = "SidebarMenuButton";
 
 const SidebarTrigger = React.forwardRef<
   HTMLButtonElement,

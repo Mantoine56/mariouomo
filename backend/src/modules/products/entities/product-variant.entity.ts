@@ -30,6 +30,14 @@ export class ProductVariant extends BaseEntity {
   @Column({ type: 'jsonb', nullable: true })
   attributes?: Record<string, any>;
 
+  @ApiProperty({ description: 'Current stock quantity' })
+  @Column({ type: 'integer', default: 0 })
+  quantity: number;
+
+  @ApiProperty({ description: 'Threshold for low stock alerts' })
+  @Column({ type: 'integer', default: 5 })
+  lowStockThreshold: number;
+
   @ApiProperty({ description: 'Weight in grams' })
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   weight?: number;

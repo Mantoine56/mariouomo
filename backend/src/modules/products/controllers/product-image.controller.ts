@@ -18,6 +18,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { Role } from '../../auth/enums/role.enum';
+import { ProductImage } from '../entities/product-image.entity';
 
 /**
  * Controller for handling product image operations
@@ -101,7 +102,7 @@ export class ProductImageController {
       throw new BadRequestException('Product not found');
     }
 
-    const image = product.images.find(img => img.id === imageId);
+    const image = product.images.find((img: ProductImage) => img.id === imageId);
     if (!image) {
       throw new BadRequestException('Image not found');
     }

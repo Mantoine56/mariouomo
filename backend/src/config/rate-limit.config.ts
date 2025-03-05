@@ -15,10 +15,18 @@ export interface RateLimitConfig {
  */
 export const getRateLimitConfig = (configService: ConfigService): ThrottlerModuleOptions => {
   const isProduction = configService.get('NODE_ENV') === 'production';
-
+  
+  // In newer versions of @nestjs/throttler, the property names have changed
+  const ttlValue = configService.get('RATE_LIMIT_TTL') || (isProduction ? 60 : 1);
+  const limitValue = configService.get('RATE_LIMIT_MAX') || (isProduction ? 100 : 1000);
+  
   return {
-    ttl: configService.get('RATE_LIMIT_TTL') || (isProduction ? 60 : 1),
-    limit: configService.get('RATE_LIMIT_MAX') || (isProduction ? 100 : 1000),
+    throttlers: [
+      {
+        ttl: ttlValue,
+        limit: limitValue,
+      }
+    ],
   };
 };
 

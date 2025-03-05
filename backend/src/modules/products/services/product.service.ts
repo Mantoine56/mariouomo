@@ -65,21 +65,38 @@ export class ProductService {
    */
   async getProduct(id: string): Promise<Product> {
     const cacheKey = `${this.CACHE_KEY_PREFIX}${id}`;
-    const cached = await this.cacheService.get<Product>(cacheKey);
+    const cached = await this.cacheService.get(cacheKey);
     
     if (cached) {
       this.logger.debug(`Cache hit for product ${id}`);
-      return cached;
+      try {
+        return JSON.parse(cached);
+      } catch (error) {
+        this.logger.warn(`Failed to parse cached product: ${error.message}`);
+      }
     }
 
     this.logger.debug(`Cache miss for product ${id}, fetching from database`);
     const product = await this.productRepository.getProductById(id);
     
     if (product) {
-      await this.cacheService.set(cacheKey, product, this.CACHE_TTL);
+      try {
+        await this.cacheService.set(cacheKey, JSON.stringify(product), this.CACHE_TTL);
+      } catch (error) {
+        this.logger.warn(`Failed to cache product: ${error.message}`);
+      }
     }
     
     return product;
+  }
+
+  /**
+   * Alias for getProduct to maintain backward compatibility
+   * @param id The product ID
+   * @returns The product with variants
+   */
+  async getProductById(id: string): Promise<Product> {
+    return this.getProduct(id);
   }
 
   /**
@@ -89,18 +106,27 @@ export class ProductService {
    * @returns Products matching the search criteria
    */
   async searchProducts(searchDto: SearchProductsDto, paginationDto: PaginationQueryDto) {
-    const cacheKey = `${this.CACHE_KEY_PREFIX}search:${JSON.stringify({ ...searchDto, ...paginationDto })}`;
+    const cacheKey = `${this.CACHE_KEY_PREFIX}search:${JSON.stringify(searchDto)}:${JSON.stringify(paginationDto)}`;
     const cached = await this.cacheService.get(cacheKey);
-
+    
     if (cached) {
-      this.logger.debug(`Cache hit for search: ${JSON.stringify(searchDto)}`);
-      return cached;
+      this.logger.debug('Cache hit for product search');
+      try {
+        return JSON.parse(cached);
+      } catch (error) {
+        this.logger.warn(`Failed to parse cached search results: ${error.message}`);
+      }
     }
 
-    this.logger.debug(`Cache miss for search: ${JSON.stringify(searchDto)}, performing search`);
+    this.logger.debug('Cache miss for product search, fetching from database');
     const results = await this.productRepository.searchProducts(searchDto, paginationDto);
     
-    await this.cacheService.set(cacheKey, results, this.CACHE_TTL);
+    try {
+      await this.cacheService.set(cacheKey, JSON.stringify(results), this.CACHE_TTL);
+    } catch (error) {
+      this.logger.warn(`Failed to cache search results: ${error.message}`);
+    }
+    
     return results;
   }
 
@@ -124,7 +150,10 @@ export class ProductService {
     productId: string,
     imageData: { originalUrl: string; thumbnailUrl: string },
   ): Promise<void> {
-    const product = await this.productRepository.findOne(productId);
+    const product = await this.productRepository.findOne({
+      where: { id: productId }
+    });
+    
     if (!product) {
       throw new NotFoundException('Product not found');
     }
@@ -148,11 +177,13 @@ export class ProductService {
    * @param imageId Image ID
    */
   async removeProductImage(productId: string, imageId: string): Promise<void> {
-    const product = await this.productRepository.findOne(productId, {
+    const product = await this.productRepository.findOne({
+      where: { id: productId },
       relations: ['images'],
     });
+    
     if (!product) {
-      throw new NotFoundException('Product not found');
+      throw new NotFoundException(`Product with ID "${productId}" not found`);
     }
 
     // Remove image

@@ -79,6 +79,8 @@ describe('OrderService', () => {
     name: 'Test Variant',
     sku: 'TEST-123',
     price_adjustment: 0,
+    quantity: 10,
+    lowStockThreshold: 5,
     weight: 1,
     dimensions: {
       length: 10,

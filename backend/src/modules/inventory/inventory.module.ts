@@ -7,8 +7,15 @@ import { InventoryItem } from './entities/inventory-item.entity';
 import { ProductVariant } from '../products/entities/product-variant.entity';
 
 /**
- * Module for handling inventory management
- * Includes inventory tracking, stock management, and reordering functionality
+ * Inventory Module
+ * 
+ * Manages inventory-related functionality including:
+ * - Inventory tracking and management
+ * - Stock level monitoring
+ * - Inventory adjustments and reconciliation
+ * - Low stock alerts
+ * - Distributed locking for concurrent operations
+ * - Inventory reporting
  */
 @Module({
   imports: [

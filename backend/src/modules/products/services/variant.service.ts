@@ -31,7 +31,9 @@ export class VariantService {
     const { productId, ...variantData } = createVariantDto;
 
     // Check if product exists
-    const product = await this.productRepository.findOne(productId);
+    const product = await this.productRepository.findOne({
+      where: { id: productId }
+    });
     if (!product) {
       throw new NotFoundException('Product not found');
     }
@@ -70,7 +72,8 @@ export class VariantService {
    * @returns Updated variant
    */
   async updateVariant(id: string, updateVariantDto: UpdateVariantDto): Promise<ProductVariant> {
-    const variant = await this.variantRepository.findOne(id, {
+    const variant = await this.variantRepository.findOne({
+      where: { id },
       relations: ['product'],
     });
     if (!variant) {
@@ -107,7 +110,8 @@ export class VariantService {
    * @param id Variant ID
    */
   async deleteVariant(id: string): Promise<void> {
-    const variant = await this.variantRepository.findOne(id, {
+    const variant = await this.variantRepository.findOne({
+      where: { id },
       relations: ['product'],
     });
     if (!variant) {
@@ -131,7 +135,8 @@ export class VariantService {
    * @param quantity New quantity
    */
   async updateInventory(id: string, quantity: number): Promise<ProductVariant> {
-    const variant = await this.variantRepository.findOne(id, {
+    const variant = await this.variantRepository.findOne({
+      where: { id },
       relations: ['product'],
     });
     if (!variant) {
@@ -164,7 +169,8 @@ export class VariantService {
    * @returns Variant with product data
    */
   async getVariantById(id: string): Promise<ProductVariant> {
-    const variant = await this.variantRepository.findOne(id, {
+    const variant = await this.variantRepository.findOne({
+      where: { id },
       relations: ['product'],
     });
     if (!variant) {
@@ -183,5 +189,15 @@ export class VariantService {
       where: { product: { id: productId } },
       order: { created_at: 'ASC' },
     });
+  }
+
+  async getProductById(productId: string): Promise<Product> {
+    const product = await this.productRepository.findOne({
+      where: { id: productId }
+    });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+    return product;
   }
 }

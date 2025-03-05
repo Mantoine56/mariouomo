@@ -184,15 +184,21 @@ export class AnalyticsCollectorService {
     await this.dataSource.transaction(async (manager) => {
       // Aggregate sales metrics
       const salesMetrics = await this.aggregateSalesMetrics(date, manager);
-      await manager.save(SalesMetrics, salesMetrics);
+      if (salesMetrics) {
+        await manager.save(SalesMetrics, salesMetrics);
+      }
 
       // Aggregate inventory metrics
       const inventoryMetrics = await this.aggregateInventoryMetrics(date, manager);
-      await manager.save(InventoryMetrics, inventoryMetrics);
+      if (inventoryMetrics) {
+        await manager.save(InventoryMetrics, inventoryMetrics);
+      }
 
       // Aggregate customer metrics
       const customerMetrics = await this.aggregateCustomerMetrics(date, manager);
-      await manager.save(CustomerMetrics, customerMetrics);
+      if (customerMetrics) {
+        await manager.save(CustomerMetrics, customerMetrics);
+      }
 
       // Emit aggregation complete event
       this.eventEmitter.emit('analytics.daily.aggregated', {

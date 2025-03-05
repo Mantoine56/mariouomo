@@ -1,4 +1,4 @@
-import { Repository, DeepPartial, FindOptionsWhere } from 'typeorm';
+import { Repository, DeepPartial, FindOptionsWhere, UpdateResult } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { BaseEntity } from '../entities/base.entity';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
@@ -54,30 +54,62 @@ export abstract class BaseRepository<T extends BaseEntity> extends Repository<T>
   /**
    * Soft deletes an entity by ID
    * @param id Entity ID
-   * @returns void
+   * @returns UpdateResult
    */
-  async softDelete(id: string): Promise<void> {
+  async softDeleteEntity(id: string): Promise<UpdateResult> {
     const result = await this.update(id, {
       deleted_at: new Date(),
-    } as QueryDeepPartialEntity<T>);
+    } as unknown as QueryDeepPartialEntity<T>);
 
     if (result.affected === 0) {
       throw new NotFoundException(`Entity with ID "${id}" not found`);
     }
+    
+    return result;
+  }
+  
+  /**
+   * Override the inherited softDelete method to maintain compatibility
+   * @param criteria Entity ID or criteria
+   * @returns UpdateResult
+   */
+  softDelete(criteria: string | FindOptionsWhere<T>): Promise<UpdateResult> {
+    if (typeof criteria === 'string') {
+      return this.softDeleteEntity(criteria);
+    }
+    
+    // Call the parent implementation for other criteria types
+    return super.softDelete(criteria);
   }
 
   /**
    * Restores a soft-deleted entity
    * @param id Entity ID
-   * @returns void
+   * @returns UpdateResult
    */
-  async restore(id: string): Promise<void> {
+  async restoreEntity(id: string): Promise<UpdateResult> {
     const result = await this.update(id, {
       deleted_at: null,
-    } as QueryDeepPartialEntity<T>);
+    } as unknown as QueryDeepPartialEntity<T>);
 
     if (result.affected === 0) {
       throw new NotFoundException(`Entity with ID "${id}" not found`);
     }
+    
+    return result;
+  }
+  
+  /**
+   * Override the inherited restore method to maintain compatibility
+   * @param criteria Entity ID or criteria
+   * @returns UpdateResult
+   */
+  restore(criteria: string | FindOptionsWhere<T>): Promise<UpdateResult> {
+    if (typeof criteria === 'string') {
+      return this.restoreEntity(criteria);
+    }
+    
+    // Call the parent implementation for other criteria types
+    return super.restore(criteria);
   }
 }

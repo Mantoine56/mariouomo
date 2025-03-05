@@ -21,8 +21,8 @@ export class ImageService {
       secretAccessKey: this.configService.get('AWS_SECRET_ACCESS_KEY'),
       region: this.configService.get('AWS_REGION'),
     });
-    this.bucketName = this.configService.get('AWS_S3_BUCKET');
-    this.cdnDomain = this.configService.get('CDN_DOMAIN');
+    this.bucketName = this.configService.get('AWS_S3_BUCKET') || 'default-bucket';
+    this.cdnDomain = this.configService.get('CDN_DOMAIN') || 'cdn.example.com';
   }
 
   /**
