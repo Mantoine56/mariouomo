@@ -28,7 +28,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -68,6 +68,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { supabase, signOut, getCurrentUser } from '@/lib/supabase';
 
 // Navigation items with TypeScript interface for better type safety
 interface NavItem {
@@ -133,12 +134,52 @@ const navItems: NavItem[] = [
 export default function AppSidebar() {
   const pathname = usePathname();
   const { state } = useSidebar();
+  const router = useRouter();
+  const [user, setUser] = React.useState<any>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
   
-  // Mock user data - will be replaced with actual auth
-  const user = {
-    name: 'John Doe',
-    email: 'john@mariouomo.com',
-    image: ''
+  React.useEffect(() => {
+    // Get current user on component mount
+    const fetchUser = async () => {
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+    };
+    
+    fetchUser();
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          setUser(null);
+        } else if (session?.user) {
+          setUser(session.user);
+        }
+      }
+    );
+    
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+  
+  // Handle sign out
+  const handleSignOut = async () => {
+    try {
+      setIsLoading(true);
+      const { error } = await signOut();
+      if (error) {
+        console.error('Error signing out:', error);
+        return;
+      }
+      
+      // Redirect to login page
+      router.push('/login');
+    } catch (err) {
+      console.error('Unexpected error during sign out:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -229,10 +270,10 @@ export default function AppSidebar() {
                     <>
                       <div className='grid flex-1 text-left text-sm leading-tight'>
                         <span className='truncate font-semibold'>
-                          {user?.name || ''}
+                          {user?.email ? user.email.split('@')[0] : 'User'}
                         </span>
                         <span className='truncate text-xs'>
-                          {user?.email || ''}
+                          {user?.email || 'user@example.com'}
                         </span>
                       </div>
                       <ChevronsUpDown className='ml-auto size-4' />
@@ -253,10 +294,10 @@ export default function AppSidebar() {
                     </div>
                     <div className='grid flex-1 text-left text-sm leading-tight'>
                       <span className='truncate font-semibold'>
-                        {user?.name || ''}
+                        {user?.email ? user.email.split('@')[0] : 'User'}
                       </span>
                       <span className='truncate text-xs'>
-                        {user?.email || ''}
+                        {user?.email || 'user@example.com'}
                       </span>
                     </div>
                   </div>
@@ -274,9 +315,9 @@ export default function AppSidebar() {
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSignOut} disabled={isLoading} className="text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
-                  Log out
+                  {isLoading ? 'Signing out...' : 'Log out'}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

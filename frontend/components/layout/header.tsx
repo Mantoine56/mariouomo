@@ -7,7 +7,8 @@
  */
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   Bell, 
@@ -23,11 +24,76 @@ import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CommandMenu } from "../command/command-menu";
+import { supabase, signOut, getCurrentUser } from '@/lib/supabase';
 
 export default function Header() {
   const { toggleCollapsed } = useSidebar();
-  const [showMobileSearch, setShowMobileSearch] = React.useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
   const isMobileView = React.useRef(typeof window !== 'undefined' && window.innerWidth < 768);
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch current user on component mount
+  useEffect(() => {
+    const fetchUser = async () => {
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+    };
+
+    fetchUser();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_OUT' || !session) {
+          setUser(null);
+        } else {
+          setUser(session.user);
+        }
+      }
+    );
+
+    return () => {
+      // Clean up subscription on unmount
+      if (subscription) subscription.unsubscribe();
+    };
+  }, []);
+
+  // Handle sign out
+  const handleSignOut = async () => {
+    setIsLoading(true);
+    try {
+      const { error } = await signOut();
+      if (error) {
+        console.error('Error signing out:', error);
+        return;
+      }
+      
+      // Redirect to login page
+      router.push('/login');
+    } catch (error) {
+      console.error('Unexpected error during sign out:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Generate user initials for avatar
+  const getUserInitials = () => {
+    if (!user?.email) return 'US';
+    
+    const email = user.email;
+    if (email.includes('@')) {
+      const name = email.split('@')[0];
+      if (name.length > 1) {
+        return name.substring(0, 2).toUpperCase();
+      }
+      return name.substring(0, 1).toUpperCase() + 'U';
+    }
+    
+    return 'US';
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full shrink-0 items-center gap-4 border-b bg-background px-4 md:px-6">
@@ -116,16 +182,18 @@ export default function Header() {
               >
                 <Avatar className="h-9 w-9">
                   <AvatarImage src="/placeholder-user.jpg" alt="User" />
-                  <AvatarFallback>US</AvatarFallback>
+                  <AvatarFallback>{getUserInitials()}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">Admin User</p>
+                  <p className="text-sm font-medium leading-none">
+                    {user?.email ? user.email.split('@')[0] : 'Admin User'}
+                  </p>
                   <p className="text-xs leading-none text-muted-foreground">
-                    admin@mariouomo.com
+                    {user?.email || 'admin@mariouomo.com'}
                   </p>
                 </div>
               </DropdownMenuLabel>
@@ -137,8 +205,12 @@ export default function Header() {
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                Sign out
+              <DropdownMenuItem 
+                onClick={handleSignOut}
+                disabled={isLoading}
+                className="text-destructive focus:text-destructive"
+              >
+                {isLoading ? 'Signing out...' : 'Sign out'}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
