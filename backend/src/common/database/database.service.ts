@@ -24,7 +24,7 @@ interface DatabasePool {
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
   private readonly isProduction: boolean;
-  private monitoringInterval: NodeJS.Timeout;
+  private monitoringInterval: NodeJS.Timeout | null = null;
 
   constructor(
     @InjectDataSource()
@@ -37,8 +37,18 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   /**
    * Get the database pool
    */
-  private get pool(): DatabasePool {
-    return (this.dataSource.driver as any).pool;
+  private get pool(): DatabasePool | null {
+    try {
+      const pool = (this.dataSource.driver as any)?.pool;
+      if (!pool) {
+        this.logger.warn('Database pool is not available');
+        return null;
+      }
+      return pool;
+    } catch (error) {
+      this.logger.warn('Failed to access database pool', error);
+      return null;
+    }
   }
 
   /**
@@ -47,13 +57,23 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     this.logger.log('Initializing database service...');
 
+    const pool = this.pool;
+    if (!pool) {
+      this.logger.warn('Skipping pool monitoring setup - pool not available');
+      return;
+    }
+
     // Start monitoring pool metrics
-    this.monitoringInterval = monitorPoolMetrics(this.pool);
+    this.monitoringInterval = monitorPoolMetrics(pool);
 
     // Set up pool error handling
-    this.pool.on('error', (err: Error) => {
-      this.handlePoolError(err);
-    });
+    if (typeof pool.on === 'function') {
+      pool.on('error', (err: Error) => {
+        this.handlePoolError(err);
+      });
+    } else {
+      this.logger.warn('Pool event binding not available, skipping error handler setup');
+    }
 
     this.logger.log('Database service initialized');
   }
@@ -65,15 +85,21 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     this.logger.log('Cleaning up database service...');
     
     // Clear monitoring interval
-    if (this.monitoringInterval) {
+    if (this.monitoringInterval !== null) {
       clearInterval(this.monitoringInterval);
+      this.monitoringInterval = null;
     }
 
     // Close all connections in the pool
     try {
-      await this.pool.drain();
-      await this.pool.clear();
-      this.logger.log('Database connections closed');
+      const pool = this.pool;
+      if (pool && typeof pool.drain === 'function' && typeof pool.clear === 'function') {
+        await pool.drain();
+        await pool.clear();
+        this.logger.log('Database connections closed');
+      } else {
+        this.logger.log('No pool to drain or clear method not available');
+      }
     } catch (error) {
       this.logger.error('Error closing database connections:', error);
     }

@@ -39,6 +39,31 @@ export const getDatabaseConfig = (configService: ConfigService): TypeOrmModuleOp
   const poolConfig = getPoolConfig(configService);
   const isProduction = configService.get('NODE_ENV') === 'production';
   const dbUrl = configService.get('DATABASE_URL');
+  
+  // Connection retry configuration
+  const retryAttempts = configService.get<number>('DATABASE_RETRY_ATTEMPTS', 5);
+  const retryDelay = configService.get<number>('DATABASE_RETRY_DELAY', 3000); // ms
+  
+  // Common configuration options with TypeORM-specific types
+  const commonConfig = {
+    retryAttempts,
+    retryDelay,
+    keepConnectionAlive: true,
+    autoLoadEntities: true,
+    // Logging configuration (development only)
+    logging: !isProduction ? ['error', 'warn', 'schema'] as any : false,
+    maxQueryExecutionTime: !isProduction ? 1000 : undefined,
+  };
+
+  // Pool events for monitoring
+  const poolErrorHandler = (err: Error) => {
+    console.error('Database pool error:', err);
+    try {
+      newrelic.noticeError(err);
+    } catch (nrError) {
+      console.warn('Failed to report pool error to New Relic:', nrError);
+    }
+  };
 
   // If DATABASE_URL is provided, use it instead of individual connection parameters
   if (dbUrl) {
@@ -66,17 +91,16 @@ export const getDatabaseConfig = (configService: ConfigService): TypeOrmModuleOp
         
         // Statement timeout (30 seconds)
         statement_timeout: 30000,
+        
+        // Improved error handling for network issues
+        connectionTimeoutMillis: 30000,
       },
-
-      // Pool events for monitoring
-      poolErrorHandler: (err: Error) => {
-        newrelic.noticeError(err);
-        console.error('Database pool error:', err);
-      },
-
-      // Logging configuration (development only)
-      logging: !isProduction ? ['error', 'warn', 'schema'] : false,
-      maxQueryExecutionTime: !isProduction ? 1000 : undefined, // Log slow queries (>1s) in development
+      
+      // Pool event handlers
+      poolErrorHandler,
+      
+      // Add common configuration
+      ...commonConfig,
     };
   }
 
@@ -103,43 +127,57 @@ export const getDatabaseConfig = (configService: ConfigService): TypeOrmModuleOp
       
       // Statement timeout (30 seconds)
       statement_timeout: 30000,
+      
+      // Improved error handling for network issues
+      connectionTimeoutMillis: 30000,
     },
-
-    // Pool events for monitoring
-    poolErrorHandler: (err: Error) => {
-      newrelic.noticeError(err);
-      console.error('Database pool error:', err);
-    },
-
-    // Logging configuration (development only)
-    logging: !isProduction ? ['error', 'warn', 'schema'] : false,
-    maxQueryExecutionTime: !isProduction ? 1000 : undefined, // Log slow queries (>1s) in development
+    
+    // Pool event handlers
+    poolErrorHandler,
+    
+    // Add common configuration
+    ...commonConfig,
   };
 };
 
 /**
  * Monitor database pool metrics
  * @param pool - Database connection pool
- * @returns Monitoring interval handle
+ * @returns Monitoring interval handle or null if pool is not available
  */
-export const monitorPoolMetrics = (pool: any): NodeJS.Timeout => {
+export const monitorPoolMetrics = (pool: any): NodeJS.Timeout | null => {
   const MONITORING_INTERVAL = 60000; // 1 minute
 
+  if (!pool) {
+    console.warn('Cannot monitor pool metrics: pool is not available');
+    return null;
+  }
+
   return setInterval(() => {
-    const metrics = {
-      total: pool.totalCount,
-      idle: pool.idleCount,
-      waiting: pool.waitingCount,
-      active: pool.activeCount,
-    };
+    try {
+      // Make sure pool is still available and has the required properties
+      if (!pool || typeof pool.totalCount === 'undefined') {
+        console.warn('Pool is no longer available for metrics monitoring');
+        return;
+      }
 
-    // Record metrics in New Relic
-    newrelic.recordMetric('db.pool.total', metrics.total);
-    newrelic.recordMetric('db.pool.idle', metrics.idle);
-    newrelic.recordMetric('db.pool.waiting', metrics.waiting);
-    newrelic.recordMetric('db.pool.active', metrics.active);
+      const metrics = {
+        total: pool.totalCount || 0,
+        idle: pool.idleCount || 0,
+        waiting: pool.waitingCount || 0,
+        active: pool.activeCount || 0,
+      };
 
-    // Log pool status
-    console.debug('Database pool metrics:', metrics);
+      // Record metrics in New Relic
+      newrelic.recordMetric('db.pool.total', metrics.total);
+      newrelic.recordMetric('db.pool.idle', metrics.idle);
+      newrelic.recordMetric('db.pool.waiting', metrics.waiting);
+      newrelic.recordMetric('db.pool.active', metrics.active);
+
+      // Log pool status
+      console.debug('Database pool metrics:', metrics);
+    } catch (error) {
+      console.error('Error monitoring pool metrics:', error);
+    }
   }, MONITORING_INTERVAL);
 };

@@ -4,10 +4,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { getDatabaseConfig } from './config/database.config';
+import { cacheConfig } from './config/cache.config';
 
 // Import modules that exist in the project
 import { CachePolicyModule } from './common/cache-policy/cache-policy.module';
 import { CorsModule } from './common/cors/cors.module';
+import { LoggingModule } from './common/logging/logging.module';
 import { SeedModule } from './seed/seed.module';
 
 // Import feature modules
@@ -24,6 +26,7 @@ import { GiftCardsModule } from './modules/gift-cards/gift-cards.module';
 import { DiscountsModule } from './modules/discounts/discounts.module';
 import { EventsModule } from './modules/events/events.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CartsModule } from './modules/carts/carts.module';
 
 /**
  * Main application module
@@ -36,6 +39,7 @@ import { AuthModule } from './modules/auth/auth.module';
     // Core Modules
     ConfigModule.forRoot({
       isGlobal: true,
+      load: [() => ({ httpCache: cacheConfig.httpCache })],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -44,6 +48,8 @@ import { AuthModule } from './modules/auth/auth.module';
     }),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'public'),
+      serveRoot: '/',
+      exclude: ['/api*', '/analytics*', '/dev*', '/graphql'],
     }),
     
     // Feature Modules
@@ -59,8 +65,10 @@ import { AuthModule } from './modules/auth/auth.module';
     GiftCardsModule,
     DiscountsModule,
     EventsModule,
+    CartsModule,
     
     // Common Modules
+    LoggingModule,
     CorsModule,
     CachePolicyModule,
     

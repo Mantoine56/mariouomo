@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DatabaseService } from './database.service';
 import { getDatabaseConfig } from '../../config/database.config';
+import { DbUtilsService } from './db-utils.service';
 
 /**
  * Global database module that provides connection pooling and transaction management
@@ -16,7 +17,13 @@ import { getDatabaseConfig } from '../../config/database.config';
       useFactory: getDatabaseConfig,
     }),
   ],
-  providers: [DatabaseService],
-  exports: [DatabaseService],
+  providers: [
+    DbUtilsService,
+    DatabaseService,
+  ],
+  exports: [
+    DbUtilsService,
+    DatabaseService,
+  ],
 })
 export class DatabaseModule {}
