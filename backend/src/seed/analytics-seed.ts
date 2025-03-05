@@ -4,6 +4,7 @@
  * This script generates realistic data for testing the analytics API endpoints.
  * It creates historical sales data, customer acquisition metrics, product performance,
  * and category breakdown for different time periods.
+ * Can be disabled with DISABLE_SEED=true environment variable
  */
 
 import { Injectable, Logger } from '@nestjs/common';
@@ -16,12 +17,18 @@ import * as path from 'path';
 export class AnalyticsSeedService {
   private readonly logger = new Logger(AnalyticsSeedService.name);
   private debugLogFile: string | null;
+  private readonly isDisabled = process.env.DISABLE_SEED === 'true';
   
   constructor(
     private readonly dataSource: DataSource
   ) {
     // Force direct output to stdout
     process.stdout.write('AnalyticsSeedService constructor called\n');
+    
+    if (this.isDisabled) {
+      process.stdout.write('AnalyticsSeedService is disabled via DISABLE_SEED environment variable\n');
+      return; // Skip further initialization
+    }
     
     // Setup debug logging
     this.setupLogging();
@@ -34,6 +41,9 @@ export class AnalyticsSeedService {
    * Setup logging directory and files
    */
   private setupLogging(): void {
+    // Skip if disabled
+    if (this.isDisabled) return;
+    
     try {
       process.stdout.write('Setting up logging for AnalyticsSeedService...\n');
       
@@ -536,9 +546,15 @@ export class AnalyticsSeedService {
   }
   
   /**
-   * Run the full seed operation
+   * Main seed method that populates the database with test data
+   * If DISABLE_SEED=true, this will be a no-op
    */
   async seed(): Promise<void> {
+    if (this.isDisabled) {
+      this.logger.log('Seed service is disabled via DISABLE_SEED environment variable - skipping');
+      return;
+    }
+    
     process.stdout.write('Starting seed operation in AnalyticsSeedService\n');
     this.logDebug('Starting seed operation in AnalyticsSeedService');
     

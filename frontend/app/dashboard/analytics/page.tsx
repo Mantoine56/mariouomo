@@ -33,8 +33,11 @@ import { ExportButton } from "@/components/analytics/export-button";
 import { Loading } from "@/components/ui/loading";
 import { ErrorDisplay } from "@/components/ui/error-display";
 import { AnalyticsApi, SalesAnalytics, CustomerAnalytics, CategoryPerformance, ProductPerformance } from "@/lib/analytics-api";
+import { AnalyticsApiDev } from "@/lib/analytics-api-dev";
 import { getPeriodDates, formatDateRange } from "@/lib/date-utils";
 import { config } from "@/lib/config";
+
+const API = process.env.NODE_ENV === 'development' ? AnalyticsApiDev : AnalyticsApi;
 
 /**
  * Analytics Dashboard Page
@@ -120,10 +123,10 @@ export default function AnalyticsDashboard() {
       
       // Fetch data in parallel
       const [salesResult, customerResult, categoryResult, productResult] = await Promise.all([
-        AnalyticsApi.getSales(startDate, endDate),
-        AnalyticsApi.getCustomers(startDate, endDate),
-        AnalyticsApi.getCategoryPerformance(startDate, endDate),
-        AnalyticsApi.getProductPerformance(startDate, endDate)
+        API.getSales(startDate, endDate),
+        API.getCustomers(startDate, endDate),
+        API.getCategoryPerformance(startDate, endDate),
+        API.getProductPerformance(startDate, endDate)
       ]);
       
       // Update state with API results

@@ -6,6 +6,8 @@ import { Order } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
 import { ProductVariant } from '../products/entities/product-variant.entity';
 import { Profile } from '../users/entities/profile.entity';
+import { InventoryItem } from '../products/entities/inventory-item.entity';
+import { Product } from '../products/entities/product.entity';
 
 /**
  * Orders Module
@@ -20,7 +22,14 @@ import { Profile } from '../users/entities/profile.entity';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, OrderItem, ProductVariant, Profile]),
+    TypeOrmModule.forFeature([
+      Order, 
+      OrderItem, 
+      ProductVariant, 
+      Profile, 
+      InventoryItem,
+      Product
+    ]),
   ],
   controllers: [OrderController],
   providers: [OrderService],

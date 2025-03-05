@@ -1,5 +1,15 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
+import { AnalyticsController } from './controllers/analytics.controller';
+import { AnalyticsDevController } from './controllers/analytics-dev.controller';
+import { AnalyticsQueryService } from './services/analytics-query.service';
+import { RealTimeTrackingService } from './services/real-time-tracking.service';
+import { SalesMetrics } from './entities/sales-metrics.entity';
+import { InventoryMetrics } from './entities/inventory-metrics.entity';
+import { CustomerMetrics } from './entities/customer-metrics.entity';
+import { RealTimeMetrics } from './entities/real-time-metrics.entity';
 
 /**
  * Analytics Module
@@ -15,21 +25,29 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      // Analytics entities will be registered here
+      // Analytics entities
+      SalesMetrics,
+      InventoryMetrics,
+      CustomerMetrics,
+      RealTimeMetrics,
     ]),
+    EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
   ],
   controllers: [
-    // Analytics controllers will be registered here
+    // Analytics controllers
+    AnalyticsController,
+    ...(process.env.NODE_ENV !== 'production' ? [AnalyticsDevController] : []),
   ],
   providers: [
-    // Analytics services will be registered here
-    // - AnalyticsCollectorService
-    // - AnalyticsAggregatorService
-    // - AnalyticsQueryService
-    // - RealTimeTrackingService
+    // Analytics services
+    AnalyticsQueryService,
+    RealTimeTrackingService,
   ],
   exports: [
     // Exported services
+    AnalyticsQueryService,
+    RealTimeTrackingService,
   ],
 })
 export class AnalyticsModule {} 

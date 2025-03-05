@@ -3,6 +3,7 @@
  * 
  * This command file allows running the seed script from the command line.
  * Usage: nest start --entryFile seed/seed-command
+ * Can be disabled with DISABLE_SEED=true environment variable
  */
 
 import { Command, CommandRunner } from 'nest-commander';
@@ -14,15 +15,22 @@ import * as path from 'path';
 /**
  * SeedCommand provides a CLI command for database seeding
  * This allows easy population of test data via command line
+ * Can be disabled with DISABLE_SEED=true environment variable
  */
 @Command({ name: 'seed', description: 'Seed database with test data for analytics' })
 export class SeedCommand extends CommandRunner {
   private readonly logger = new Logger(SeedCommand.name);
+  private readonly isDisabled = process.env.DISABLE_SEED === 'true';
   
   constructor(private readonly seedService: AnalyticsSeedService) {
     super();
     // Force direct output to stdout
     process.stdout.write('SeedCommand constructor called\n');
+    
+    if (this.isDisabled) {
+      process.stdout.write('SeedCommand is disabled via DISABLE_SEED environment variable\n');
+      return; // Skip further initialization
+    }
     
     // Create debug log file for tracking execution
     this.setupLogging();
@@ -37,6 +45,9 @@ export class SeedCommand extends CommandRunner {
    * Setup logging directory and files
    */
   private setupLogging(): void {
+    // Skip if disabled
+    if (this.isDisabled) return;
+    
     try {
       process.stdout.write('Setting up logging...\n');
       
@@ -82,6 +93,9 @@ export class SeedCommand extends CommandRunner {
    * This ensures we have a record even if console output is suppressed
    */
   private writeToDebugLog(message: string): void {
+    // Skip if disabled
+    if (this.isDisabled) return;
+    
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] ${message}\n`;
     
@@ -102,6 +116,12 @@ export class SeedCommand extends CommandRunner {
    * Run the seed command
    */
   async run(): Promise<void> {
+    // Skip if disabled
+    if (this.isDisabled) {
+      this.logger.log('Seed command is disabled via DISABLE_SEED environment variable - skipping execution');
+      return;
+    }
+    
     process.stdout.write('SeedCommand.run() called\n');
     this.writeToDebugLog('Starting database seed process');
     try {

@@ -38,7 +38,49 @@ export const getPoolConfig = (configService: ConfigService): PoolConfig => {
 export const getDatabaseConfig = (configService: ConfigService): TypeOrmModuleOptions => {
   const poolConfig = getPoolConfig(configService);
   const isProduction = configService.get('NODE_ENV') === 'production';
+  const dbUrl = configService.get('DATABASE_URL');
 
+  // If DATABASE_URL is provided, use it instead of individual connection parameters
+  if (dbUrl) {
+    // Check if connecting to Supabase
+    const isSupabase = dbUrl.includes('.supabase.co');
+    
+    return {
+      type: 'postgres',
+      url: dbUrl,
+      entities: ['dist/**/*.entity{.ts,.js}'],
+      // Disable synchronize when connecting to Supabase or in production
+      synchronize: !isSupabase && !isProduction,
+      
+      // Always enable SSL for Supabase connections, otherwise use production setting
+      ssl: isSupabase ? { rejectUnauthorized: false } : (isProduction ? { rejectUnauthorized: false } : false),
+
+      // Connection pool configuration
+      extra: {
+        // Pool configuration
+        min: poolConfig.min,
+        max: poolConfig.max,
+        idleTimeoutMillis: poolConfig.idleTimeoutMillis,
+        acquireTimeoutMillis: poolConfig.acquireTimeoutMillis,
+        reapIntervalMillis: poolConfig.reapIntervalMillis,
+        
+        // Statement timeout (30 seconds)
+        statement_timeout: 30000,
+      },
+
+      // Pool events for monitoring
+      poolErrorHandler: (err: Error) => {
+        newrelic.noticeError(err);
+        console.error('Database pool error:', err);
+      },
+
+      // Logging configuration (development only)
+      logging: !isProduction ? ['error', 'warn', 'schema'] : false,
+      maxQueryExecutionTime: !isProduction ? 1000 : undefined, // Log slow queries (>1s) in development
+    };
+  }
+
+  // Fallback to individual connection parameters
   return {
     type: 'postgres',
     host: configService.get('DB_HOST'),
@@ -61,12 +103,6 @@ export const getDatabaseConfig = (configService: ConfigService): TypeOrmModuleOp
       
       // Statement timeout (30 seconds)
       statement_timeout: 30000,
-      
-      // SSL configuration for production
-      ssl: isProduction ? {
-        rejectUnauthorized: false,
-        ca: configService.get('DB_SSL_CA'),
-      } : undefined,
     },
 
     // Pool events for monitoring
