@@ -31,6 +31,7 @@ describe('ShipmentService', () => {
    */
   const mockOrder = {
     id: '456',
+    store_id: 'store123', // Added required store_id property
     user_id: '789',
     user: {
       id: '789',
@@ -47,9 +48,10 @@ describe('ShipmentService', () => {
     },
     status: OrderStatus.CONFIRMED,
     total_amount: 100,
-    subtotal: 90,
-    tax: 5,
-    shipping: 5,
+    subtotal_amount: 90, // Changed from subtotal to subtotal_amount
+    tax_amount: 5, // Changed from tax to tax_amount
+    shipping_amount: 5, // Changed from shipping to shipping_amount
+    discount_amount: 0, // Added required discount_amount property
     shipping_address: {
       street: '123 Main St',
       city: 'New York',

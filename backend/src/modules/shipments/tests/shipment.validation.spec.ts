@@ -14,12 +14,15 @@ import { ShipmentStatus } from '../enums/shipment-status.enum';
 describe('Shipment DTO Validation', () => {
   describe('CreateShipmentDto', () => {
     it('should validate a valid CreateShipmentDto', async () => {
-      // Arrange: Create a valid DTO
+      // Arrange: Create a valid DTO with a future date (30 days from now)
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 30);
+      
       const dto = plainToInstance(CreateShipmentDto, {
         order_id: '123e4567-e89b-12d3-a456-426614174000',
         shipping_provider: 'FedEx',
         tracking_number: 'TRACK123',
-        estimated_delivery_date: new Date('2025-03-01'),
+        estimated_delivery_date: futureDate,
         package_details: {
           weight: 2.5,
           weight_unit: 'kg',
