@@ -5,7 +5,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotFoundException } from '@nestjs/common';
 import { Profile } from '../entities/profile.entity';
 import { ProfileService } from '../services/profile.service';
-import { CreateProfileDto, UserRole, UserStatus } from '../dtos/create-profile.dto';
+import { CreateProfileDto, UserStatus } from '../dtos/create-profile.dto';
+import { Role } from '../../auth/enums/role.enum';
 
 /**
  * Test suite for ProfileService
@@ -20,7 +21,7 @@ describe('ProfileService', () => {
     id: '123e4567-e89b-12d3-a456-426614174000',
     full_name: 'John Doe',
     email: 'john@example.com',
-    role: UserRole.CUSTOMER,
+    role: Role.USER,
     status: UserStatus.ACTIVE,
     addresses: [],
     orders: [],
@@ -64,8 +65,7 @@ describe('ProfileService', () => {
       const createProfileDto: CreateProfileDto = {
         full_name: 'John Doe',
         email: 'john@example.com',
-        role: UserRole.CUSTOMER,
-        status: UserStatus.ACTIVE,
+        role: Role.USER, status: UserStatus.ACTIVE,
       };
 
       // Act

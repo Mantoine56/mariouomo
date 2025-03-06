@@ -26,6 +26,9 @@ describe('InventoryController', () => {
     product_id: '123',
     sku: 'TEST-SKU-1',
     name: 'Test Variant',
+    price_adjustment: 0,
+    product: {} as Product,
+    inventory_items: [],
     created_at: new Date(),
     updated_at: new Date(),
   };
@@ -33,7 +36,7 @@ describe('InventoryController', () => {
   const mockInventoryItem = {
     id: '123',
     variant_id: mockVariant.id,
-    variant: mockVariant as ProductVariant,
+    variant: mockVariant as unknown as ProductVariant,
     location: 'Warehouse A',
     quantity: 100,
     reserved_quantity: 0,

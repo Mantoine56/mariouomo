@@ -93,21 +93,23 @@ export class OrderService {
       }
 
       // Calculate order totals (simplified tax and shipping for now)
-      const tax = subtotal * 0.1; // 10% tax
-      const shipping = 10; // Flat rate shipping
-      const total_amount = subtotal + tax + shipping;
+      const tax_amount = subtotal * 0.1; // 10% tax
+      const shipping_amount = 10; // Flat rate shipping
+      const discount_amount = 0; // No discount by default
+      const total_amount = subtotal + tax_amount + shipping_amount - discount_amount;
 
       // Create order
       const order = manager.create(Order, {
+        store_id: dto.store_id || '00000000-0000-0000-0000-000000000000', // Default store ID if not provided
         user_id: userId,
-        subtotal,
-        tax,
-        shipping,
+        subtotal_amount: subtotal,
+        tax_amount,
+        shipping_amount,
+        discount_amount,
         total_amount,
         status: OrderStatus.PENDING,
         shipping_address: dto.shipping_address,
         billing_address: dto.billing_address,
-        customer_notes: dto.customer_notes,
         metadata: dto.metadata,
       });
 
@@ -151,13 +153,12 @@ export class OrderService {
           orderItem.variant_id = variant.id;
           orderItem.quantity = item.quantity;
           orderItem.unit_price = price;
-          orderItem.subtotal = price * item.quantity;
-          orderItem.product_name = product.name;
-          orderItem.variant_name = variant.name;
-          orderItem.product_metadata = {
-            sku: variant.sku,
-            weight: variant.weight || undefined,
-            dimensions: variant.dimensions || undefined,
+          orderItem.total_price = price * item.quantity;
+          // Store product and variant information in metadata
+          orderItem.metadata = {
+            product_name: product.name,
+            sku: variant.sku || null,
+            option_values: variant.option_values || {},
           };
 
           return manager.save(OrderItem, orderItem);
@@ -193,8 +194,11 @@ export class OrderService {
     // Update allowed fields
     Object.assign(order, {
       status: dto.status,
-      staff_notes: dto.staff_notes,
-      customer_notes: dto.customer_notes,
+      metadata: {
+        ...order.metadata,
+        staff_notes: dto.staff_notes,
+        customer_notes: dto.customer_notes,
+      },
     });
 
     return this.orderRepository.save(order);
@@ -221,12 +225,23 @@ export class OrderService {
   /**
    * Lists all orders for a user
    * @param userId - ID of the user
-   * @returns Array of orders
+   * @returns Array of orders with their items
    */
   async findOrdersByUser(userId: string): Promise<Order[]> {
     return this.orderRepository.find({
       where: { user_id: userId },
       relations: ['items'],
+      order: { created_at: 'DESC' },
+    });
+  }
+
+  /**
+   * Lists all orders in the system (for admin use)
+   * @returns Array of all orders with their items
+   */
+  async findAllOrders(): Promise<Order[]> {
+    return this.orderRepository.find({
+      relations: ['items', 'user'],
       order: { created_at: 'DESC' },
     });
   }

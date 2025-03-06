@@ -186,8 +186,8 @@ export class ProductService {
       throw new NotFoundException(`Product with ID "${productId}" not found`);
     }
 
-    // Remove image
-    await this.productImageRepository.delete(imageId);
+    // Remove image (using soft delete)
+    await this.productImageRepository.softDelete(imageId);
 
     // Clear cache
     await this.cacheService.del(`product:${productId}`);

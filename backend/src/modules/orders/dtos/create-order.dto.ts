@@ -67,30 +67,55 @@ export class CreateOrderItemDto {
  * Validates all required order information
  */
 export class CreateOrderDto {
+  /**
+   * Store ID for the order
+   */
+  @ApiProperty({ description: 'Store ID for the order' })
+  @IsUUID()
+  store_id: string;
+
+  /**
+   * Array of order items
+   */
   @ApiProperty({ description: 'Array of order items' })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items: CreateOrderItemDto[];
 
-  @ApiProperty({ description: 'Shipping address information' })
+  /**
+   * Shipping address information
+   */
+  @ApiProperty({ description: 'Shipping address information', required: false })
   @IsObject()
   @ValidateNested()
   @Type(() => AddressDto)
-  shipping_address: AddressDto;
-
-  @ApiProperty({ description: 'Billing address information' })
-  @IsObject()
-  @ValidateNested()
-  @Type(() => AddressDto)
-  billing_address: AddressDto;
-
-  @ApiProperty({ description: 'Customer notes for the order', required: false })
-  @IsString()
   @IsOptional()
-  customer_notes?: string;
+  shipping_address?: AddressDto;
 
-  @ApiProperty({ description: 'Additional order metadata', required: false })
+  /**
+   * Billing address information
+   */
+  @ApiProperty({ description: 'Billing address information', required: false })
+  @IsObject()
+  @ValidateNested()
+  @Type(() => AddressDto)
+  @IsOptional()
+  billing_address?: AddressDto;
+
+  /**
+   * Additional order metadata
+   * Can include customer notes and other information
+   */
+  @ApiProperty({ 
+    description: 'Additional order metadata', 
+    required: false,
+    example: {
+      customer_notes: 'Please leave at the front door',
+      source: 'mobile_app',
+      gift: true
+    }
+  })
   @IsObject()
   @IsOptional()
   metadata?: Record<string, any>;

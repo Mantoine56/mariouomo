@@ -9,6 +9,7 @@ import { cacheConfig } from './config/cache.config';
 // Import modules that exist in the project
 import { CachePolicyModule } from './common/cache-policy/cache-policy.module';
 import { CorsModule } from './common/cors/cors.module';
+import { HealthModule } from './common/health/health.module';
 import { LoggingModule } from './common/logging/logging.module';
 import { SeedModule } from './seed/seed.module';
 
@@ -71,6 +72,7 @@ import { CartsModule } from './modules/carts/carts.module';
     LoggingModule,
     CorsModule,
     CachePolicyModule,
+    HealthModule,
     
     // Development Modules
     ...(process.env.NODE_ENV !== 'production' ? [SeedModule] : []),

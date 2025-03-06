@@ -5,7 +5,7 @@
 The Mario Uomo e-commerce platform uses PostgreSQL via Supabase as its primary database. This documentation provides comprehensive information about our database architecture, schema, security policies, and maintenance procedures.
 
 ## Implementation Status
-Last Updated: 2025-02-23
+Last Updated: 2025-03-06
 
 ### Completed Tasks
 - Initial documentation and planning
@@ -27,6 +27,11 @@ Last Updated: 2025-02-23
   - Automated daily Supabase backups
   - Custom weekly backup script
   - Backup verification tools
+- Schema Updates (March 2025)
+  - Profiles table enhancements
+  - Inventory items table enhancements
+  - Backward compatibility implementation
+  - Data migration scripts
 
 ## Table of Contents
 
@@ -56,6 +61,7 @@ Last Updated: 2025-02-23
 - [Backup Procedures](./operations/backup-recovery.md)
 - [Monitoring Guide](./operations/monitoring.md)
 - [Migration Guide](./migrations/guide.md)
+- [March 2025 Schema Updates](./migrations/march-2025-schema-updates.md)
 
 ## Development Guidelines
 

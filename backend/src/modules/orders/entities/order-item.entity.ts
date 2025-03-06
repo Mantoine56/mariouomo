@@ -26,31 +26,20 @@ export class OrderItem extends BaseEntity {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   unit_price: number;
 
-  @ApiProperty({ description: 'Subtotal for this item (quantity * unit_price)' })
+  /**
+   * Total price for this item (quantity * unit_price)
+   */
+  @ApiProperty({ description: 'Total price for this item (quantity * unit_price)' })
   @Column({ type: 'decimal', precision: 10, scale: 2 })
-  subtotal: number;
+  total_price: number;
 
-  @ApiProperty({ description: 'Product name at time of order' })
-  @Column({ type: 'varchar', length: 255 })
-  product_name: string;
-
-  @ApiProperty({ description: 'Variant name at time of order' })
-  @Column({ type: 'varchar', length: 255 })
-  variant_name: string;
-
-  @ApiProperty({ description: 'Product metadata at time of order' })
+  /**
+   * Additional metadata for the order item
+   * This can include product name, variant details, etc.
+   */
+  @ApiProperty({ description: 'Additional metadata for the order item' })
   @Column({ type: 'jsonb', nullable: true })
-  product_metadata?: {
-    sku: string;
-    weight?: number;
-    dimensions?: {
-      length: number;
-      width: number;
-      height: number;
-      unit: string;
-    };
-    [key: string]: any;
-  };
+  metadata?: Record<string, any>;
 
   // Relationships
   @ManyToOne(() => Order, order => order.items)

@@ -6,6 +6,9 @@ import { ProductVariant } from '../../products/entities/product-variant.entity';
 /**
  * InventoryItem entity for tracking product stock levels
  * Uses optimistic locking for concurrent inventory updates
+ * 
+ * Note: This entity includes both old and new field names for compatibility
+ * during the database migration process.
  */
 @Entity('inventory_items')
 @Index(['variant_id', 'location'])
@@ -25,6 +28,10 @@ export class InventoryItem extends BaseEntity {
   @ApiProperty({ description: 'Reserved quantity (for pending orders)' })
   @Column({ type: 'integer', default: 0 })
   reserved_quantity: number;
+  
+  @ApiProperty({ description: 'Reserved quantity (legacy field)' })
+  @Column({ type: 'integer', default: 0, name: 'reserved' })
+  reserved?: number;
 
   @ApiProperty({ description: 'Minimum stock level before reorder' })
   @Column({ type: 'integer', default: 0 })

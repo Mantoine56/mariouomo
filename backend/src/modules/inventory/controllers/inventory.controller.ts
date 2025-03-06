@@ -39,6 +39,31 @@ export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
   /**
+   * Gets all inventory items with pagination
+   * Requires ADMIN role
+   */
+  @Get('items')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Get all inventory items (Admin only)' })
+  @ApiQuery({ name: 'skip', required: false, type: Number })
+  @ApiQuery({ name: 'take', required: false, type: Number })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Inventory items retrieved successfully',
+    type: [InventoryItem],
+  })
+  async getAllItems(
+    @Query('skip') skip?: number,
+    @Query('take') take?: number,
+  ): Promise<{ items: InventoryItem[]; total: number }> {
+    const [items, total] = await this.inventoryService.findAll(
+      skip ? +skip : 0,
+      take ? +take : 10,
+    );
+    return { items, total };
+  }
+
+  /**
    * Creates a new inventory item
    * Requires ADMIN role
    */

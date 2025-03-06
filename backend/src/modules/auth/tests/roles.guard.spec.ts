@@ -2,6 +2,8 @@ import { Reflector } from '@nestjs/core';
 import { RolesGuard } from '../guards/roles.guard';
 import { Role } from '../enums/role.enum';
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { ROLES_KEY } from '../decorators/roles.decorator';
 
 /**
  * Unit tests for Role-Based Access Control Guard
@@ -36,45 +38,45 @@ describe('RolesGuard', () => {
     expect(guard).toBeDefined();
   });
 
-  it('should allow access when no roles are required', () => {
-    // Mock reflector to return no roles
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
+  it('should allow access to public routes', () => {
+    // First call for IS_PUBLIC_KEY returns true
+    jest.spyOn(reflector, 'getAllAndOverride')
+      .mockImplementationOnce((key) => key === IS_PUBLIC_KEY ? true : undefined);
 
     const result = guard.canActivate(mockContext);
     expect(result).toBe(true);
   });
 
-  it('should deny access when user has no roles', () => {
-    // Mock reflector to require admin role
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([Role.ADMIN]);
+  it('should allow access when no roles are required', () => {
+    // First call for IS_PUBLIC_KEY returns false, second call for ROLES_KEY returns undefined
+    jest.spyOn(reflector, 'getAllAndOverride')
+      .mockImplementationOnce((key) => key === IS_PUBLIC_KEY ? false : undefined)
+      .mockImplementationOnce((key) => key === ROLES_KEY ? undefined : undefined);
+
+    const result = guard.canActivate(mockContext);
+    expect(result).toBe(true);
+  });
+
+  it('should deny access when user is missing', () => {
+    // Mock reflector to return not public and require admin role
+    jest.spyOn(reflector, 'getAllAndOverride')
+      .mockImplementationOnce((key) => key === IS_PUBLIC_KEY ? false : undefined)
+      .mockImplementationOnce((key) => key === ROLES_KEY ? [Role.ADMIN] : undefined);
 
     const result = guard.canActivate(mockContext);
     expect(result).toBe(false);
   });
 
   it('should allow access when user has required role', () => {
-    // Mock reflector to require admin role
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([Role.ADMIN]);
+    // Mock reflector to return not public and require admin role
+    jest.spyOn(reflector, 'getAllAndOverride')
+      .mockImplementationOnce((key) => key === IS_PUBLIC_KEY ? false : undefined)
+      .mockImplementationOnce((key) => key === ROLES_KEY ? [Role.ADMIN] : undefined);
 
     // Mock request with admin user
     mockRequest.mockReturnValue({
       user: {
-        roles: [Role.ADMIN]
-      }
-    });
-
-    const result = guard.canActivate(mockContext);
-    expect(result).toBe(true);
-  });
-
-  it('should allow access when user has super_admin role', () => {
-    // Mock reflector to require admin role
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([Role.ADMIN, Role.SUPER_ADMIN]);
-
-    // Mock request with super_admin user
-    mockRequest.mockReturnValue({
-      user: {
-        roles: [Role.SUPER_ADMIN]
+        role: Role.ADMIN
       }
     });
 
@@ -83,13 +85,15 @@ describe('RolesGuard', () => {
   });
 
   it('should deny access when user has insufficient role', () => {
-    // Mock reflector to require admin role
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([Role.ADMIN]);
+    // Mock reflector to return not public and require admin role
+    jest.spyOn(reflector, 'getAllAndOverride')
+      .mockImplementationOnce((key) => key === IS_PUBLIC_KEY ? false : undefined)
+      .mockImplementationOnce((key) => key === ROLES_KEY ? [Role.ADMIN] : undefined);
 
     // Mock request with regular user
     mockRequest.mockReturnValue({
       user: {
-        roles: [Role.USER]
+        role: Role.USER
       }
     });
 
@@ -98,31 +102,15 @@ describe('RolesGuard', () => {
   });
 
   it('should handle multiple required roles', () => {
-    // Mock reflector to require either admin or super_admin role
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([
-      Role.ADMIN,
-      Role.SUPER_ADMIN
-    ]);
+    // Mock reflector to return not public and require either admin or super_admin role
+    jest.spyOn(reflector, 'getAllAndOverride')
+      .mockImplementationOnce((key) => key === IS_PUBLIC_KEY ? false : undefined)
+      .mockImplementationOnce((key) => key === ROLES_KEY ? [Role.ADMIN, Role.SUPER_ADMIN] : undefined);
 
     // Mock request with admin user
     mockRequest.mockReturnValue({
       user: {
-        roles: [Role.ADMIN]
-      }
-    });
-
-    const result = guard.canActivate(mockContext);
-    expect(result).toBe(true);
-  });
-
-  it('should handle user with multiple roles', () => {
-    // Mock reflector to require admin role
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([Role.ADMIN]);
-
-    // Mock request with user having multiple roles
-    mockRequest.mockReturnValue({
-      user: {
-        roles: [Role.USER, Role.ADMIN]
+        role: Role.ADMIN
       }
     });
 

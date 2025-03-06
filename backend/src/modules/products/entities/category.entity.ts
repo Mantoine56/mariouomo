@@ -8,6 +8,12 @@ import { Product } from './product.entity';
  * Each category can have multiple child categories and products.
  * Categories are organized in a tree structure for efficient navigation and management.
  */
+
+/**
+ * Category entity representing product categories in a hierarchical tree structure.
+ * Each category can have multiple child categories and products.
+ * Categories are organized in a tree structure for efficient navigation and management.
+ */
 @Entity('categories')
 @Tree('closure-table')
 export class Category extends BaseEntity {
@@ -39,7 +45,7 @@ export class Category extends BaseEntity {
    * Used for category thumbnails and banners
    */
   @ApiProperty({ description: 'Category image URL' })
-  @Column({ nullable: true })
+  @Column({ name: 'image_url', nullable: true })
   imageUrl?: string;
 
   /**
@@ -55,7 +61,7 @@ export class Category extends BaseEntity {
    * Used to temporarily hide categories without deleting them
    */
   @ApiProperty({ description: 'Category visibility' })
-  @Column({ default: true })
+  @Column({ name: 'is_visible', default: true })
   isVisible: boolean;
 
   /**
@@ -63,7 +69,7 @@ export class Category extends BaseEntity {
    * Used to optimize category pages for search engines
    */
   @ApiProperty({ description: 'SEO metadata' })
-  @Column('jsonb', { nullable: true })
+  @Column('jsonb', { name: 'seo_metadata', nullable: true })
   seoMetadata?: {
     title?: string;
     description?: string;
@@ -106,7 +112,7 @@ export class Category extends BaseEntity {
    * Used for UI display and optimization
    */
   @ApiProperty({ description: 'Number of child categories' })
-  @Column({ default: 0 })
+  @Column({ name: 'child_count', default: 0 })
   childCount: number;
 
   /**
@@ -114,6 +120,14 @@ export class Category extends BaseEntity {
    * Used for UI display and filtering
    */
   @ApiProperty({ description: 'Total number of products' })
-  @Column({ default: 0 })
+  @Column({ name: 'total_products', default: 0 })
   totalProducts: number;
+  
+  /**
+   * Soft delete timestamp
+   * Used to mark categories as deleted without actually removing them
+   */
+  @ApiProperty({ description: 'Soft delete timestamp' })
+  @Column({ name: 'deleted_at', nullable: true })
+  deletedAt?: Date;
 }

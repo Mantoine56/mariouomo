@@ -29,6 +29,37 @@ export class RealTimeTrackingService {
   ) {}
 
   /**
+   * Initialize the service
+   * In development mode, this starts the sample data generation
+   */
+  onModuleInit() {
+    this.logger.log('RealTimeTrackingService initialized');
+    this.activeUsers = new Map<string, Date>();
+    
+    // Generate initial sample data in development
+    if (process.env.NODE_ENV === 'development') {
+      this.generateSampleData();
+    }
+  }
+
+  /**
+   * Run every minute in development mode to update sample metrics
+   */
+  @Cron('0 * * * * *')
+  async scheduledMetricsUpdate() {
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        await this.generateSampleData();
+        this.logger.debug('Sample metrics updated via scheduled task');
+      } catch (error) {
+        this.logger.error(`Error in scheduled metrics update: ${error.message}`);
+      }
+    } else {
+      await this.updateRealTimeMetrics();
+    }
+  }
+
+  /**
    * Gets current active user count
    */
   getActiveUserCount(): number {
@@ -43,53 +74,109 @@ export class RealTimeTrackingService {
   }
 
   /**
-   * Gets current metrics for the real-time dashboard
+   * Gets current real-time metrics with trend calculations
+   * @returns Current metrics with trend data
    */
-  async getCurrentMetrics() {
-    // Get latest metrics
-    const current = await this.realTimeMetricsRepo.findOne({
-      order: {
-        timestamp: 'DESC',
-      },
-    });
-
-    // Get historical data for trends (last hour)
-    const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const trends = await this.realTimeMetricsRepo.find({
-      where: {
-        timestamp: MoreThanOrEqual(hourAgo),
-      },
-      order: {
-        timestamp: 'ASC',
-      },
-    });
-
-    // Calculate key trends
-    const activeUserTrend = trends.map((t) => ({
-      timestamp: t.timestamp,
-      users: t.active_users,
-    }));
-
-    const pageViewTrend = trends.map((t) => ({
-      timestamp: t.timestamp,
-      views: t.page_views,
-    }));
-
-    const trafficSourceTrend = trends.map((t) => ({
-      timestamp: t.timestamp,
-      sources: t.traffic_sources,
-    }));
-
-    return {
-      activeUsers: current?.active_users || 0,
-      pageViews: current?.page_views || [],
-      trafficSources: current?.traffic_sources || [],
-      trends: {
-        activeUsers: activeUserTrend,
-        pageViews: pageViewTrend,
-        trafficSources: trafficSourceTrend,
-      },
-    };
+  async getCurrentMetrics(): Promise<any> {
+    try {
+      this.logger.debug('Fetching current real-time metrics');
+      
+      // Get the latest metrics entry - using find with limit instead of findOne
+      const latestMetricsArr = await this.realTimeMetricsRepo.find({
+        order: { timestamp: 'DESC' },
+        take: 1
+      });
+      
+      const latestMetrics = latestMetricsArr.length > 0 ? latestMetricsArr[0] : null;
+      
+      if (!latestMetrics) {
+        this.logger.warn('No real-time metrics found in database');
+        return {
+          activeUsers: { current: 0, trend: 0 },
+          pageViews: { current: 0, trend: 0 },
+          trafficSources: [],
+          popularProducts: [],
+          cart: { count: 0, value: 0 },
+          pendingOrders: { count: 0, value: 0 },
+        };
+      }
+      
+      // Get historical data for trend calculation
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      
+      // For newer TypeORM, ensure we're using the correct syntax for MoreThanOrEqual
+      const historicalData = await this.realTimeMetricsRepo.find({
+        where: {
+          timestamp: MoreThanOrEqual(oneHourAgo)
+        },
+        order: { timestamp: 'ASC' }
+      });
+      
+      // Calculate trends by comparing latest metrics with data from an hour ago
+      let activeUsersTrend = 0;
+      let pageViewsTrend = 0;
+      
+      if (historicalData.length > 1) {
+        const oldestMetrics = historicalData[0];
+        
+        // Calculate percentage changes
+        if (oldestMetrics.active_users > 0) {
+          activeUsersTrend = ((latestMetrics.active_users - oldestMetrics.active_users) / oldestMetrics.active_users) * 100;
+        }
+        
+        // Calculate page view trends
+        const oldPageViewsTotal = oldestMetrics.page_views ? 
+          oldestMetrics.page_views.reduce((sum, item) => sum + item.views, 0) : 0;
+        
+        const newPageViewsTotal = latestMetrics.page_views ? 
+          latestMetrics.page_views.reduce((sum, item) => sum + item.views, 0) : 0;
+        
+        if (oldPageViewsTotal > 0) {
+          pageViewsTrend = ((newPageViewsTotal - oldPageViewsTotal) / oldPageViewsTotal) * 100;
+        }
+      }
+      
+      // Format traffic sources for frontend
+      const trafficSources = latestMetrics.traffic_sources ? 
+        latestMetrics.traffic_sources.map(source => ({
+          source: source.source,
+          count: source.active_users,
+          percentage: latestMetrics.active_sessions > 0 
+            ? (source.active_users / latestMetrics.active_sessions) * 100 
+            : 0,
+        })) : [];
+      
+      // Calculate total page views
+      const pageViewsTotal = latestMetrics.page_views ? 
+        latestMetrics.page_views.reduce((sum, page) => sum + page.views, 0) : 0;
+      
+      // Get popular products
+      const popularProducts = latestMetrics.current_popular_products || [];
+      
+      return {
+        activeUsers: {
+          current: latestMetrics.active_users || 0,
+          trend: Math.round(activeUsersTrend),
+        },
+        pageViews: {
+          current: pageViewsTotal,
+          trend: Math.round(pageViewsTrend),
+        },
+        trafficSources,
+        popularProducts,
+        cart: {
+          count: latestMetrics.cart_count || 0,
+          value: latestMetrics.cart_value || 0,
+        },
+        pendingOrders: {
+          count: latestMetrics.pending_orders || 0,
+          value: latestMetrics.pending_revenue || 0,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error getting current metrics: ${error.message}`, error.stack);
+      throw new Error(`Failed to fetch real-time metrics: ${error.message}`);
+    }
   }
 
   /**
@@ -436,6 +523,126 @@ export class RealTimeTrackingService {
     } catch (error) {
       this.logger.warn(`Error in safeQueryWithTableCheck: ${error.message}`);
       return defaultValue;
+    }
+  }
+
+  /**
+   * Generates sample real-time metrics data for development
+   * This is useful for testing the dashboard without real user activity
+   */
+  async generateSampleData(): Promise<void> {
+    try {
+      this.logger.log('Generating sample real-time metrics data for development');
+      
+      const timestamp = new Date();
+      
+      // Generate random metrics values
+      const active_users = Math.floor(Math.random() * 100) + 10;
+      const active_sessions = Math.floor(Math.random() * 150) + 20;
+      const cart_count = Math.floor(Math.random() * 30) + 5;
+      const cart_value = parseFloat((Math.random() * 5000 + 1000).toFixed(2));
+      const pending_orders = Math.floor(Math.random() * 15) + 2;
+      const pending_revenue = parseFloat((Math.random() * 3000 + 500).toFixed(2));
+      
+      // Generate popular products
+      const current_popular_products = Array.from({ length: 5 }, (_, i) => ({
+        product_id: `product-${i + 1}`,
+        views: Math.floor(Math.random() * 100) + 20,
+        in_cart: Math.floor(Math.random() * 20) + 1,
+      }));
+      
+      // Generate traffic sources
+      const traffic_sources = [
+        {
+          source: 'direct',
+          active_users: Math.floor(Math.random() * 40) + 10,
+          conversion_rate: parseFloat((Math.random() * 5 + 1).toFixed(2)),
+        },
+        {
+          source: 'search',
+          active_users: Math.floor(Math.random() * 30) + 10,
+          conversion_rate: parseFloat((Math.random() * 4 + 2).toFixed(2)),
+        },
+        {
+          source: 'social',
+          active_users: Math.floor(Math.random() * 20) + 5,
+          conversion_rate: parseFloat((Math.random() * 3 + 0.5).toFixed(2)),
+        },
+        {
+          source: 'referral',
+          active_users: Math.floor(Math.random() * 15) + 3,
+          conversion_rate: parseFloat((Math.random() * 6 + 1).toFixed(2)),
+        },
+      ];
+      
+      // Generate page views
+      const page_views = [
+        {
+          page: 'home',
+          views: Math.floor(Math.random() * 200) + 50,
+          average_time: Math.floor(Math.random() * 120) + 30,
+        },
+        {
+          page: 'products',
+          views: Math.floor(Math.random() * 150) + 40,
+          average_time: Math.floor(Math.random() * 180) + 60,
+        },
+        {
+          page: 'cart',
+          views: Math.floor(Math.random() * 80) + 20,
+          average_time: Math.floor(Math.random() * 90) + 45,
+        },
+        {
+          page: 'checkout',
+          views: Math.floor(Math.random() * 50) + 10,
+          average_time: Math.floor(Math.random() * 240) + 120,
+        },
+        {
+          page: 'account',
+          views: Math.floor(Math.random() * 40) + 15,
+          average_time: Math.floor(Math.random() * 150) + 60,
+        },
+      ];
+      
+      // Create and save the metrics entity
+      const metrics = this.realTimeMetricsRepo.create({
+        timestamp,
+        active_users,
+        active_sessions,
+        cart_count,
+        cart_value,
+        pending_orders,
+        pending_revenue,
+        current_popular_products,
+        traffic_sources,
+        page_views,
+      });
+      
+      await this.realTimeMetricsRepo.save(metrics);
+      this.logger.log('Sample real-time metrics data generated successfully');
+      
+      // Emit event for websocket updates
+      try {
+        const currentMetrics = await this.getCurrentMetrics();
+        this.eventEmitter.emit('realtime.metrics.updated', currentMetrics);
+      } catch (metricError) {
+        this.logger.warn(`Could not emit metrics update event: ${metricError.message}`);
+        // Still provide basic metrics for the websocket
+        this.eventEmitter.emit('realtime.metrics.updated', {
+          activeUsers: { current: active_users, trend: 0 },
+          pageViews: { current: page_views.reduce((sum, page) => sum + page.views, 0), trend: 0 },
+          trafficSources: traffic_sources.map(source => ({
+            source: source.source,
+            count: source.active_users,
+            percentage: active_sessions > 0 ? (source.active_users / active_sessions) * 100 : 0,
+          })),
+          popularProducts: current_popular_products,
+          cart: { count: cart_count, value: cart_value },
+          pendingOrders: { count: pending_orders, value: pending_revenue },
+        });
+      }
+    } catch (error) {
+      this.logger.error(`Error generating sample data: ${error.message}`, error.stack);
     }
   }
 }

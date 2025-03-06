@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { Profile } from './entities/profile.entity';
+import { ProfileService } from './services/profile.service';
+import { ProfileController } from './controllers/profile.controller';
 
 /**
  * Users Module
@@ -15,17 +19,18 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      // User entities will be registered here
+      Profile
     ]),
+    EventEmitterModule.forRoot(),
   ],
   controllers: [
-    // User controllers will be registered here
+    ProfileController
   ],
   providers: [
-    // User services will be registered here
+    ProfileService
   ],
   exports: [
-    // Exported services
+    ProfileService
   ],
 })
 export class UsersModule {} 

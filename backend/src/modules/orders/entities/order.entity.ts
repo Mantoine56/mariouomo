@@ -26,6 +26,16 @@ export enum OrderStatus {
  */
 @Entity('orders')
 export class Order extends BaseEntity {
+  /**
+   * Reference to the store this order belongs to
+   */
+  @ApiProperty({ description: 'Reference to the store this order belongs to' })
+  @Column({ type: 'uuid' })
+  store_id: string;
+
+  /**
+   * Reference to the user who placed the order
+   */
   @ApiProperty({ description: 'Reference to the user who placed the order' })
   @Column({ type: 'uuid' })
   user_id: string;
@@ -43,21 +53,40 @@ export class Order extends BaseEntity {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   total_amount: number;
 
+  /**
+   * Subtotal before tax and shipping
+   */
   @ApiProperty({ description: 'Subtotal before tax and shipping' })
   @Column({ type: 'decimal', precision: 10, scale: 2 })
-  subtotal: number;
+  subtotal_amount: number;
 
+  /**
+   * Tax amount
+   */
   @ApiProperty({ description: 'Tax amount' })
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
-  tax: number;
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  tax_amount?: number;
 
+  /**
+   * Shipping amount
+   */
   @ApiProperty({ description: 'Shipping amount' })
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
-  shipping: number;
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  shipping_amount?: number;
+  
+  /**
+   * Discount amount
+   */
+  @ApiProperty({ description: 'Discount amount' })
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  discount_amount?: number;
 
+  /**
+   * Shipping address details
+   */
   @ApiProperty({ description: 'Shipping address details' })
-  @Column({ type: 'jsonb' })
-  shipping_address: {
+  @Column({ type: 'jsonb', nullable: true })
+  shipping_address?: {
     street: string;
     city: string;
     state: string;
@@ -66,9 +95,12 @@ export class Order extends BaseEntity {
     additional_details?: string;
   };
 
+  /**
+   * Billing address details
+   */
   @ApiProperty({ description: 'Billing address details' })
-  @Column({ type: 'jsonb' })
-  billing_address: {
+  @Column({ type: 'jsonb', nullable: true })
+  billing_address?: {
     street: string;
     city: string;
     state: string;
@@ -77,13 +109,7 @@ export class Order extends BaseEntity {
     additional_details?: string;
   };
 
-  @ApiProperty({ description: 'Customer notes for the order' })
-  @Column({ type: 'text', nullable: true })
-  customer_notes?: string;
 
-  @ApiProperty({ description: 'Internal notes for staff' })
-  @Column({ type: 'text', nullable: true })
-  staff_notes?: string;
 
   @ApiProperty({ description: 'Additional order metadata' })
   @Column({ type: 'jsonb', nullable: true })

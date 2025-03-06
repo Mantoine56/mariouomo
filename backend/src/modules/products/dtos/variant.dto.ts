@@ -1,16 +1,22 @@
-import { IsString, IsNumber, IsOptional, IsUUID, Min, IsObject, ValidateNested } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsUUID, Min, IsObject, IsJSON, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
- * DTO for variant attributes (e.g., size, color)
+ * DTO for variant option values (e.g., size, color)
  */
-export class VariantAttributeDto {
-  @ApiProperty({ description: 'Attribute name (e.g., "size", "color")' })
+export class OptionValueDto {
+  /**
+   * Option name (e.g., "size", "color")
+   */
+  @ApiProperty({ description: 'Option name (e.g., "size", "color")' })
   @IsString()
   name: string;
 
-  @ApiProperty({ description: 'Attribute value (e.g., "large", "red")' })
+  /**
+   * Option value (e.g., "large", "red")
+   */
+  @ApiProperty({ description: 'Option value (e.g., "large", "red")' })
   @IsString()
   value: string;
 }
@@ -19,46 +25,50 @@ export class VariantAttributeDto {
  * Base DTO for variant data
  */
 export class BaseVariantDto {
-  @ApiProperty({ description: 'Variant SKU' })
+  /**
+   * Variant SKU - unique identifier for this variant
+   */
+  @ApiProperty({ description: 'Variant SKU', required: false })
+  @IsOptional()
   @IsString()
-  sku: string;
+  sku?: string;
 
-  @ApiProperty({ description: 'Variant price' })
-  @IsNumber()
-  @Min(0)
-  price: number;
-
-  @ApiProperty({ description: 'Variant attributes' })
-  @IsObject({ each: true })
-  @ValidateNested({ each: true })
-  @Type(() => VariantAttributeDto)
-  attributes: VariantAttributeDto[];
-
-  @ApiProperty({ description: 'Available quantity' })
-  @IsNumber()
-  @Min(0)
-  quantity: number;
-
-  @ApiProperty({ description: 'Low stock threshold' })
+  /**
+   * Barcode for the variant (UPC, EAN, etc.)
+   */
+  @ApiProperty({ description: 'Barcode (UPC, EAN, etc.)', required: false })
   @IsOptional()
+  @IsString()
+  barcode?: string;
+
+  /**
+   * Price adjustment from base product price
+   */
+  @ApiProperty({ description: 'Price adjustment from base product price' })
   @IsNumber()
   @Min(0)
-  lowStockThreshold?: number;
+  price_adjustment: number;
 
-  @ApiProperty({ description: 'Variant weight in grams' })
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  weight?: number;
-
-  @ApiProperty({ description: 'Variant dimensions in cm (length x width x height)' })
+  /**
+   * Option values for this variant (color, size, etc.)
+   */
+  @ApiProperty({ 
+    description: 'Option values for this variant (color, size, etc.)',
+    type: 'object',
+    example: { color: 'red', size: 'large' }
+  })
   @IsOptional()
   @IsObject()
-  dimensions?: {
-    length: number;
-    width: number;
-    height: number;
-  };
+  option_values?: Record<string, any>;
+
+  /**
+   * Position for ordering variants
+   */
+  @ApiProperty({ description: 'Position for ordering variants', required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  position?: number;
 }
 
 /**

@@ -54,14 +54,12 @@ describe('InventoryService', () => {
     sku: 'TEST-SKU-123',
     name: 'Test Variant',
     price_adjustment: 0,
-    attributes: {},
-    weight: 100,
-    dimensions: {
-      length: 10,
-      width: 10,
-      height: 10,
-      unit: 'cm'
+    option_values: {
+      color: 'Blue',
+      size: 'Medium'
     },
+    barcode: 'BARCODE-123',
+    position: 1,
     created_at: new Date(),
     updated_at: new Date(),
     product: undefined,

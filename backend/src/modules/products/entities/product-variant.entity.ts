@@ -14,42 +14,45 @@ export class ProductVariant extends BaseEntity {
   @Column({ type: 'uuid' })
   product_id: string;
 
+  /**
+   * SKU (Stock Keeping Unit) - unique identifier for this variant
+   */
   @ApiProperty({ description: 'SKU (Stock Keeping Unit)' })
-  @Column({ type: 'varchar', length: 100, unique: true })
-  sku: string;
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  sku?: string;
 
-  @ApiProperty({ description: 'Variant name' })
+  /**
+   * Name of the variant
+   */
+  @ApiProperty({ description: 'Name of the variant' })
   @Column({ type: 'varchar', length: 255 })
   name: string;
+
+  /**
+   * Barcode for the variant (UPC, EAN, etc.)
+   */
+  @ApiProperty({ description: 'Barcode (UPC, EAN, etc.)' })
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  barcode?: string;
 
   @ApiProperty({ description: 'Price adjustment from base product price' })
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   price_adjustment: number;
 
-  @ApiProperty({ description: 'Variant-specific attributes in JSON format' })
+  /**
+   * Option values for this variant (color, size, etc.)
+   * Stored as a JSONB object
+   */
+  @ApiProperty({ description: 'Option values for this variant (color, size, etc.)' })
   @Column({ type: 'jsonb', nullable: true })
-  attributes?: Record<string, any>;
+  option_values?: Record<string, any>;
 
-  @ApiProperty({ description: 'Current stock quantity' })
-  @Column({ type: 'integer', default: 0 })
-  quantity: number;
-
-  @ApiProperty({ description: 'Threshold for low stock alerts' })
-  @Column({ type: 'integer', default: 5 })
-  lowStockThreshold: number;
-
-  @ApiProperty({ description: 'Weight in grams' })
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  weight?: number;
-
-  @ApiProperty({ description: 'Dimensions in JSON format' })
-  @Column({ type: 'jsonb', nullable: true })
-  dimensions?: {
-    length: number;
-    width: number;
-    height: number;
-    unit: string;
-  };
+  /**
+   * Position for ordering variants
+   */
+  @ApiProperty({ description: 'Position for ordering variants' })
+  @Column({ type: 'integer', nullable: true })
+  position?: number;
 
   // Relationships
   @ManyToOne(() => Product, product => product.variants)

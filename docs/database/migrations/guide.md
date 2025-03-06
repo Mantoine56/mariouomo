@@ -89,6 +89,20 @@ DROP TABLE example;
 YYYYMMDDHHMMSS_descriptive_name.sql
 ```
 
+## Recent Migrations
+
+### March 2025 Schema Updates
+A significant schema update was performed in March 2025 to align the database structure with entity definitions in the backend code. This migration focused on backward compatibility while adding new functionality.
+
+- [Full Documentation](./march-2025-schema-updates.md)
+- [SQL Scripts](../../db-scripts/)
+
+Key changes included:
+- Adding missing columns to the `profiles` table
+- Enhancing the `inventory_items` table with additional fields
+- Implementing data migration for existing records
+- Supporting both legacy and new column names during transition
+
 ## Common Issues
 
 ### Troubleshooting
@@ -99,6 +113,8 @@ YYYYMMDDHHMMSS_descriptive_name.sql
 
 ### Solutions
 - Use batching for large data changes
+- Implement proper error handling and rollback mechanisms
+- Test migrations thoroughly before production deployment
 - Implement retry logic
 - Monitor progress
 - Validate results

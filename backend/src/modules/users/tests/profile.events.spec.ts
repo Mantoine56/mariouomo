@@ -4,7 +4,8 @@ import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Profile } from '../entities/profile.entity';
 import { ProfileService } from '../services/profile.service';
-import { UserRole, UserStatus } from '../dtos/create-profile.dto';
+import { UserStatus } from '../dtos/create-profile.dto';
+import { Role } from '../../auth/enums/role.enum';
 
 /**
  * Test suite for profile-related events
@@ -18,7 +19,7 @@ describe('Profile Events', () => {
     id: '123e4567-e89b-12d3-a456-426614174000',
     full_name: 'John Doe',
     email: 'john@example.com',
-    role: UserRole.CUSTOMER,
+    role: Role.USER,
     status: UserStatus.ACTIVE,
     addresses: [],
     orders: [],
@@ -60,8 +61,7 @@ describe('Profile Events', () => {
       const createProfileDto = {
         full_name: 'John Doe',
         email: 'john@example.com',
-        role: UserRole.CUSTOMER,
-        status: UserStatus.ACTIVE,
+        role: Role.USER, status: UserStatus.ACTIVE,
       };
 
       // Act
@@ -114,8 +114,7 @@ describe('Profile Events', () => {
       const createProfileDto = {
         full_name: 'John Doe',
         email: 'john@example.com',
-        role: UserRole.CUSTOMER,
-        status: UserStatus.ACTIVE,
+        role: Role.USER, status: UserStatus.ACTIVE,
       };
 
       // Act

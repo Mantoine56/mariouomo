@@ -36,9 +36,13 @@ export class Product extends BaseEntity {
   @Column({ type: 'varchar', length: 50 })
   type: string;
 
-  @ApiProperty({ description: 'Product category' })
-  @Column({ type: 'varchar', length: 50 })
-  category: string;
+  /**
+   * Legacy category field - will be deprecated in favor of the categories relation
+   * Kept for backward compatibility during migration
+   */
+  @ApiProperty({ description: 'Legacy product category (deprecated)' })
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  category?: string;
 
   @ApiProperty({ description: 'Base price of the product' })
   @Column({ type: 'decimal', precision: 10, scale: 2 })
@@ -67,6 +71,12 @@ export class Product extends BaseEntity {
   @OneToMany(() => ProductImage, image => image.product)
   images: ProductImage[];
 
+  /**
+   * Categories this product belongs to
+   * Many-to-many relationship with Category entity
+   * This replaces the legacy 'category' string field
+   */
+  @ApiProperty({ description: 'Product categories', type: () => [Category] })
   @ManyToMany(() => Category, (category: Category) => category.products)
   @JoinTable({
     name: 'product_categories',

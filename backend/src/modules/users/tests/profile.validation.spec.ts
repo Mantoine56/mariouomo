@@ -1,7 +1,8 @@
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
-import { CreateProfileDto, UserRole, UserStatus } from '../dtos/create-profile.dto';
+import { CreateProfileDto, UserStatus } from '../dtos/create-profile.dto';
 import { UpdateProfileDto } from '../dtos/update-profile.dto';
+import { Role } from '../../auth/enums/role.enum';
 
 /**
  * Test suite for profile DTOs validation
@@ -13,7 +14,7 @@ describe('Profile DTO Validation', () => {
       const dto = plainToInstance(CreateProfileDto, {
         full_name: 'John Doe',
         email: 'john@example.com',
-        role: UserRole.CUSTOMER,
+        role: Role.USER,
         status: UserStatus.ACTIVE
       });
 
@@ -28,7 +29,7 @@ describe('Profile DTO Validation', () => {
       // Arrange
       const dto = plainToInstance(CreateProfileDto, {
         email: 'john@example.com',
-        role: UserRole.CUSTOMER
+        role: Role.USER
       });
 
       // Act
@@ -44,7 +45,7 @@ describe('Profile DTO Validation', () => {
       const dto = plainToInstance(CreateProfileDto, {
         full_name: 'John Doe',
         email: 'invalid-email',
-        role: UserRole.CUSTOMER
+        role: Role.USER
       });
 
       // Act
@@ -83,7 +84,7 @@ describe('Profile DTO Validation', () => {
 
       // Assert
       expect(errors.length).toBe(0);
-      expect(dto.role).toBe(UserRole.CUSTOMER);
+      expect(dto.role).toBe(Role.USER);
       expect(dto.status).toBe(UserStatus.ACTIVE);
     });
   });
@@ -107,7 +108,7 @@ describe('Profile DTO Validation', () => {
       const dto = plainToInstance(UpdateProfileDto, {
         full_name: 'Updated Name',
         email: 'updated@example.com',
-        role: UserRole.MANAGER,
+        role: Role.ADMIN,
         status: UserStatus.INACTIVE
       });
 

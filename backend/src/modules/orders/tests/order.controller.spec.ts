@@ -50,6 +50,8 @@ describe('OrderController', () => {
   };
 
   const mockCreateOrderDto: CreateOrderDto = {
+    // Add the required store_id property
+    store_id: 'store123',
     items: [
       {
         variant_id: 'variant123',

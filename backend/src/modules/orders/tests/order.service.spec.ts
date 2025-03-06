@@ -78,17 +78,13 @@ describe('OrderService', () => {
     product_id: mockProduct.id,
     name: 'Test Variant',
     sku: 'TEST-123',
+    barcode: 'BARCODE-123',
     price_adjustment: 0,
-    quantity: 10,
-    lowStockThreshold: 5,
-    weight: 1,
-    dimensions: {
-      length: 10,
-      width: 10,
-      height: 10,
-      unit: 'cm',
+    option_values: {
+      color: 'Blue',
+      size: 'Medium'
     },
-    attributes: {},
+    position: 1,
     product: mockProduct,
     inventory_items: [],
     created_at: new Date(),
@@ -111,13 +107,15 @@ describe('OrderService', () => {
 
   const mockOrder: Order = {
     id: 'order123',
+    store_id: 'store123',
     user_id: 'user123',
     user: {} as Profile,
     status: OrderStatus.PENDING as OrderStatus,
     total_amount: 100,
-    subtotal: 90,
-    tax: 10,
-    shipping: 10,
+    subtotal_amount: 90,
+    tax_amount: 10,
+    shipping_amount: 10,
+    discount_amount: 0,
     shipping_address: {
       street: '123 Test St',
       city: 'Test City',
@@ -306,6 +304,7 @@ describe('OrderService', () => {
 
   describe('createOrder', () => {
     const createOrderDto: CreateOrderDto = {
+      store_id: 'store123',
       items: [
         {
           variant_id: 'variant123',

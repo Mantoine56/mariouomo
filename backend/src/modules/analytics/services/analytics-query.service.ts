@@ -117,33 +117,64 @@ export class AnalyticsQueryService {
    * @param endDate - End date for the analysis period
    */
   async getSalesOverview(startDate: Date, endDate: Date) {
-    const metrics = await this.salesMetricsRepo
-      .createQueryBuilder('sm')
-      .select([
-        'SUM(sm.total_revenue) as revenue',
-        'SUM(sm.total_orders) as orders',
-        'AVG(sm.average_order_value) as avg_order_value',
-        'DATE(sm.date) as date',
-      ])
-      .where('sm.date BETWEEN :startDate AND :endDate', {
-        startDate,
-        endDate,
-      })
-      .groupBy('DATE(sm.date)')
-      .getRawMany<RawSalesMetrics>();
+    try {
+      // Validate date range
+      if (startDate > endDate) {
+        throw new Error('Start date must be before end date');
+      }
 
-    const latestMetrics = metrics[metrics.length - 1];
+      // Add index hint for better performance
+      const metrics = await this.salesMetricsRepo
+        .createQueryBuilder('sm')
+        .select([
+          'SUM(sm.total_revenue) as revenue',
+          'SUM(sm.total_orders) as orders',
+          'AVG(sm.average_order_value) as avg_order_value',
+          'DATE(sm.date) as date',
+        ])
+        .where('sm.date BETWEEN :startDate AND :endDate', {
+          startDate,
+          endDate,
+        })
+        .groupBy('DATE(sm.date)')
+        .orderBy('DATE(sm.date)', 'ASC') // Ensure consistent ordering
+        .getRawMany<RawSalesMetrics>();
 
-    return {
-      revenue: latestMetrics?.revenue ?? 0,
-      orders: latestMetrics?.orders ?? 0,
-      averageOrderValue: latestMetrics?.avg_order_value ?? 0,
-      trend: metrics.map((m) => ({
-        date: m.date,
-        revenue: m.revenue,
-        orders: m.orders,
-      })),
-    };
+      // Calculate summary metrics
+      const totalRevenue = metrics.reduce((sum, m) => sum + Number(m.revenue || 0), 0);
+      const totalOrders = metrics.reduce((sum, m) => sum + Number(m.orders || 0), 0);
+      const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+      return {
+        revenue: totalRevenue,
+        orders: totalOrders,
+        averageOrderValue: avgOrderValue,
+        trend: metrics.map((m) => ({
+          date: m.date,
+          revenue: Number(m.revenue || 0),
+          orders: Number(m.orders || 0),
+          averageOrderValue: Number(m.avg_order_value || 0),
+        })),
+        dateRange: {
+          startDate,
+          endDate,
+        }
+      };
+    } catch (error) {
+      console.error('Error in getSalesOverview:', error);
+      return {
+        error: 'Failed to retrieve sales overview',
+        message: error.message,
+        revenue: 0,
+        orders: 0,
+        averageOrderValue: 0,
+        trend: [],
+        dateRange: {
+          startDate,
+          endDate,
+        }
+      };
+    }
   }
 
   /**
@@ -151,32 +182,76 @@ export class AnalyticsQueryService {
    * @param date - Date for inventory analysis
    */
   async getInventoryOverview(date: Date) {
-    const metrics = await this.inventoryMetricsRepo
-      .createQueryBuilder('im')
-      .select([
-        'COUNT(*) as total_items',
-        'SUM(CASE WHEN im.low_stock_items > 0 THEN 1 ELSE 0 END) as low_stock_items',
-        'SUM(CASE WHEN im.out_of_stock_items > 0 THEN 1 ELSE 0 END) as out_of_stock_items',
-        'AVG(im.turnover_rate) as turnover_rate',
-        'DATE(im.date) as date',
-      ])
-      .where('im.date <= :date', { date })
-      .getRawOne<RawInventoryMetrics>();
-
-    return {
-      current: {
-        totalItems: metrics?.total_items ?? 0,
-        lowStockItems: metrics?.low_stock_items ?? 0,
-        outOfStockItems: metrics?.out_of_stock_items ?? 0,
-        turnoverRate: metrics?.turnover_rate ?? 0,
-      },
-      turnoverTrend: [
-        {
-          date: metrics?.date ?? date,
-          turnoverRate: metrics?.turnover_rate ?? 0,
+    try {
+      // Validate date
+      if (!date || isNaN(date.getTime())) {
+        throw new Error('Invalid date provided');
+      }
+      
+      // Get current metrics
+      const currentMetrics = await this.inventoryMetricsRepo
+        .createQueryBuilder('im')
+        .select([
+          'COUNT(*) as total_items',
+          'SUM(CASE WHEN im.low_stock_items > 0 THEN 1 ELSE 0 END) as low_stock_items',
+          'SUM(CASE WHEN im.out_of_stock_items > 0 THEN 1 ELSE 0 END) as out_of_stock_items',
+          'AVG(im.turnover_rate) as turnover_rate',
+          'DATE(im.date) as date',
+        ])
+        .where('im.date <= :date', { date })
+        .getRawOne<RawInventoryMetrics>();
+      
+      // Get trend data for the last 30 days
+      const thirtyDaysAgo = new Date(date);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const trendMetrics = await this.inventoryMetricsRepo
+        .createQueryBuilder('im')
+        .select([
+          'AVG(im.turnover_rate) as turnover_rate',
+          'DATE(im.date) as date',
+        ])
+        .where('im.date BETWEEN :startDate AND :endDate', {
+          startDate: thirtyDaysAgo,
+          endDate: date,
+        })
+        .groupBy('DATE(im.date)')
+        .orderBy('DATE(im.date)', 'ASC')
+        .getRawMany();
+      
+      return {
+        current: {
+          totalItems: Number(currentMetrics?.total_items ?? 0),
+          lowStockItems: Number(currentMetrics?.low_stock_items ?? 0),
+          outOfStockItems: Number(currentMetrics?.out_of_stock_items ?? 0),
+          turnoverRate: Number(currentMetrics?.turnover_rate ?? 0),
         },
-      ],
-    };
+        turnoverTrend: trendMetrics.length > 0 
+          ? trendMetrics.map(m => ({
+              date: m.date,
+              turnoverRate: Number(m.turnover_rate ?? 0),
+            }))
+          : [{
+              date: date,
+              turnoverRate: Number(currentMetrics?.turnover_rate ?? 0),
+            }],
+        analysisDate: date,
+      };
+    } catch (error) {
+      console.error('Error in getInventoryOverview:', error);
+      return {
+        error: 'Failed to retrieve inventory overview',
+        message: error.message,
+        current: {
+          totalItems: 0,
+          lowStockItems: 0,
+          outOfStockItems: 0,
+          turnoverRate: 0,
+        },
+        turnoverTrend: [],
+        analysisDate: date,
+      };
+    }
   }
 
   /**
@@ -291,33 +366,60 @@ export class AnalyticsQueryService {
 
   /**
    * Gets traffic source distribution
+   * @param startDate - Optional start date for filtering traffic sources
+   * @param endDate - Optional end date for filtering traffic sources
    */
-  async getTrafficSourceDistribution() {
-    // Get latest traffic source data
-    const latestMetrics = await this.customerMetricsRepo.findOne({
-      order: {
-        date: 'DESC',
-      },
-    });
+  async getTrafficSourceDistribution(startDate?: Date, endDate?: Date) {
+    try {
+      // Set default date range if not provided
+      const effectiveEndDate = endDate || new Date();
+      const effectiveStartDate = startDate || new Date(effectiveEndDate.getTime() - 30 * 24 * 60 * 60 * 1000); // Default to last 30 days
+      
+      // Get traffic source metrics with proper date filtering
+      const query = this.customerMetricsRepo
+        .createQueryBuilder('customer')
+        .select([
+          'customer.traffic_source as name', // Using snake_case column name
+          'COUNT(*) as visits',
+          'AVG(CASE WHEN customer.last_purchase_date IS NOT NULL THEN 1 ELSE 0 END) * 100 as conversion_rate',
+        ])
+        .where('customer.created_at IS NOT NULL'); // Ensure we have valid records
+      
+      // Add date range conditions if dates are provided
+      if (startDate || endDate) {
+        query.andWhere('customer.created_at BETWEEN :startDate AND :endDate', {
+          startDate: effectiveStartDate,
+          endDate: effectiveEndDate,
+        });
+      }
+      
+      const sources = await query
+        .groupBy('customer.traffic_source')
+        .getRawMany<RawTrafficSource>();
 
-    // Get traffic source metrics
-    const sources = await this.customerMetricsRepo
-      .createQueryBuilder('customer')
-      .select([
-        'customer.trafficSource as name',
-        'COUNT(*) as visits',
-        'AVG(CASE WHEN customer.lastPurchaseDate IS NOT NULL THEN 1 ELSE 0 END) * 100 as conversion_rate',
-      ])
-      .groupBy('customer.trafficSource')
-      .getRawMany<RawTrafficSource>();
-
-    return {
-      sources: sources.map((source) => ({
-        source: source.name,
-        visits: source.visits,
-        conversion_rate: source.conversion_rate,
-      })),
-    };
+      return {
+        sources: sources.map((source) => ({
+          source: source.name || 'Unknown',
+          visits: source.visits || 0,
+          conversion_rate: source.conversion_rate || 0,
+        })),
+        dateRange: {
+          startDate: effectiveStartDate,
+          endDate: effectiveEndDate,
+        }
+      };
+    } catch (error) {
+      console.error('Error in getTrafficSourceDistribution:', error);
+      return {
+        sources: [],
+        error: 'Failed to retrieve traffic source distribution',
+        message: error.message,
+        dateRange: {
+          startDate: startDate || new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000),
+          endDate: endDate || new Date(),
+        }
+      };
+    }
   }
 
   /**
