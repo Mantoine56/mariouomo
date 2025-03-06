@@ -17,13 +17,15 @@ import { ProductVariant } from '../entities/product-variant.entity';
 @Injectable()
 export class ProductRepository extends BaseRepository<Product> {
   private readonly logger = new Logger(ProductRepository.name);
+  private readonly variantRepository: Repository<ProductVariant>;
 
   constructor(
     @InjectRepository(ProductVariant)
-    private readonly variantRepository: Repository<ProductVariant>,
+    variantRepository: Repository<ProductVariant>,
     entityManager: EntityManager
   ) {
     super(Product, entityManager);
+    this.variantRepository = variantRepository;
   }
 
   /**

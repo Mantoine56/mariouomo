@@ -1,15 +1,17 @@
-import { EntityRepository } from 'typeorm';
+import { Injectable } from '@nestjs/common';
+import { EntityManager } from 'typeorm';
 import { BaseRepository } from '../../../common/repositories/base.repository';
 import { ProductImage } from '../entities/product-image.entity';
-import { Injectable } from '@nestjs/common';
 
 /**
  * Repository for ProductImage entity
  * Handles image-specific database operations
  */
 @Injectable()
-@EntityRepository(ProductImage)
 export class ProductImageRepository extends BaseRepository<ProductImage> {
+  constructor(entityManager: EntityManager) {
+    super(ProductImage, entityManager);
+  }
   /**
    * Find all images for a product
    * @param productId Product ID

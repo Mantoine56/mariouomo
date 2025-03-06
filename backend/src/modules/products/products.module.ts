@@ -1,5 +1,19 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { Product } from './entities/product.entity';
+import { ProductVariant } from './entities/product-variant.entity';
+import { ProductImage } from './entities/product-image.entity';
+import { Category } from './entities/category.entity';
+import { ProductService } from './services/product.service';
+import { ProductController } from './controllers/product.controller';
+import { CategoryController } from './controllers/category.controller';
+import { VariantController } from './controllers/variant.controller';
+import { ProductImageController } from './controllers/product-image.controller';
+import { ProductRepository } from './repositories/product.repository';
+import { ProductImageRepository } from './repositories/product-image.repository';
+import { CategoryService } from './services/category.service';
+import { VariantService } from './services/variant.service';
+import { RedisCacheModule } from '../../common/cache/cache.module';
 
 /**
  * Products Module
@@ -14,17 +28,32 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      // Product entities will be registered here
+      Product,
+      ProductVariant,
+      ProductImage,
+      Category,
+      ProductRepository,
+      ProductImageRepository,
     ]),
+    RedisCacheModule,
   ],
   controllers: [
-    // Product controllers will be registered here
+    ProductController,
+    CategoryController,
+    VariantController,
+    ProductImageController,
   ],
   providers: [
-    // Product services and repositories will be registered here
+    ProductService,
+    CategoryService,
+    VariantService,
+    ProductRepository,
+    ProductImageRepository,
   ],
   exports: [
-    // Exported services and repositories
+    ProductService,
+    CategoryService,
+    VariantService,
   ],
 })
 export class ProductsModule {} 
