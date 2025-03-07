@@ -57,4 +57,35 @@ export class SalesMetrics {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  /**
+   * Store ID for multi-tenant support
+   * Allows filtering metrics by store
+   */
+  @Column({ type: 'uuid', nullable: true })
+  @Index()
+  store_id: string;
+
+  /**
+   * Product ID for direct joins
+   * Enables efficient product-specific analytics
+   */
+  @Column({ type: 'uuid', nullable: true })
+  @Index()
+  product_id: string;
+
+  /**
+   * Category ID for direct joins
+   * Enables efficient category-specific analytics
+   */
+  @Column({ type: 'uuid', nullable: true })
+  @Index()
+  category_id: string;
+
+  /**
+   * Views count for conversion rate calculations
+   * Helps track product page views for accurate conversion metrics
+   */
+  @Column({ type: 'integer', default: 0 })
+  views: number;
 }

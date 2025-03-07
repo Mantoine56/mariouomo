@@ -64,4 +64,12 @@ export class RealTimeMetrics {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  /**
+   * Store ID for multi-tenant support
+   * Allows filtering metrics by store
+   */
+  @Column({ type: 'uuid', nullable: true })
+  @Index()
+  store_id: string;
 }

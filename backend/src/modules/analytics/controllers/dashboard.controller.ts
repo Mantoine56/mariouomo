@@ -1,15 +1,27 @@
-import { Controller, Get, UseInterceptors, Logger, Query } from '@nestjs/common';
+import { Controller, Get, UseInterceptors, Logger, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { CacheHeadersInterceptor } from '../../../common/interceptors/cache-headers.interceptor';
 import { AnalyticsQueryService } from '../services/analytics-query.service';
 import { RealTimeTrackingService } from '../services/real-time-tracking.service';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { Role } from '../../auth/enums/role.enum';
 
 /**
  * Dashboard Controller
  * 
  * Provides endpoints for dashboard data and visualizations
  * Used for displaying real-time metrics and analytics data
+ * 
+ * Secured with JWT authentication and role-based access control
+ * Only ADMIN and MERCHANT roles can access dashboard data
  */
+@ApiTags('Dashboard')
 @Controller('dashboard')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth('JWT')
+@Roles(Role.ADMIN, Role.MERCHANT)
 export class DashboardController {
   private readonly logger = new Logger(DashboardController.name);
 
@@ -25,6 +37,22 @@ export class DashboardController {
    */
   @Get()
   @UseInterceptors(CacheHeadersInterceptor)
+  @ApiOperation({ 
+    summary: 'Get dashboard overview data (Admin and Merchant only)',
+    description: 'Provides a comprehensive overview of sales and real-time metrics for the dashboard'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Dashboard data retrieved successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing authentication token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User does not have required roles',
+  })
   async getDashboardOverview() {
     try {
       // Get sales metrics - use current month as default period

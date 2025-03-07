@@ -102,12 +102,86 @@ async function bootstrap() {
     console.log('Setting up Swagger documentation...');
     const config = new DocumentBuilder()
       .setTitle('Mario Uomo API')
-      .setDescription('The Mario Uomo API documentation')
+      .setDescription('The Mario Uomo API documentation - Enterprise-grade e-commerce platform')
       .setVersion('1.0')
-      .addBearerAuth()
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          name: 'JWT',
+          description: 'Enter JWT token',
+          in: 'header',
+        },
+        'JWT', // This name here is important for matching the @ApiBearerAuth() decorator
+      )
+      .addTag('Analytics', 'Endpoints for retrieving and managing analytics data')
+      .addTag('Dashboard', 'Endpoints for dashboard visualizations and summaries')
       .build();
-    const document = SwaggerModule.createDocument(application, config);
-    SwaggerModule.setup('api', application, document);
+    
+    // Import schemas from analytics documentation
+    const document = SwaggerModule.createDocument(application, config, {
+      extraModels: [],
+    });
+    
+    // Add custom schemas for analytics
+    document.components = document.components || {};
+    document.components.schemas = document.components.schemas || {};
+    
+    // Add our custom schemas
+    document.components.schemas['SalesMetricsResponseSchema'] = {
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        store_id: { type: 'string', format: 'uuid' },
+        date: { type: 'string', format: 'date-time' },
+        total_revenue: { type: 'number' },
+        total_orders: { type: 'integer' },
+        total_units_sold: { type: 'integer' },
+        average_order_value: { type: 'number' },
+        conversion_rate: { type: 'number' },
+        views: { type: 'integer' },
+      }
+    };
+    
+    document.components.schemas['InventoryMetricsResponseSchema'] = {
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        store_id: { type: 'string', format: 'uuid' },
+        date: { type: 'string', format: 'date-time' },
+        total_inventory_value: { type: 'number' },
+        total_items_in_stock: { type: 'integer' },
+        low_stock_items: { type: 'integer' },
+        out_of_stock_items: { type: 'integer' },
+        turnover_rate: { type: 'number' },
+      }
+    };
+    
+    document.components.schemas['CustomerMetricsResponseSchema'] = {
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        store_id: { type: 'string', format: 'uuid' },
+        date: { type: 'string', format: 'date-time' },
+        total_customers: { type: 'integer' },
+        new_customers: { type: 'integer' },
+        returning_customers: { type: 'integer' },
+        average_purchase_frequency: { type: 'number' },
+        customer_lifetime_value: { type: 'number' },
+        last_purchase_date: { type: 'string', format: 'date-time' },
+      }
+    };
+    
+    // Setup Swagger UI
+    SwaggerModule.setup('api', application, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+        tagsSorter: 'alpha',
+        operationsSorter: 'alpha',
+        docExpansion: 'none',
+      },
+    });
     console.log('Swagger documentation setup complete');
 
     // Initialize Sentry for error tracking

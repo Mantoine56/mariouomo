@@ -62,4 +62,28 @@ export class CustomerMetrics {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  /**
+   * Store ID for multi-tenant support
+   * Allows filtering metrics by store
+   */
+  @Column({ type: 'uuid', nullable: true })
+  @Index()
+  store_id: string;
+
+  /**
+   * Traffic source tracking for attribution analysis
+   * Helps identify most valuable customer acquisition channels
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Index()
+  traffic_source: string;
+
+  /**
+   * Last purchase date for retention analysis
+   * Enables accurate customer recency metrics
+   */
+  @Column({ type: 'date', nullable: true })
+  @Index()
+  last_purchase_date: Date;
 }

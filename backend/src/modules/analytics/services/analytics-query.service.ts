@@ -260,32 +260,74 @@ export class AnalyticsQueryService {
    * @param endDate - End date for the analysis period
    */
   async getCustomerInsights(startDate: Date, endDate: Date) {
-    const metrics = await this.customerMetricsRepo
-      .createQueryBuilder('customer')
-      .select([
-        'COUNT(DISTINCT CASE WHEN customer.lastPurchaseDate BETWEEN :startDate AND :endDate THEN customer.id END) as repeat_customers',
-        'COUNT(DISTINCT CASE WHEN customer.createdAt BETWEEN :startDate AND :endDate THEN customer.id END) as new_customers',
-        'AVG(CASE WHEN customer.lastPurchaseDate >= :startDate THEN 1 ELSE 0 END) * 100 as retention_rate',
-        'DATE(customer.createdAt) as date',
-      ])
-      .where('customer.createdAt <= :endDate', { startDate, endDate })
-      .groupBy('DATE(customer.createdAt)')
-      .getRawMany<RawCustomerMetrics>();
+    try {
+      // Validate date range
+      if (startDate > endDate) {
+        throw new Error('Start date must be before end date');
+      }
 
-    const latestMetrics = metrics[metrics.length - 1];
-    const retention = latestMetrics?.retention_rate ?? 0;
+      // Use snake_case column names for consistency with database schema
+      const metrics = await this.customerMetricsRepo
+        .createQueryBuilder('customer')
+        .select([
+          'COUNT(DISTINCT CASE WHEN customer.last_purchase_date BETWEEN :startDate AND :endDate THEN customer.id END) as repeat_customers',
+          'COUNT(DISTINCT CASE WHEN customer.created_at BETWEEN :startDate AND :endDate THEN customer.id END) as new_customers',
+          'AVG(CASE WHEN customer.last_purchase_date >= :startDate THEN 1 ELSE 0 END) * 100 as retention_rate',
+          'DATE(customer.created_at) as date',
+        ])
+        .where('customer.created_at <= :endDate', { startDate, endDate })
+        .groupBy('DATE(customer.created_at)')
+        .getRawMany<RawCustomerMetrics>();
 
-    return {
-      retention,
-      churn: 100 - retention,
-      newCustomers: latestMetrics?.new_customers ?? 0,
-      repeatCustomers: latestMetrics?.repeat_customers ?? 0,
-      trend: metrics.map((m) => ({
-        date: m.date,
-        retention: m.retention_rate,
-        churn: 100 - m.retention_rate,
-      })),
-    };
+      // Handle empty result set
+      if (metrics.length === 0) {
+        return {
+          retention: 0,
+          churn: 100,
+          newCustomers: 0,
+          repeatCustomers: 0,
+          trend: [],
+          dateRange: {
+            startDate,
+            endDate
+          }
+        };
+      }
+
+      const latestMetrics = metrics[metrics.length - 1];
+      const retention = Number(latestMetrics?.retention_rate ?? 0);
+
+      return {
+        retention,
+        churn: 100 - retention,
+        newCustomers: Number(latestMetrics?.new_customers ?? 0),
+        repeatCustomers: Number(latestMetrics?.repeat_customers ?? 0),
+        trend: metrics.map((m) => ({
+          date: m.date,
+          retention: Number(m.retention_rate ?? 0),
+          churn: 100 - Number(m.retention_rate ?? 0),
+        })),
+        dateRange: {
+          startDate,
+          endDate
+        }
+      };
+    } catch (error) {
+      console.error('Error in getCustomerInsights:', error);
+      return {
+        error: 'Failed to retrieve customer insights',
+        message: error.message,
+        retention: 0,
+        churn: 100,
+        newCustomers: 0,
+        repeatCustomers: 0,
+        trend: [],
+        dateRange: {
+          startDate,
+          endDate
+        }
+      };
+    }
   }
 
   /**
@@ -294,7 +336,13 @@ export class AnalyticsQueryService {
    * @param endDate - End date for the analysis period
    */
   async getProductPerformance(startDate: Date, endDate: Date) {
-    const metrics = await this.salesMetricsRepo
+    try {
+      // Validate date range
+      if (startDate > endDate) {
+        throw new Error('Start date must be before end date');
+      }
+
+      const metrics = await this.salesMetricsRepo
       .createQueryBuilder('sm')
       .select([
         'SUM(sm.total_revenue) as revenue',
@@ -311,21 +359,56 @@ export class AnalyticsQueryService {
       .groupBy('DATE(sm.date)')
       .getRawMany<RawProductMetrics>();
 
-    const latestMetrics = metrics[metrics.length - 1];
+      // Handle empty result set
+      if (metrics.length === 0) {
+        return {
+          revenue: 0,
+          orders: 0,
+          views: 0,
+          conversionRate: 0,
+          trend: [],
+          dateRange: {
+            startDate,
+            endDate
+          }
+        };
+      }
 
-    return {
-      revenue: latestMetrics?.revenue ?? 0,
-      orders: latestMetrics?.orders ?? 0,
-      views: latestMetrics?.views ?? 0,
-      conversionRate: latestMetrics?.conversion_rate ?? 0,
-      trend: metrics.map((d) => ({
-        date: d.date,
-        revenue: d.revenue,
-        orders: d.orders,
-        views: d.views,
-        conversionRate: d.conversion_rate,
-      })),
-    };
+      const latestMetrics = metrics[metrics.length - 1];
+
+      return {
+        revenue: Number(latestMetrics?.revenue ?? 0),
+        orders: Number(latestMetrics?.orders ?? 0),
+        views: Number(latestMetrics?.views ?? 0),
+        conversionRate: Number(latestMetrics?.conversion_rate ?? 0),
+        trend: metrics.map((d) => ({
+          date: d.date,
+          revenue: Number(d.revenue ?? 0),
+          orders: Number(d.orders ?? 0),
+          views: Number(d.views ?? 0),
+          conversionRate: Number(d.conversion_rate ?? 0),
+        })),
+        dateRange: {
+          startDate,
+          endDate
+        }
+      };
+    } catch (error) {
+      console.error('Error in getProductPerformance:', error);
+      return {
+        error: 'Failed to retrieve product performance metrics',
+        message: error.message,
+        revenue: 0,
+        orders: 0,
+        views: 0,
+        conversionRate: 0,
+        trend: [],
+        dateRange: {
+          startDate,
+          endDate
+        }
+      };
+    }
   }
 
   /**
@@ -334,7 +417,13 @@ export class AnalyticsQueryService {
    * @param endDate - End date for the analysis period
    */
   async getCategoryPerformance(startDate: Date, endDate: Date) {
-    const metrics = await this.salesMetricsRepo
+    try {
+      // Validate date range
+      if (startDate > endDate) {
+        throw new Error('Start date must be before end date');
+      }
+
+      const metrics = await this.salesMetricsRepo
       .createQueryBuilder('sm')
       .select([
         'SUM(sm.total_revenue) as revenue',
@@ -350,18 +439,51 @@ export class AnalyticsQueryService {
       .groupBy('DATE(sm.date)')
       .getRawMany<RawCategoryMetrics>();
 
-    const latestMetrics = metrics[metrics.length - 1];
+      // Handle empty result set
+      if (metrics.length === 0) {
+        return {
+          revenue: 0,
+          orders: 0,
+          products: 0,
+          trend: [],
+          dateRange: {
+            startDate,
+            endDate
+          }
+        };
+      }
 
-    return {
-      revenue: latestMetrics?.revenue ?? 0,
-      orders: latestMetrics?.orders ?? 0,
-      products: latestMetrics?.products ?? 0,
-      trend: metrics.map((d) => ({
-        date: d.date,
-        revenue: d.revenue,
-        orders: d.orders,
-      })),
-    };
+      const latestMetrics = metrics[metrics.length - 1];
+
+      return {
+        revenue: Number(latestMetrics?.revenue ?? 0),
+        orders: Number(latestMetrics?.orders ?? 0),
+        products: Number(latestMetrics?.products ?? 0),
+        trend: metrics.map((d) => ({
+          date: d.date,
+          revenue: Number(d.revenue ?? 0),
+          orders: Number(d.orders ?? 0),
+        })),
+        dateRange: {
+          startDate,
+          endDate
+        }
+      };
+    } catch (error) {
+      console.error('Error in getCategoryPerformance:', error);
+      return {
+        error: 'Failed to retrieve category performance metrics',
+        message: error.message,
+        revenue: 0,
+        orders: 0,
+        products: 0,
+        trend: [],
+        dateRange: {
+          startDate,
+          endDate
+        }
+      };
+    }
   }
 
   /**
@@ -385,23 +507,23 @@ export class AnalyticsQueryService {
         ])
         .where('customer.created_at IS NOT NULL'); // Ensure we have valid records
       
-      // Add date range conditions if dates are provided
-      if (startDate || endDate) {
-        query.andWhere('customer.created_at BETWEEN :startDate AND :endDate', {
-          startDate: effectiveStartDate,
-          endDate: effectiveEndDate,
-        });
-      }
+      // Add date range conditions
+      // Always use the date range parameters to ensure consistent filtering
+      query.andWhere('customer.created_at BETWEEN :startDate AND :endDate', {
+        startDate: effectiveStartDate,
+        endDate: effectiveEndDate,
+      });
       
       const sources = await query
         .groupBy('customer.traffic_source')
         .getRawMany<RawTrafficSource>();
 
+      // Ensure we have proper type conversion
       return {
         sources: sources.map((source) => ({
           source: source.name || 'Unknown',
-          visits: source.visits || 0,
-          conversion_rate: source.conversion_rate || 0,
+          visits: Number(source.visits || 0),
+          conversion_rate: Number(source.conversion_rate || 0),
         })),
         dateRange: {
           startDate: effectiveStartDate,
@@ -424,67 +546,126 @@ export class AnalyticsQueryService {
 
   /**
    * Gets real-time dashboard data including active users and trends
+   * @returns Dashboard data with active users and trends
    */
   async getRealTimeDashboard() {
-    const current = await this.realTimeMetricsRepo
-      .createQueryBuilder('metrics')
-      .select([
-        'metrics.activeUsers as active_users',
-        'metrics.pageViews as page_views',
-        'metrics.trafficSources as traffic_sources',
-      ])
-      .orderBy('metrics.timestamp', 'DESC')
-      .limit(1)
-      .getRawOne();
+    try {
+      // Validate and optimize the query for current metrics
+      const current = await this.realTimeMetricsRepo
+        .createQueryBuilder('metrics')
+        .select([
+          'metrics.activeUsers as active_users',
+          'metrics.pageViews as page_views',
+          'metrics.trafficSources as traffic_sources',
+          'metrics.timestamp as timestamp'
+        ])
+        .orderBy('metrics.timestamp', 'DESC')
+        .limit(1)
+        .getRawOne();
 
-    const hourAgo = new Date(Date.now() - 3600000);
-    const trends = await this.realTimeMetricsRepo
-      .createQueryBuilder('metrics')
-      .select([
-        'metrics.timestamp as timestamp',
-        'metrics.activeUsers as active_users',
-        'metrics.pageViews as page_views',
-      ])
-      .where('metrics.timestamp >= :hourAgo', { hourAgo })
-      .orderBy('metrics.timestamp', 'ASC')
-      .getRawMany();
+      // Calculate the time one hour ago for trend data
+      const hourAgo = new Date(Date.now() - 3600000);
+      
+      // Get trend data for the last hour with consistent time intervals
+      const trends = await this.realTimeMetricsRepo
+        .createQueryBuilder('metrics')
+        .select([
+          'metrics.timestamp as timestamp',
+          'metrics.activeUsers as active_users',
+          'metrics.pageViews as page_views',
+        ])
+        .where('metrics.timestamp >= :hourAgo', { hourAgo })
+        .orderBy('metrics.timestamp', 'ASC')
+        .getRawMany();
 
-    return {
-      current: {
-        activeUsers: current?.active_users ?? 0,
-        pageViews: current?.page_views ?? 0,
-        trafficSources: current?.traffic_sources ?? [],
-      },
-      trends: {
-        activeUsers: trends.map((t) => ({
-          timestamp: t.timestamp,
-          users: t.active_users,
-        })),
-        pageViews: trends.map((t) => ({
-          timestamp: t.timestamp,
-          views: t.page_views,
-        })),
-      },
-    };
+      // Parse traffic sources from JSON if needed
+      let trafficSources = [];
+      try {
+        if (current?.traffic_sources) {
+          // Handle both string JSON and already parsed objects
+          if (typeof current.traffic_sources === 'string') {
+            trafficSources = JSON.parse(current.traffic_sources);
+          } else {
+            trafficSources = current.traffic_sources;
+          }
+        }
+      } catch (parseError) {
+        console.error('Error parsing traffic sources:', parseError);
+        trafficSources = [];
+      }
+
+      return {
+        current: {
+          activeUsers: Number(current?.active_users ?? 0),
+          pageViews: Number(current?.page_views ?? 0),
+          trafficSources: trafficSources,
+          timestamp: current?.timestamp ? new Date(current.timestamp) : new Date()
+        },
+        trends: {
+          activeUsers: trends.map((t) => ({
+            timestamp: t.timestamp,
+            users: Number(t.active_users ?? 0),
+          })),
+          pageViews: trends.map((t) => ({
+            timestamp: t.timestamp,
+            views: Number(t.page_views ?? 0),
+          })),
+        },
+      };
+    } catch (error) {
+      console.error('Error in getRealTimeDashboard:', error);
+      return {
+        error: 'Failed to retrieve real-time dashboard data',
+        message: error.message,
+        current: {
+          activeUsers: 0,
+          pageViews: 0,
+          trafficSources: [],
+          timestamp: new Date()
+        },
+        trends: {
+          activeUsers: [],
+          pageViews: [],
+        },
+      };
+    }
   }
 
   /**
-   * Aggregates customer segments
+   * Aggregates customer segments into a structured format
+   * @param segments - Array of customer segments with metrics
+   * @returns Aggregated segment map with calculated metrics
    */
   private aggregateCustomerSegments(segments: CustomerSegment[]): SegmentMap {
+    // Handle empty segments array
+    if (!segments || segments.length === 0) {
+      return {};
+    }
+    
     return segments.reduce((acc: SegmentMap, segment) => {
-      if (!acc[segment.segment]) {
-        acc[segment.segment] = {
+      // Ensure segment name exists and use default if not
+      const segmentName = segment.segment || 'Unknown';
+      
+      if (!acc[segmentName]) {
+        acc[segmentName] = {
           customers: 0,
           revenue: 0,
           avg_order_value: 0,
         };
       }
 
-      acc[segment.segment].customers += segment.customer_count;
-      acc[segment.segment].revenue += segment.total_revenue;
-      acc[segment.segment].avg_order_value =
-        acc[segment.segment].revenue / acc[segment.segment].customers;
+      // Use Number() to ensure proper type conversion
+      const customerCount = Number(segment.customer_count || 0);
+      const totalRevenue = Number(segment.total_revenue || 0);
+
+      // Update segment metrics
+      acc[segmentName].customers += customerCount;
+      acc[segmentName].revenue += totalRevenue;
+      
+      // Calculate average order value safely (avoid division by zero)
+      acc[segmentName].avg_order_value = acc[segmentName].customers > 0 
+        ? acc[segmentName].revenue / acc[segmentName].customers 
+        : 0;
 
       return acc;
     }, {});

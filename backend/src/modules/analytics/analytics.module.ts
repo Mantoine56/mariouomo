@@ -5,9 +5,14 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AnalyticsController } from './controllers/analytics.controller';
 import { AnalyticsDevController } from './controllers/analytics-dev.controller';
 import { DashboardController } from './controllers/dashboard.controller';
+import { AnalyticsOptimizedController } from './controllers/analytics-optimized.controller';
 import { AnalyticsQueryService } from './services/analytics-query.service';
 import { RealTimeTrackingService } from './services/real-time-tracking.service';
 import { AnalyticsAggregatorService } from './services/analytics-aggregator.service';
+import { AnalyticsCollectorService } from './services/analytics-collector.service';
+import { AnalyticsSchedulerService } from './services/analytics-scheduler.service';
+import { AnalyticsMaterializedViewsService } from './services/analytics-materialized-views.service';
+import { AnalyticsScheduledTasksService } from './services/analytics-scheduled-tasks.service';
 import { SalesMetrics } from './entities/sales-metrics.entity';
 import { InventoryMetrics } from './entities/inventory-metrics.entity';
 import { CustomerMetrics } from './entities/customer-metrics.entity';
@@ -16,6 +21,7 @@ import { DatabaseModule } from '../../common/database/database.module';
 import { CartsModule } from '../carts/carts.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { Store } from '../stores/entities/store.entity';
 
 /**
  * Analytics Module
@@ -37,6 +43,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       CustomerMetrics,
       RealTimeMetrics,
     ]),
+    // Import Store entity for multi-tenant support in scheduler
+    TypeOrmModule.forFeature([Store], 'default'),
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     DatabaseModule,
@@ -54,6 +62,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     // Analytics controllers
     AnalyticsController,
     DashboardController,
+    AnalyticsOptimizedController,
     ...(process.env.NODE_ENV !== 'production' ? [AnalyticsDevController] : []),
   ],
   providers: [
@@ -61,12 +70,20 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     AnalyticsQueryService,
     RealTimeTrackingService,
     AnalyticsAggregatorService,
+    AnalyticsCollectorService,
+    AnalyticsSchedulerService,
+    // New services for analytics optimization
+    AnalyticsMaterializedViewsService,
+    AnalyticsScheduledTasksService,
   ],
   exports: [
     // Exported services
     AnalyticsQueryService,
     RealTimeTrackingService,
     AnalyticsAggregatorService,
+    AnalyticsCollectorService,
+    // Export new services for use in other modules
+    AnalyticsMaterializedViewsService,
   ],
 })
 export class AnalyticsModule {} 

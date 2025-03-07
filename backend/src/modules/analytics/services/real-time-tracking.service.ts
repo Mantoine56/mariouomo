@@ -77,7 +77,14 @@ export class RealTimeTrackingService {
    * Gets current real-time metrics with trend calculations
    * @returns Current metrics with trend data
    */
-  async getCurrentMetrics(): Promise<any> {
+  async getCurrentMetrics(): Promise<{
+    activeUsers: { current: number; trend: number };
+    pageViews: { current: number; trend: number };
+    trafficSources: Array<{ source: string; count: number; percentage: number }>;
+    popularProducts: Array<{ product_id: string; views: number; in_cart: number }>;
+    cart: { count: number; value: number };
+    pendingOrders: { count: number; value: number };
+  }> {
     try {
       this.logger.debug('Fetching current real-time metrics');
       
@@ -104,13 +111,12 @@ export class RealTimeTrackingService {
       // Get historical data for trend calculation
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
       
-      // For newer TypeORM, ensure we're using the correct syntax for MoreThanOrEqual
-      const historicalData = await this.realTimeMetricsRepo.find({
-        where: {
-          timestamp: MoreThanOrEqual(oneHourAgo)
-        },
-        order: { timestamp: 'ASC' }
-      });
+      // Use TypeORM's query builder for better compatibility
+      const historicalData = await this.realTimeMetricsRepo
+        .createQueryBuilder('metrics')
+        .where('metrics.timestamp >= :oneHourAgo', { oneHourAgo })
+        .orderBy('metrics.timestamp', 'ASC')
+        .getMany();
       
       // Calculate trends by comparing latest metrics with data from an hour ago
       let activeUsersTrend = 0;
@@ -119,39 +125,44 @@ export class RealTimeTrackingService {
       if (historicalData.length > 1) {
         const oldestMetrics = historicalData[0];
         
-        // Calculate percentage changes
-        if (oldestMetrics.active_users > 0) {
-          activeUsersTrend = ((latestMetrics.active_users - oldestMetrics.active_users) / oldestMetrics.active_users) * 100;
+        // Calculate percentage changes with proper null/undefined handling
+        const oldActiveUsers = oldestMetrics.active_users || 0;
+        const newActiveUsers = latestMetrics.active_users || 0;
+        
+        if (oldActiveUsers > 0) {
+          activeUsersTrend = ((newActiveUsers - oldActiveUsers) / oldActiveUsers) * 100;
         }
         
-        // Calculate page view trends
-        const oldPageViewsTotal = oldestMetrics.page_views ? 
-          oldestMetrics.page_views.reduce((sum, item) => sum + item.views, 0) : 0;
+        // Calculate page view trends with proper null/undefined handling
+        const oldPageViews = oldestMetrics.page_views || [];
+        const newPageViews = latestMetrics.page_views || [];
         
-        const newPageViewsTotal = latestMetrics.page_views ? 
-          latestMetrics.page_views.reduce((sum, item) => sum + item.views, 0) : 0;
+        const oldPageViewsTotal = oldPageViews.reduce((sum, item) => sum + (item.views || 0), 0);
+        const newPageViewsTotal = newPageViews.reduce((sum, item) => sum + (item.views || 0), 0);
         
         if (oldPageViewsTotal > 0) {
           pageViewsTrend = ((newPageViewsTotal - oldPageViewsTotal) / oldPageViewsTotal) * 100;
         }
       }
       
-      // Format traffic sources for frontend
-      const trafficSources = latestMetrics.traffic_sources ? 
-        latestMetrics.traffic_sources.map(source => ({
-          source: source.source,
-          count: source.active_users,
-          percentage: latestMetrics.active_sessions > 0 
-            ? (source.active_users / latestMetrics.active_sessions) * 100 
-            : 0,
-        })) : [];
+      // Format traffic sources for frontend with proper null/undefined handling
+      const trafficSources = (latestMetrics.traffic_sources || []).map(source => ({
+        source: source.source || 'Unknown',
+        count: source.active_users || 0,
+        percentage: (latestMetrics.active_sessions || 0) > 0 
+          ? ((source.active_users || 0) / (latestMetrics.active_sessions || 1)) * 100 
+          : 0,
+      }));
       
-      // Calculate total page views
-      const pageViewsTotal = latestMetrics.page_views ? 
-        latestMetrics.page_views.reduce((sum, page) => sum + page.views, 0) : 0;
+      // Calculate total page views with proper null/undefined handling
+      const pageViewsTotal = (latestMetrics.page_views || []).reduce((sum, page) => sum + (page.views || 0), 0);
       
-      // Get popular products
-      const popularProducts = latestMetrics.current_popular_products || [];
+      // Get popular products with proper type handling
+      const popularProducts = (latestMetrics.current_popular_products || []).map(product => ({
+        product_id: product.product_id || '',
+        views: product.views || 0,
+        in_cart: product.in_cart || 0
+      }));
       
       return {
         activeUsers: {
@@ -217,6 +228,7 @@ export class RealTimeTrackingService {
    * Track traffic source for a session
    * @param source - Traffic source (e.g., 'google', 'direct')
    * @param sessionId - Unique session identifier
+   * @throws Error if tracking fails
    */
   async trackTrafficSource(source: string, sessionId: string): Promise<void> {
     try {
@@ -274,6 +286,7 @@ export class RealTimeTrackingService {
   /**
    * Updates real-time metrics
    * Called after each tracking event and periodically
+   * @throws Error if update fails critically
    */
   @Cron(CronExpression.EVERY_30_SECONDS)
   private async updateRealTimeMetrics() {
@@ -403,10 +416,12 @@ export class RealTimeTrackingService {
         this.logger.warn(`Unable to fetch popular products: ${error.message}`);
       }
       
-      // Create traffic source metrics
+      // Create traffic source metrics with validation
       const trafficSourceMetrics = Array.from(
         this.trafficSources.entries(),
-      ).map(([source, sessions]) => ({
+      )
+      .filter(([source, sessions]) => source && sessions) // Validate entries
+      .map(([source, sessions]) => ({
         source,
         active_users: sessions.size,
         conversion_rate: 0, // Will be calculated with order data
@@ -459,7 +474,11 @@ export class RealTimeTrackingService {
       // Get active cart metrics from the repository with error handling
       try {
         const cartMetrics = await this.shoppingCartRepository.getActiveCartMetrics(30);
-        this.logger.debug(`Active carts: ${cartMetrics.cart_count}, Value: ${cartMetrics.cart_value}`);
+        if (cartMetrics) {
+          this.logger.debug(`Active carts: ${cartMetrics.cart_count || 0}, Value: ${cartMetrics.cart_value || 0}`);
+        } else {
+          this.logger.warn('No cart metrics returned from repository');
+        }
       } catch (error) {
         this.logger.error(`Error tracking active carts: ${error.message}`, error.stack);
       }

@@ -122,12 +122,4 @@ export class Category extends BaseEntity {
   @ApiProperty({ description: 'Total number of products' })
   @Column({ name: 'total_products', default: 0 })
   totalProducts: number;
-  
-  /**
-   * Soft delete timestamp
-   * Used to mark categories as deleted without actually removing them
-   */
-  @ApiProperty({ description: 'Soft delete timestamp' })
-  @Column({ name: 'deleted_at', nullable: true })
-  deletedAt?: Date;
 }
