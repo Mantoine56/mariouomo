@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, Controller, Get, Post, UseGuards, Injectable } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule, JwtService } from '@nestjs/jwt';
@@ -10,6 +10,11 @@ import { AuthService } from '../../src/modules/auth/services/auth.service';
 import { AuthController } from '../../src/modules/auth/controllers/auth.controller';
 import { TestDatabaseModule } from './test-database.module';
 import { Repository } from 'typeorm';
+import { Public } from '../../src/modules/auth/decorators/public.decorator';
+import { Roles } from '../../src/modules/auth/decorators/roles.decorator';
+import { Role } from '../../src/modules/auth/enums/role.enum';
+import { JwtAuthGuard } from '../../src/modules/auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../src/modules/auth/guards/roles.guard';
 
 // Custom Auth Service for testing
 class TestAuthService extends AuthService {
@@ -33,6 +38,106 @@ class TestAuthService extends AuthService {
       status: 'active',
       preferences: { theme: 'light' },
     };
+  }
+}
+
+/**
+ * Mock Controllers for RBAC testing
+ * These controllers provide test endpoints with different role restrictions
+ */
+
+// Mock Auth Controller with admin-only and public endpoints
+@Controller('auth')
+export class TestAuthController {
+  @Public()
+  @Get('status')
+  getAuthStatus() {
+    return { status: 'ok', authenticated: false };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('profile')
+  getProfile() {
+    return { message: 'Profile access successful' };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('admin')
+  adminAccess() {
+    return { message: 'Admin access successful' };
+  }
+}
+
+// Mock Analytics Controller with admin-only endpoints
+@Controller('analytics')
+export class TestAnalyticsController {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @Get('traffic-sources')
+  getTrafficSources() {
+    return { sources: ['direct', 'organic', 'referral'] };
+  }
+}
+
+// Mock Inventory Controller with admin-only endpoints
+@Controller('inventory')
+export class TestInventoryController {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @Get('items')
+  getInventoryItems() {
+    return { items: [] };
+  }
+}
+
+// Mock Dashboard Controller with admin and merchant access
+@Controller('dashboard')
+export class TestDashboardController {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN, Role.MERCHANT)
+  @Get()
+  getDashboard() {
+    return { stats: {} };
+  }
+}
+
+// Mock Products Controller with different role requirements
+@Controller('products')
+export class TestProductsController {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @Post()
+  createProduct() {
+    return { id: '123', name: 'Test Product' };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN, Role.MERCHANT)
+  @Get('variants')
+  getVariants() {
+    return { variants: [] };
+  }
+}
+
+// Mock Users Controller for profile access
+@Controller('users')
+export class TestUsersController {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @Get('profiles')
+  getAllProfiles() {
+    return { profiles: [] };
+  }
+}
+
+// Health check controller
+@Controller()
+export class TestHealthController {
+  @Public()
+  @Get('health')
+  healthCheck() {
+    return { status: 'ok' };
   }
 }
 
@@ -70,7 +175,19 @@ class TestAuthService extends AuthService {
       },
     }),
   ],
-  controllers: [AuthController],
+  controllers: [
+    // Original auth controller
+    AuthController,
+    
+    // Mock controllers for RBAC testing
+    TestAuthController,
+    TestAnalyticsController,
+    TestInventoryController, 
+    TestDashboardController,
+    TestProductsController,
+    TestUsersController,
+    TestHealthController
+  ],
   providers: [
     // Use the test auth service implementation
     {
@@ -80,6 +197,10 @@ class TestAuthService extends AuthService {
     
     // JWT strategy for authentication
     SupabaseJwtStrategy,
+    
+    // Guards for RBAC testing
+    JwtAuthGuard,
+    RolesGuard,
     
     // Mock profile repository
     {
@@ -92,6 +213,6 @@ class TestAuthService extends AuthService {
       },
     },
   ],
-  exports: [JwtModule, AuthService, SupabaseJwtStrategy],
+  exports: [JwtModule, AuthService, SupabaseJwtStrategy, JwtAuthGuard, RolesGuard],
 })
 export class AuthTestModule {} 
