@@ -1,0 +1,18 @@
+---
+description: this is my project tech stack
+globs: 
+alwaysApply: true
+---
+
+## Tech Stack
+
+- **Frontend**: Next.js 14 with App Router
+- **UI Components**: shadcn/ui
+- **Database**: PostgreSQL (Supabase)
+- **Authentication**: Supabase Auth
+- **Storage**: Supabase Storage
+- **State Management**: React Context + Zustand
+- **API Integration**: Supabase Client + tRPC
+- **Testing**: Jest + React Testing Library
+- **Package Manager**: pnpm
+- **CI/CD**: GitHub Actions

@@ -5,7 +5,7 @@ import { DataSource } from 'typeorm';
 /**
  * Interface for sales dashboard data from materialized view
  */
-interface SalesDashboardData {
+export interface SalesDashboardData {
   day: Date;
   store_id: string;
   revenue: number;
@@ -19,7 +19,7 @@ interface SalesDashboardData {
 /**
  * Interface for customer insights data from materialized view
  */
-interface CustomerInsightsData {
+export interface CustomerInsightsData {
   day: Date;
   store_id: string;
   new_customers: number;
@@ -34,7 +34,7 @@ interface CustomerInsightsData {
 /**
  * Interface for inventory status data from materialized view
  */
-interface InventoryStatusData {
+export interface InventoryStatusData {
   day: Date;
   store_id: string;
   total_items: number;
@@ -92,7 +92,7 @@ export class AnalyticsMaterializedViewsService {
         [storeId, startDate, endDate],
       );
       
-      return result.map(row => ({
+      return result.map((row: Record<string, any>) => ({
         day: row.day,
         store_id: row.store_id,
         revenue: parseFloat(row.revenue),
@@ -139,7 +139,7 @@ export class AnalyticsMaterializedViewsService {
       
       const result = await this.dataSource.query(query, params);
       
-      return result.map(row => ({
+      return result.map((row: Record<string, any>) => ({
         day: row.day,
         store_id: row.store_id,
         new_customers: parseInt(row.new_customers, 10),
@@ -176,7 +176,7 @@ export class AnalyticsMaterializedViewsService {
         [storeId, startDate, endDate],
       );
       
-      return result.map(row => ({
+      return result.map((row: Record<string, any>) => ({
         day: row.day,
         store_id: row.store_id,
         total_items: parseInt(row.total_items, 10),

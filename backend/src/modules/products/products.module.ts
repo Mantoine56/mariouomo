@@ -13,6 +13,7 @@ import { ProductRepository } from './repositories/product.repository';
 import { ProductImageRepository } from './repositories/product-image.repository';
 import { CategoryService } from './services/category.service';
 import { VariantService } from './services/variant.service';
+import { ImageService } from './services/image.service';
 import { RedisCacheModule } from '../../common/cache/cache.module';
 
 /**
@@ -47,6 +48,7 @@ import { RedisCacheModule } from '../../common/cache/cache.module';
     ProductService,
     CategoryService,
     VariantService,
+    ImageService,
     ProductRepository,
     ProductImageRepository,
   ],
@@ -54,6 +56,7 @@ import { RedisCacheModule } from '../../common/cache/cache.module';
     ProductService,
     CategoryService,
     VariantService,
+    ImageService,
   ],
 })
 export class ProductsModule {} 
