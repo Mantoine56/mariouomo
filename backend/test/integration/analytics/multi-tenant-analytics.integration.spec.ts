@@ -176,7 +176,7 @@ describe('Multi-Tenant Analytics Integration Tests', () => {
           id: uuidv4(),
           store_id: testStores.store1,
           date: now,
-          total_items: 100,
+          total_sku_count: 100,
           low_stock_items: 10,
           out_of_stock_items: 5,
           turnover_rate: 0.2,
@@ -186,7 +186,7 @@ describe('Multi-Tenant Analytics Integration Tests', () => {
           id: uuidv4(),
           store_id: testStores.store2,
           date: now,
-          total_items: 200,
+          total_sku_count: 200,
           low_stock_items: 20,
           out_of_stock_items: 10,
           turnover_rate: 0.3,
@@ -196,7 +196,7 @@ describe('Multi-Tenant Analytics Integration Tests', () => {
           id: uuidv4(),
           store_id: testStores.store3,
           date: now,
-          total_items: 300,
+          total_sku_count: 300,
           low_stock_items: 30,
           out_of_stock_items: 15,
           turnover_rate: 0.4,
@@ -415,11 +415,11 @@ describe('Multi-Tenant Analytics Integration Tests', () => {
       expect(store3Inventory.length).toBeGreaterThan(0);
       
       // Verify store1 data is different from store2 and store3
-      expect(store1Inventory[0].total_items).not.toBe(store2Inventory[0].total_items);
-      expect(store1Inventory[0].total_items).not.toBe(store3Inventory[0].total_items);
+      expect(store1Inventory[0].total_sku_count).not.toBe(store2Inventory[0].total_sku_count);
+      expect(store1Inventory[0].total_sku_count).not.toBe(store3Inventory[0].total_sku_count);
       
       // Verify store2 data is different from store3
-      expect(store2Inventory[0].total_items).not.toBe(store3Inventory[0].total_items);
+      expect(store2Inventory[0].total_sku_count).not.toBe(store3Inventory[0].total_sku_count);
     });
   });
 
@@ -481,11 +481,11 @@ describe('Multi-Tenant Analytics Integration Tests', () => {
       expect(store3RealTime.length).toBeGreaterThan(0);
       
       // Verify store1 data is different from store2 and store3
-      expect(store1RealTime[0].active_users || store1RealTime[0].activeUsers).not.toBe(store2RealTime[0].active_users || store2RealTime[0].activeUsers);
-      expect(store1RealTime[0].active_users || store1RealTime[0].activeUsers).not.toBe(store3RealTime[0].active_users || store3RealTime[0].activeUsers);
+      expect(store1RealTime[0].active_users).not.toBe(store2RealTime[0].active_users);
+      expect(store1RealTime[0].active_users).not.toBe(store3RealTime[0].active_users);
       
       // Verify store2 data is different from store3
-      expect(store2RealTime[0].active_users || store2RealTime[0].activeUsers).not.toBe(store3RealTime[0].active_users || store3RealTime[0].activeUsers);
+      expect(store2RealTime[0].active_users).not.toBe(store3RealTime[0].active_users);
     });
     
     it('should track user activity with store isolation', async () => {
@@ -497,20 +497,20 @@ describe('Multi-Tenant Analytics Integration Tests', () => {
         (realTimeTrackingService as any).storeId = testStores.store1;
         
         // Track activity for store1
-        await realTimeTrackingService.trackUserActivity('user1', testSessions.store1Session1, { storeId: testStores.store1 });
-        await realTimeTrackingService.trackUserActivity('user2', testSessions.store1Session2, { storeId: testStores.store1 });
+        await realTimeTrackingService.trackUserActivity('user1', testSessions.store1Session1);
+        await realTimeTrackingService.trackUserActivity('user2', testSessions.store1Session2);
         
         // Get active user count for store1
-        const store1ActiveUsers = realTimeTrackingService.getActiveUserCount(testStores.store1);
+        const store1ActiveUsers = realTimeTrackingService.getActiveUserCount();
         
         // Change store context to store2
         (realTimeTrackingService as any).storeId = testStores.store2;
         
         // Track activity for store2
-        await realTimeTrackingService.trackUserActivity('user3', testSessions.store2Session1, { storeId: testStores.store2 });
+        await realTimeTrackingService.trackUserActivity('user3', testSessions.store2Session1);
         
         // Get active user count for store2
-        const store2ActiveUsers = realTimeTrackingService.getActiveUserCount(testStores.store2);
+        const store2ActiveUsers = realTimeTrackingService.getActiveUserCount();
         
         // Verify different active user counts for different stores
         expect(store1ActiveUsers).not.toBe(store2ActiveUsers);

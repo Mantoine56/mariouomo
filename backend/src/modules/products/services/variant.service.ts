@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { ProductVariant } from '../entities/product-variant.entity';
 import { Product } from '../entities/product.entity';
 import { CreateVariantDto, UpdateVariantDto } from '../dtos/variant.dto';
-import { CacheService } from '@common/cache/cache.service';
+import { CacheService } from '../../../common/cache/cache.service';
 
 /**
  * Service for managing product variants
