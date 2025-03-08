@@ -12,13 +12,35 @@ import { DashboardCard } from '@/components/ui/dashboard-card';
 import { Package, Plus, Search, Loader2, Trash2, Archive, CheckCircle } from 'lucide-react';
 import { DataTable } from '@/components/ui/table/data-table';
 import { columns } from './components/columns';
-import { Product, fakeProducts } from '@/lib/mock-api';
+import { Product, productApi, ProductSearchParams, PaginatedResponse, ProductStatus } from '@/lib/product-api';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/use-toast';
 
+// Define a frontend product type that matches what the UI expects
+// This helps us adapt between the backend and frontend data structures
+interface FrontendProduct {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  description?: string;
+  photo_url?: string;
+  created_at?: string;
+  updated_at?: string;
+  inventory: number;
+  status: 'Active' | 'Low Stock' | 'Out of Stock';
+  images?: Array<{
+    id: string;
+    url: string;
+    name: string;
+    size: number;
+  }>;
+  cost?: number;
+}
+
 export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<FrontendProduct[]>([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -30,33 +52,93 @@ export default function ProductsPage() {
   const { toast } = useToast();
 
   /**
+   * Convert backend Product to frontend format
+   */
+  const adaptProductToFrontend = (product: Product): FrontendProduct => {
+    // Calculate inventory from variants or use a default
+    const inventory = product.variants?.reduce((sum, variant) => sum + variant.current_stock, 0) || 0;
+    
+    // Determine status based on inventory or backend status
+    let status: 'Active' | 'Low Stock' | 'Out of Stock';
+    if (product.status === ProductStatus.ACTIVE) {
+      status = inventory > 10 ? 'Active' : inventory > 0 ? 'Low Stock' : 'Out of Stock';
+    } else {
+      status = 'Out of Stock';
+    }
+    
+    // Map images to frontend format
+    const images = product.images?.map(img => ({
+      id: img.id,
+      url: img.original_url,
+      name: img.original_url.split('/').pop() || 'product-image',
+      size: 0, // Size information not available from backend
+    }));
+    
+    return {
+      id: product.id,
+      name: product.name,
+      price: product.base_price,
+      category: product.type || 'Uncategorized',
+      description: product.description,
+      photo_url: product.images?.[0]?.original_url,
+      created_at: product.created_at,
+      updated_at: product.updated_at,
+      inventory,
+      status,
+      images,
+      // Cost might be stored in metadata
+      cost: product.metadata?.cost as number | undefined,
+    };
+  };
+
+  /**
    * Fetch products based on filters
    */
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const filters: Record<string, any> = {
+      // Create search params object for the API
+      const searchParams: ProductSearchParams = {
         page: currentPage,
         limit: itemsPerPage,
       };
 
+      // Add search query if present
       if (searchQuery) {
-        filters.search = searchQuery;
+        searchParams.query = searchQuery;
       }
 
+      // Add category filter if selected
       if (selectedCategory) {
-        filters.categories = selectedCategory;
+        searchParams.categories = [selectedCategory];
       }
 
+      // Add status filter if selected
       if (selectedStatus) {
-        filters.status = selectedStatus;
+        // Map frontend status to backend status
+        if (selectedStatus === 'Active') {
+          searchParams.status = ProductStatus.ACTIVE;
+        } else if (selectedStatus === 'Out of Stock') {
+          searchParams.status = ProductStatus.INACTIVE;
+        }
       }
 
-      const data = await fakeProducts.getProducts(filters);
-      setProducts(data.products);
-      setTotalProducts(data.totalProducts);
+      // Call the real API
+      const response = await productApi.searchProducts(searchParams);
+      
+      // Convert backend products to frontend format
+      const frontendProducts = response.items.map(adaptProductToFrontend);
+      
+      // Update state with the response data
+      setProducts(frontendProducts);
+      setTotalProducts(response.total);
     } catch (error) {
       console.error('Error fetching products:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch products. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
@@ -107,73 +189,55 @@ export default function ProductsPage() {
   };
 
   /**
-   * Handle bulk delete action
+   * Handle bulk actions on selected products
    */
-  const handleBulkDelete = async () => {
-    if (!window.confirm(`Are you sure you want to delete ${Object.keys(selectedRows).length} products?`)) {
-      return;
-    }
-
+  const handleBulkAction = async (action: 'delete' | 'archive' | 'activate') => {
     setBulkActionLoading(true);
+    
     try {
-      // Get array of selected product IDs
-      const productIds = Object.keys(selectedRows);
+      const selectedProductIds = Object.entries(selectedRows)
+        .filter(([_, isSelected]) => isSelected)
+        .map(([id]) => id);
       
-      // Call API to delete products
-      await Promise.all(productIds.map(id => fakeProducts.deleteProduct(id)));
+      if (selectedProductIds.length === 0) {
+        toast({
+          title: 'No products selected',
+          description: 'Please select at least one product to perform this action.',
+          variant: 'default',
+        });
+        return;
+      }
+      
+      // Process each selected product
+      for (const id of selectedProductIds) {
+        if (action === 'delete') {
+          await productApi.deleteProduct(id);
+        } else {
+          // For archive/activate, update the product status
+          await productApi.updateProduct(id, {
+            status: action === 'activate' ? ProductStatus.ACTIVE : ProductStatus.INACTIVE,
+          });
+        }
+      }
       
       // Show success message
       toast({
-        title: "Products deleted",
-        description: `Successfully deleted ${productIds.length} products`,
-        variant: "default",
+        title: 'Success',
+        description: `${selectedProductIds.length} products ${
+          action === 'delete' ? 'deleted' : action === 'archive' ? 'archived' : 'activated'
+        } successfully.`,
+        variant: 'default',
       });
       
       // Clear selection and refresh products
       setSelectedRows({});
       fetchProducts();
     } catch (error) {
-      console.error('Error deleting products:', error);
+      console.error(`Error performing bulk ${action}:`, error);
       toast({
-        title: "Error",
-        description: "Failed to delete products. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setBulkActionLoading(false);
-    }
-  };
-
-  /**
-   * Handle bulk status update action
-   */
-  const handleBulkStatusUpdate = async (status: 'Active' | 'Low Stock' | 'Out of Stock') => {
-    setBulkActionLoading(true);
-    try {
-      // Get array of selected product IDs
-      const productIds = Object.keys(selectedRows);
-      
-      // Call API to update product status
-      await Promise.all(productIds.map(id => 
-        fakeProducts.updateProduct(id, { status })
-      ));
-      
-      // Show success message
-      toast({
-        title: "Products updated",
-        description: `Successfully updated ${productIds.length} products to ${status}`,
-        variant: "default",
-      });
-      
-      // Clear selection and refresh products
-      setSelectedRows({});
-      fetchProducts();
-    } catch (error) {
-      console.error('Error updating products:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update products. Please try again.",
-        variant: "destructive",
+        title: 'Error',
+        description: `Failed to ${action} products. Please try again.`,
+        variant: 'destructive',
       });
     } finally {
       setBulkActionLoading(false);
@@ -189,7 +253,7 @@ export default function ProductsPage() {
         <Button 
           variant="outline" 
           size="sm" 
-          onClick={() => handleBulkStatusUpdate('Active')}
+          onClick={() => handleBulkAction('activate')}
           disabled={bulkActionLoading}
         >
           <CheckCircle className="h-4 w-4 mr-2" />
@@ -198,7 +262,7 @@ export default function ProductsPage() {
         <Button 
           variant="outline" 
           size="sm" 
-          onClick={() => handleBulkStatusUpdate('Out of Stock')}
+          onClick={() => handleBulkAction('archive')}
           disabled={bulkActionLoading}
         >
           <Archive className="h-4 w-4 mr-2" />
@@ -207,7 +271,7 @@ export default function ProductsPage() {
         <Button 
           variant="destructive" 
           size="sm" 
-          onClick={handleBulkDelete}
+          onClick={() => handleBulkAction('delete')}
           disabled={bulkActionLoading}
         >
           <Trash2 className="h-4 w-4 mr-2" />
