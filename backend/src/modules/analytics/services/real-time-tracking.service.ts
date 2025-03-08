@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource, MoreThanOrEqual } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -24,8 +24,8 @@ export class RealTimeTrackingService {
     private realTimeMetricsRepo: Repository<RealTimeMetrics>,
     @InjectDataSource() private readonly dataSource: DataSource,
     private eventEmitter: EventEmitter2,
-    private readonly dbUtilsService: DbUtilsService,
-    private readonly shoppingCartRepository: ShoppingCartRepository,
+    @Optional() @Inject('DbUtilsService') private readonly dbUtilsService: DbUtilsService,
+    @Optional() @Inject('ShoppingCartRepository') private readonly shoppingCartRepository: ShoppingCartRepository,
   ) {}
 
   /**
@@ -284,6 +284,34 @@ export class RealTimeTrackingService {
   }
 
   /**
+   * Clears inactive sessions that are older than the timeout
+   * Exported for testing purposes
+   */
+  clearInactiveSessions(): void {
+    // Clean up stale sessions (inactive for more than 15 minutes)
+    const staleTime = new Date(Date.now() - 15 * 60 * 1000);
+    const staleSessions = new Set<string>();
+
+    for (const [sessionId, lastActive] of this.activeUsers.entries()) {
+      if (lastActive < staleTime) {
+        staleSessions.add(sessionId);
+      }
+    }
+
+    // Remove stale sessions
+    for (const sessionId of staleSessions) {
+      this.activeUsers.delete(sessionId);
+      // Remove from traffic sources
+      for (const [source, sessions] of this.trafficSources.entries()) {
+        sessions.delete(sessionId);
+        if (sessions.size === 0) {
+          this.trafficSources.delete(source);
+        }
+      }
+    }
+  }
+
+  /**
    * Updates real-time metrics
    * Called after each tracking event and periodically
    * @throws Error if update fails critically
@@ -291,27 +319,8 @@ export class RealTimeTrackingService {
   @Cron(CronExpression.EVERY_30_SECONDS)
   private async updateRealTimeMetrics() {
     try {
-      // Clean up stale sessions (inactive for more than 15 minutes)
-      const staleTime = new Date(Date.now() - 15 * 60 * 1000);
-      const staleSessions = new Set<string>();
-
-      for (const [sessionId, lastActive] of this.activeUsers.entries()) {
-        if (lastActive < staleTime) {
-          staleSessions.add(sessionId);
-        }
-      }
-
-      // Remove stale sessions
-      for (const sessionId of staleSessions) {
-        this.activeUsers.delete(sessionId);
-        // Remove from traffic sources
-        for (const [source, sessions] of this.trafficSources.entries()) {
-          sessions.delete(sessionId);
-          if (sessions.size === 0) {
-            this.trafficSources.delete(source);
-          }
-        }
-      }
+      // Use the clearInactiveSessions method
+      this.clearInactiveSessions();
 
       // Gather all the metrics data before entering the transaction
       let cartMetrics = { cart_count: 0, cart_value: 0 };

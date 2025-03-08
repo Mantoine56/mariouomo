@@ -157,11 +157,8 @@ export class CustomerApi {
     customer: Partial<Omit<Customer, 'id' | 'created_at' | 'updated_at' | 'total_orders' | 'total_spent' | 'last_order_date'>>
   ): Promise<Customer> {
     try {
-      // Since ApiClient doesn't have a PUT method, we'll use POST with a _method parameter
-      const response = await ApiClient.post<Customer>(`${this.baseUrl}/${id}`, {
-        ...customer,
-        _method: 'PUT'
-      });
+      // Use proper PUT method instead of POST with _method parameter
+      const response = await ApiClient.put<Customer>(`${this.baseUrl}/${id}`, customer);
       return response;
     } catch (error) {
       throw this.handleError(error, 'Failed to update customer');
@@ -175,10 +172,8 @@ export class CustomerApi {
    */
   public async deleteCustomer(id: string): Promise<void> {
     try {
-      // Since ApiClient doesn't have a DELETE method, we'll use POST with a _method parameter
-      await ApiClient.post<void>(`${this.baseUrl}/${id}`, {
-        _method: 'DELETE'
-      });
+      // Use proper DELETE method
+      await ApiClient.delete(`${this.baseUrl}/${id}`);
     } catch (error) {
       throw this.handleError(error, 'Failed to delete customer');
     }
@@ -215,13 +210,10 @@ export class CustomerApi {
     address: Partial<Omit<CustomerAddress, 'id' | 'customer_id' | 'created_at' | 'updated_at'>>
   ): Promise<CustomerAddress> {
     try {
-      // Since ApiClient doesn't have a PUT method, we'll use POST with a _method parameter
-      const response = await ApiClient.post<CustomerAddress>(
+      // Use proper PUT method
+      const response = await ApiClient.put<CustomerAddress>(
         `${this.baseUrl}/${customerId}/addresses/${addressId}`,
-        {
-          ...address,
-          _method: 'PUT'
-        }
+        address
       );
       return response;
     } catch (error) {
@@ -237,10 +229,8 @@ export class CustomerApi {
    */
   public async deleteCustomerAddress(customerId: string, addressId: string): Promise<void> {
     try {
-      // Since ApiClient doesn't have a DELETE method, we'll use POST with a _method parameter
-      await ApiClient.post<void>(`${this.baseUrl}/${customerId}/addresses/${addressId}`, {
-        _method: 'DELETE'
-      });
+      // Use proper DELETE method
+      await ApiClient.delete(`${this.baseUrl}/${customerId}/addresses/${addressId}`);
     } catch (error) {
       throw this.handleError(error, 'Failed to delete customer address');
     }

@@ -17,27 +17,29 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { Order } from '@/lib/mock-api';
 import { Badge } from '@/components/ui/badge';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 
+// Import real API interface
+import { Order, OrderStatus, PaymentStatus } from '@/lib/order-api';
+
 /**
  * Get appropriate status badge variant based on order status
  */
-const getStatusVariant = (status: Order['status']) => {
+const getStatusVariant = (status: OrderStatus) => {
   switch (status) {
-    case 'delivered':
+    case OrderStatus.DELIVERED:
       return 'success';
-    case 'processing':
-    case 'confirmed':
+    case OrderStatus.PROCESSING:
+    case OrderStatus.CONFIRMED:
       return 'default';
-    case 'shipped':
+    case OrderStatus.SHIPPED:
       return 'secondary';
-    case 'pending':
+    case OrderStatus.PENDING:
       return 'warning';
-    case 'cancelled':
-    case 'refunded':
+    case OrderStatus.CANCELLED:
+    case OrderStatus.REFUNDED:
       return 'destructive';
     default:
       return 'default';
@@ -47,15 +49,15 @@ const getStatusVariant = (status: Order['status']) => {
 /**
  * Get appropriate payment status badge variant
  */
-const getPaymentStatusVariant = (status: Order['payment_status']) => {
+const getPaymentStatusVariant = (status: PaymentStatus) => {
   switch (status) {
-    case 'paid':
+    case PaymentStatus.PAID:
       return 'success';
-    case 'pending':
+    case PaymentStatus.PENDING:
       return 'warning';
-    case 'refunded':
+    case PaymentStatus.REFUNDED:
       return 'default';
-    case 'failed':
+    case PaymentStatus.FAILED:
       return 'destructive';
     default:
       return 'default';
@@ -70,9 +72,32 @@ const formatStatus = (status: string) => {
 };
 
 /**
+ * Get customer name from customer object
+ */
+const getCustomerName = (order: Order) => {
+  if (order.customer) {
+    return `${order.customer.first_name} ${order.customer.last_name}`;
+  }
+  return 'Unknown Customer';
+};
+
+/**
+ * Get customer email from customer object
+ */
+const getCustomerEmail = (order: Order) => {
+  return order.customer?.email || 'No email';
+};
+
+/**
  * Cell action component for order row actions
  */
-const CellAction = ({ order }: { order: Order }) => {
+const CellAction = ({ 
+  order, 
+  onStatusChange
+}: { 
+  order: Order;
+  onStatusChange?: (orderId: string, newStatus: string) => void;
+}) => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -89,12 +114,56 @@ const CellAction = ({ order }: { order: Order }) => {
             View details
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem>Update status</DropdownMenuItem>
-        <DropdownMenuItem>Send notification</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-red-600">
-          Cancel order
-        </DropdownMenuItem>
+        
+        {/* Status update dropdown items */}
+        {onStatusChange && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Update Status</DropdownMenuLabel>
+            
+            {order.status !== OrderStatus.CONFIRMED && (
+              <DropdownMenuItem onClick={() => onStatusChange(order.id, OrderStatus.CONFIRMED)}>
+                Mark as Confirmed
+              </DropdownMenuItem>
+            )}
+            
+            {order.status !== OrderStatus.PROCESSING && (
+              <DropdownMenuItem onClick={() => onStatusChange(order.id, OrderStatus.PROCESSING)}>
+                Mark as Processing
+              </DropdownMenuItem>
+            )}
+            
+            {order.status !== OrderStatus.SHIPPED && (
+              <DropdownMenuItem onClick={() => onStatusChange(order.id, OrderStatus.SHIPPED)}>
+                Mark as Shipped
+              </DropdownMenuItem>
+            )}
+            
+            {order.status !== OrderStatus.DELIVERED && (
+              <DropdownMenuItem onClick={() => onStatusChange(order.id, OrderStatus.DELIVERED)}>
+                Mark as Delivered
+              </DropdownMenuItem>
+            )}
+            
+            {order.status !== OrderStatus.CANCELLED && (
+              <DropdownMenuItem 
+                onClick={() => onStatusChange(order.id, OrderStatus.CANCELLED)}
+                className="text-red-600"
+              >
+                Cancel Order
+              </DropdownMenuItem>
+            )}
+            
+            {order.status !== OrderStatus.REFUNDED && (
+              <DropdownMenuItem 
+                onClick={() => onStatusChange(order.id, OrderStatus.REFUNDED)}
+                className="text-amber-600"
+              >
+                Mark as Refunded
+              </DropdownMenuItem>
+            )}
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -113,19 +182,19 @@ export const columns: ColumnDef<Order>[] = [
         href={`/dashboard/orders/${row.original.id}`} 
         className="text-blue-600 hover:underline font-medium"
       >
-        {row.original.id}
+        {row.original.id.substring(0, 8)}...
       </Link>
     )
   },
   
   // Customer column
   {
-    accessorKey: 'customer',
+    accessorKey: 'customer_id',
     header: 'Customer',
     cell: ({ row }) => (
       <div>
-        <div className="font-medium">{row.original.customer.name}</div>
-        <div className="text-sm text-gray-500">{row.original.customer.email}</div>
+        <div className="font-medium">{getCustomerName(row.original)}</div>
+        <div className="text-sm text-gray-500">{getCustomerEmail(row.original)}</div>
       </div>
     )
   },
@@ -199,7 +268,7 @@ export const columns: ColumnDef<Order>[] = [
     header: 'Items',
     cell: ({ row }) => (
       <div className="text-center">
-        {row.original.items.length}
+        {row.original.items?.length || 0}
       </div>
     )
   },
@@ -207,6 +276,10 @@ export const columns: ColumnDef<Order>[] = [
   // Actions column
   {
     id: 'actions',
-    cell: ({ row }) => <CellAction order={row.original} />
+    cell: ({ row, table }) => {
+      // @ts-ignore - access the onStatusChange prop from the parent component
+      const { onStatusChange } = table.options.meta || {};
+      return <CellAction order={row.original} onStatusChange={onStatusChange} />;
+    }
   }
 ]; 

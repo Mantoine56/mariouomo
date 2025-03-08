@@ -23,12 +23,20 @@ import { Button } from '@/components/ui/button';
 import { CustomerForm } from './customer-form';
 import { useToast } from '@/components/ui/use-toast';
 
+// API client
+import { customerApi } from '@/lib/customer-api';
+
+// Props for the dialog component
+interface AddCustomerDialogProps {
+  onCustomerAdded?: () => void;
+}
+
 /**
  * Add Customer Dialog Component 
  * 
  * Displays a button that opens a modal with the customer form
  */
-export function AddCustomerDialog() {
+export function AddCustomerDialog({ onCustomerAdded }: AddCustomerDialogProps) {
   // State for dialog open/close
   const [open, setOpen] = useState(false);
   // State for loading status during form submission
@@ -43,29 +51,37 @@ export function AddCustomerDialog() {
   const handleSubmit = async (data: any) => {
     setIsLoading(true);
     try {
-      // In a real application, we would send this data to an API
-      // For now we'll simulate an API call with a timeout
-      console.log('Creating new customer:', data);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Call the API to create a new customer
+      await customerApi.createCustomer({
+        first_name: data.firstName,
+        last_name: data.lastName,
+        email: data.email,
+        phone: data.phone,
+        status: 'active',
+        notes: data.notes,
+      });
       
       // Show success message
       toast({
-        title: "Customer Created",
-        description: `Successfully created customer: ${data.name}`,
+        title: 'Success',
+        description: 'Customer created successfully',
+        variant: 'default',
       });
       
       // Close the dialog
       setOpen(false);
+      
+      // Call the onCustomerAdded callback if provided
+      if (onCustomerAdded) {
+        onCustomerAdded();
+      }
     } catch (error) {
-      // Show error message
+      console.error('Error creating customer:', error);
       toast({
-        title: "Error",
-        description: "Failed to create customer. Please try again.",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to create customer. Please try again.',
+        variant: 'destructive',
       });
-      console.error("Error creating customer:", error);
     } finally {
       setIsLoading(false);
     }
@@ -74,26 +90,23 @@ export function AddCustomerDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
-          <PlusCircle className="h-4 w-4" />
+        <Button>
+          <PlusCircle className="mr-2 h-4 w-4" />
           Add Customer
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Add New Customer</DialogTitle>
           <DialogDescription>
-            Create a new customer record. Fill in all required information.
+            Create a new customer record. Fill out the form below with the customer's information.
           </DialogDescription>
         </DialogHeader>
-        
-        <div className="py-4">
-          <CustomerForm 
-            onSubmit={handleSubmit}
-            onCancel={() => setOpen(false)}
-            isLoading={isLoading}
-          />
-        </div>
+        <CustomerForm 
+          onSubmit={handleSubmit} 
+          isLoading={isLoading} 
+          onCancel={() => setOpen(false)}
+        />
       </DialogContent>
     </Dialog>
   );

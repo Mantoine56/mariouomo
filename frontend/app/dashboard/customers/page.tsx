@@ -7,8 +7,8 @@
  * Allows viewing customer details, order history, and performing various actions.
  */
 
-import { useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { RefreshCw, Loader2 } from 'lucide-react';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -21,120 +21,131 @@ import {
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/components/ui/use-toast';
 
 // Customer components
 import { CustomersTable, Customer } from '@/components/customers/customers-table';
 import { AddCustomerDialog } from '@/components/customers/add-customer-dialog';
 
-// Mock customer data (would be fetched from API in a real app)
-const mockCustomers: Customer[] = [
-  {
-    id: 'cust_1',
-    name: 'Jane Smith',
-    email: 'jane.smith@example.com',
-    phone: '+1 555-1234',
-    totalOrders: 12,
-    totalSpent: 1245.50,
-    lastOrderDate: '2023-02-15',
-    status: 'active',
-    segment: 'loyal',
-    createdAt: '2022-01-10',
-  },
-  {
-    id: 'cust_2',
-    name: 'John Doe',
-    email: 'john.doe@example.com',
-    phone: '+1 555-5678',
-    totalOrders: 3,
-    totalSpent: 349.99,
-    lastOrderDate: '2023-03-01',
-    status: 'active',
-    segment: 'returning',
-    createdAt: '2022-11-05',
-  },
-  {
-    id: 'cust_3',
-    name: 'Alice Johnson',
-    email: 'alice@example.com',
-    phone: '+1 555-9012',
-    totalOrders: 1,
-    totalSpent: 89.99,
-    lastOrderDate: '2023-03-10',
-    status: 'active',
-    segment: 'new',
-    createdAt: '2023-03-08',
-  },
-  {
-    id: 'cust_4',
-    name: 'Robert Brown',
-    email: 'robert@example.com',
-    phone: '+1 555-3456',
-    totalOrders: 8,
-    totalSpent: 753.25,
-    lastOrderDate: '2023-01-20',
-    status: 'inactive',
-    segment: 'at-risk',
-    createdAt: '2022-04-15',
-  },
-  {
-    id: 'cust_5',
-    name: 'Emily Davis',
-    email: 'emily@example.com',
-    phone: '+1 555-7890',
-    totalOrders: 0,
-    totalSpent: 0,
-    lastOrderDate: '',
-    status: 'inactive',
-    segment: 'lost',
-    createdAt: '2022-08-01',
-  },
-  {
-    id: 'cust_6',
-    name: 'Michael Wilson',
-    email: 'michael@example.com',
-    phone: '+1 555-2468',
-    totalOrders: 5,
-    totalSpent: 429.95,
-    lastOrderDate: '2023-02-28',
-    status: 'active',
-    segment: 'returning',
-    createdAt: '2022-07-22',
-  },
-  {
-    id: 'cust_7',
-    name: 'Sarah Martinez',
-    email: 'sarah@example.com',
-    phone: '+1 555-1357',
-    totalOrders: 18,
-    totalSpent: 2345.75,
-    lastOrderDate: '2023-03-12',
-    status: 'active',
-    segment: 'loyal',
-    createdAt: '2021-11-10',
-  },
-];
+// API Client
+import { customerApi, Customer as BackendCustomer } from '@/lib/customer-api';
+
+/**
+ * Adapts a backend customer to the frontend customer format
+ * @param backendCustomer Customer from the API
+ * @returns Customer formatted for the frontend
+ */
+const adaptCustomerToFrontend = (backendCustomer: BackendCustomer): Customer => {
+  return {
+    id: backendCustomer.id,
+    name: `${backendCustomer.first_name} ${backendCustomer.last_name}`,
+    email: backendCustomer.email,
+    phone: backendCustomer.phone || '',
+    totalOrders: backendCustomer.total_orders,
+    totalSpent: backendCustomer.total_spent,
+    lastOrderDate: backendCustomer.last_order_date || '',
+    status: backendCustomer.status,
+    // Determine segment based on orders and spent amount
+    segment: determineCustomerSegment(backendCustomer),
+    createdAt: backendCustomer.created_at,
+  };
+};
+
+/**
+ * Determines customer segment based on their order history and spending
+ * @param customer Backend customer data
+ * @returns segment classification (new, returning, loyal, at-risk, lost)
+ */
+const determineCustomerSegment = (customer: BackendCustomer): string => {
+  if (customer.total_orders === 0) {
+    return 'lost';
+  }
+  
+  if (customer.total_orders === 1) {
+    return 'new';
+  }
+  
+  if (customer.total_orders >= 10 || customer.total_spent >= 1000) {
+    return 'loyal';
+  }
+  
+  if (!customer.last_order_date) {
+    return 'at-risk';
+  }
+  
+  // Check if last order is more than 3 months ago
+  const lastOrderDate = new Date(customer.last_order_date);
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  
+  if (lastOrderDate < threeMonthsAgo) {
+    return 'at-risk';
+  }
+  
+  return 'returning';
+};
 
 /**
  * Customers Page Component
  */
 export default function CustomersPage() {
   // State for customer data
-  const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   // Current status filter
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  // Loading state
+  const [isLoading, setIsLoading] = useState(true);
+  // Error state
+  const [error, setError] = useState<string | null>(null);
+  
+  const { toast } = useToast();
+
+  // Fetch customers from the API
+  const fetchCustomers = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Call the customer API to fetch customers
+      const response = await customerApi.searchCustomers({
+        // If filtering by status, pass it to the API
+        status: statusFilter !== 'all' ? statusFilter as 'active' | 'inactive' : undefined,
+        // Default to a reasonable limit
+        limit: 100,
+      });
+      
+      // Transform backend customers to frontend format
+      const frontendCustomers = response.items.map(adaptCustomerToFrontend);
+      setCustomers(frontendCustomers);
+    } catch (err) {
+      console.error('Error fetching customers:', err);
+      setError('Failed to load customers. Please try again.');
+      toast({
+        title: 'Error',
+        description: 'Failed to load customers. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch customers on initial load and when status filter changes
+  useEffect(() => {
+    fetchCustomers();
+  }, [statusFilter]);
 
   // Handle data changes from table (e.g., after deletion)
   const handleDataChange = (updatedData: Customer[]) => {
     setCustomers(updatedData);
   };
 
-  // Filter customers by status
-  const filteredCustomers = statusFilter === 'all'
-    ? customers
-    : customers.filter(customer => customer.status === statusFilter);
+  // Filter customers by status - this is now handled by the API, but we keep it for flexibility
+  const filteredCustomers = customers;
 
   // Get count of customers by status
   const getStatusCounts = () => {
+    // Instead of filtering locally, we use the counts we already have
     const counts = {
       all: customers.length,
       active: customers.filter(c => c.status === 'active').length,
@@ -145,12 +156,9 @@ export default function CustomersPage() {
 
   const statusCounts = getStatusCounts();
 
-  // Refresh customer data (would fetch from API in a real app)
+  // Refresh customer data from the API
   const refreshData = () => {
-    // This would be an API call in a real application
-    console.log('Refreshing customer data...');
-    // For demo, we'll just reset to the original data
-    setCustomers(mockCustomers);
+    fetchCustomers();
   };
 
   return (
@@ -162,10 +170,20 @@ export default function CustomersPage() {
           description="Manage your customer base and view customer information"
         />
         <div className="flex gap-2">
-          <Button variant="outline" size="icon" onClick={refreshData} title="Refresh data">
-            <RefreshCw className="h-4 w-4" />
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={refreshData} 
+            title="Refresh data"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
           </Button>
-          <AddCustomerDialog />
+          <AddCustomerDialog onCustomerAdded={refreshData} />
         </div>
       </div>
       <Separator />
@@ -184,13 +202,34 @@ export default function CustomersPage() {
           </TabsTrigger>
         </TabsList>
         
+        {error && (
+          <div className="bg-destructive/10 text-destructive p-4 rounded-md mb-4">
+            {error}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={refreshData} 
+              className="ml-2"
+              disabled={isLoading}
+            >
+              Retry
+            </Button>
+          </div>
+        )}
+        
         <TabsContent value="all" className="space-y-4">
           <Card>
             <CardContent className="p-6">
-              <CustomersTable 
-                data={filteredCustomers} 
-                onDataChange={handleDataChange}
-              />
+              {isLoading ? (
+                <div className="flex justify-center items-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <CustomersTable 
+                  data={filteredCustomers} 
+                  onDataChange={handleDataChange}
+                />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -198,10 +237,16 @@ export default function CustomersPage() {
         <TabsContent value="active" className="space-y-4">
           <Card>
             <CardContent className="p-6">
-              <CustomersTable 
-                data={filteredCustomers} 
-                onDataChange={handleDataChange}
-              />
+              {isLoading ? (
+                <div className="flex justify-center items-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <CustomersTable 
+                  data={filteredCustomers} 
+                  onDataChange={handleDataChange}
+                />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -209,10 +254,16 @@ export default function CustomersPage() {
         <TabsContent value="inactive" className="space-y-4">
           <Card>
             <CardContent className="p-6">
-              <CustomersTable 
-                data={filteredCustomers} 
-                onDataChange={handleDataChange}
-              />
+              {isLoading ? (
+                <div className="flex justify-center items-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <CustomersTable 
+                  data={filteredCustomers} 
+                  onDataChange={handleDataChange}
+                />
+              )}
             </CardContent>
           </Card>
         </TabsContent>

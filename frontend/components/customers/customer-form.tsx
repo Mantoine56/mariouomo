@@ -48,25 +48,28 @@ import { Separator } from '@/components/ui/separator';
 
 // Define validation schema using Zod
 const customerFormSchema = z.object({
-  name: z.string().min(2, {
-    message: "Name must be at least 2 characters.",
+  firstName: z.string().min(2, {
+    message: "First name must be at least 2 characters.",
+  }),
+  lastName: z.string().min(2, {
+    message: "Last name must be at least 2 characters.",
   }),
   email: z.string().email({
     message: "Please enter a valid email address.",
   }),
   phone: z.string().optional(),
   address: z.object({
-    street: z.string().min(1, { message: "Street address is required." }),
+    addressLine1: z.string().min(1, { message: "Street address is required." }),
+    addressLine2: z.string().optional(),
     city: z.string().min(1, { message: "City is required." }),
     state: z.string().min(1, { message: "State/Province is required." }),
-    postal_code: z.string().min(1, { message: "Postal code is required." }),
+    postalCode: z.string().min(1, { message: "Postal code is required." }),
     country: z.string().min(1, { message: "Country is required." }),
-  }),
+    addressType: z.enum(["shipping", "billing", "both"]).default("both"),
+    isDefault: z.boolean().default(true),
+  }).optional(),
   status: z.enum(["active", "inactive"]).default("active"),
-  segment: z.enum(["new", "returning", "loyal", "at-risk", "lost"]).optional(),
-  preferredPaymentMethod: z.string().optional(),
   notes: z.string().optional(),
-  tags: z.array(z.string()).optional(),
 });
 
 // Define form values type from schema
@@ -82,21 +85,22 @@ interface CustomerFormProps {
 
 // Default values for new customer
 const defaultValues: CustomerFormValues = {
-  name: "",
+  firstName: "",
+  lastName: "",
   email: "",
   phone: "",
   address: {
-    street: "",
+    addressLine1: "",
+    addressLine2: "",
     city: "",
     state: "",
-    postal_code: "",
+    postalCode: "",
     country: "",
+    addressType: "both",
+    isDefault: true,
   },
   status: "active",
-  segment: "new",
-  preferredPaymentMethod: "",
   notes: "",
-  tags: [],
 };
 
 /**
@@ -108,9 +112,6 @@ export function CustomerForm({
   onCancel,
   isLoading = false,
 }: CustomerFormProps) {
-  // New tag input state
-  const [newTag, setNewTag] = useState('');
-  
   // Setup form with zod validation
   const form = useForm<CustomerFormValues>({
     resolver: zodResolver(customerFormSchema),
@@ -120,26 +121,6 @@ export function CustomerForm({
   // Form submission handler
   const handleSubmit = (values: CustomerFormValues) => {
     onSubmit(values);
-  };
-  
-  // Add tag to form
-  const addTag = () => {
-    if (!newTag.trim()) return;
-    
-    const currentTags = form.getValues('tags') || [];
-    if (!currentTags.includes(newTag)) {
-      form.setValue('tags', [...currentTags, newTag]);
-      setNewTag('');
-    }
-  };
-  
-  // Remove tag from form
-  const removeTag = (tagToRemove: string) => {
-    const currentTags = form.getValues('tags') || [];
-    form.setValue(
-      'tags',
-      currentTags.filter(tag => tag !== tagToRemove)
-    );
   };
 
   return (
@@ -157,14 +138,31 @@ export function CustomerForm({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
-                name="name"
+                name="firstName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Full Name</FormLabel>
+                    <FormLabel>First Name</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input className="pl-10" placeholder="John Doe" {...field} />
+                        <Input className="pl-10" placeholder="John" {...field} />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="lastName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Last Name</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input className="pl-10" placeholder="Doe" {...field} />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -267,7 +265,7 @@ export function CustomerForm({
               <div className="grid grid-cols-1 gap-4">
                 <FormField
                   control={form.control}
-                  name="address.street"
+                  name="address.addressLine1"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Street Address</FormLabel>
@@ -312,7 +310,7 @@ export function CustomerForm({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="address.postal_code"
+                    name="address.postalCode"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Postal Code</FormLabel>
@@ -344,172 +342,43 @@ export function CustomerForm({
             <Separator />
             
             {/* Additional Info Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="segment"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Customer Segment</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select segment" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="new">New</SelectItem>
-                        <SelectItem value="returning">Returning</SelectItem>
-                        <SelectItem value="loyal">Loyal</SelectItem>
-                        <SelectItem value="at-risk">At Risk</SelectItem>
-                        <SelectItem value="lost">Lost</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      Helps categorize customers for marketing and support
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="preferredPaymentMethod"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Preferred Payment Method</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <CreditCard className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                          className="pl-10" 
-                          placeholder="Credit Card, PayPal, etc." 
-                          {...field} 
-                          value={field.value || ""}
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
-            {/* Tags Section */}
-            <div className="space-y-2">
-              <FormLabel>Tags</FormLabel>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {form.watch('tags')?.map(tag => (
-                  <div 
-                    key={tag}
-                    className="bg-muted text-muted-foreground px-3 py-1 rounded-full text-sm flex items-center gap-1"
-                  >
-                    <Tag className="h-3 w-3" />
-                    <span>{tag}</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-4 w-4 p-0 ml-1 hover:bg-muted-foreground/20 rounded-full"
-                      onClick={() => removeTag(tag)}
-                    >
-                      <User className="h-2 w-2" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Input 
-                  placeholder="Add tag (e.g., vip, retail)" 
-                  value={newTag}
-                  onChange={(e) => setNewTag(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addTag();
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={addTag}
-                >
-                  Add
-                </Button>
-              </div>
-              <FormDescription>
-                Tags help organize customers and target marketing campaigns
-              </FormDescription>
-            </div>
-            
-            {/* Notes Section */}
             <FormField
               control={form.control}
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Customer Notes</FormLabel>
+                  <FormLabel>Notes</FormLabel>
                   <FormControl>
                     <Textarea 
-                      placeholder="Add any notes about this customer..." 
-                      className="min-h-[100px]"
+                      placeholder="Add any additional notes about this customer..." 
+                      className="min-h-[120px]"
                       {...field}
                       value={field.value || ""}
                     />
                   </FormControl>
-                  <FormDescription>
-                    Notes are private and only visible to staff
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
           </CardContent>
-          <CardFooter className="flex justify-between">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <svg
-                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Saving...
-                </>
-              ) : (
-                "Save Customer"
-              )}
-            </Button>
-          </CardFooter>
         </Card>
+        
+        <div className="flex justify-end gap-2">
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={onCancel}
+            disabled={isLoading}
+          >
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            disabled={isLoading}
+          >
+            {isLoading ? "Saving..." : "Save Customer"}
+          </Button>
+        </div>
       </form>
     </Form>
   );

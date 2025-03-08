@@ -187,10 +187,10 @@ describe('AnalyticsCollectorService Integration', () => {
       
       // Verify data was saved correctly
       expect(savedMetrics).toBeDefined();
-      expect(savedMetrics.total_revenue).toEqual(199.99);
-      expect(savedMetrics.total_orders).toEqual(1);
-      expect(savedMetrics.total_units_sold).toEqual(3); // 2 + 1 items
-      expect(savedMetrics.views).toEqual(25);
+      expect(savedMetrics!.total_revenue).toEqual(199.99);
+      expect(savedMetrics!.total_orders).toEqual(1);
+      expect(savedMetrics!.total_units_sold).toEqual(3); // 2 + 1 items
+      expect(savedMetrics!.views).toEqual(25);
       
       // Verify event was emitted
       expect(eventEmitter.emit).toHaveBeenCalledWith(
@@ -232,10 +232,10 @@ describe('AnalyticsCollectorService Integration', () => {
       
       // Verify data was updated correctly
       expect(updatedMetrics).toBeDefined();
-      expect(updatedMetrics.total_revenue).toBeGreaterThan(500); // Should be increased
-      expect(updatedMetrics.total_orders).toEqual(6); // 5 + 1
-      expect(updatedMetrics.total_units_sold).toEqual(13); // 10 + 3
-      expect(updatedMetrics.views).toEqual(125); // 100 + 25
+      expect(updatedMetrics!.total_revenue).toBeGreaterThan(500); // Should be increased
+      expect(updatedMetrics!.total_orders).toEqual(6); // 5 + 1
+      expect(updatedMetrics!.total_units_sold).toEqual(13); // 10 + 3
+      expect(updatedMetrics!.views).toEqual(125); // 100 + 25
       
       // Verify event was emitted
       expect(eventEmitter.emit).toHaveBeenCalledWith(
@@ -266,8 +266,8 @@ describe('AnalyticsCollectorService Integration', () => {
       
       // Verify data was saved correctly
       expect(savedMetrics).toBeDefined();
-      expect(savedMetrics.inventory_value).toEqual(-90); // -2 * 45.00
-      expect(savedMetrics.low_stock_items).toEqual(1); // Current quantity is below threshold
+      expect(savedMetrics!.inventory_value).toEqual(-90); // -2 * 45.00
+      expect(savedMetrics!.low_stock_items).toEqual(1); // Current quantity is below threshold
       
       // Verify event was emitted
       expect(eventEmitter.emit).toHaveBeenCalledWith(
@@ -298,8 +298,8 @@ describe('AnalyticsCollectorService Integration', () => {
       
       // Verify data was saved correctly
       expect(savedMetrics).toBeDefined();
-      expect(savedMetrics.returning_customers).toEqual(1); // Is returning customer
-      expect(savedMetrics.traffic_source).toEqual('google');
+      expect(savedMetrics!.returning_customers).toEqual(1); // Is returning customer
+      expect(savedMetrics!.traffic_source).toEqual('google');
       
       // Verify event was emitted
       expect(eventEmitter.emit).toHaveBeenCalledWith(

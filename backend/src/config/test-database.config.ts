@@ -1,48 +1,44 @@
-import { TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { registerAs } from '@nestjs/config';
 import { ConfigService } from '@nestjs/config';
-import { getDatabaseConfig } from './database.config';
+import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 
 /**
- * Get TypeORM database configuration specifically for testing
- * This extends the main database configuration with test-specific settings
- * 
- * @param configService - NestJS ConfigService
- * @returns TypeORM configuration options for testing
+ * Database configuration for test environment
+ * Uses a completely separate database for testing
  */
-export const getTestDatabaseConfig = (configService: ConfigService): TypeOrmModuleOptions => {
-  // Start with the base database configuration
-  const baseConfig = getDatabaseConfig(configService);
-  
-  // Get test-specific settings
-  const tablePrefix = configService.get<string>('DATABASE_TABLE_PREFIX', 'test_');
-  const syncSchema = configService.get<boolean>('DATABASE_SYNC_SCHEMA', false);
-  
-  // Override settings for testing
-  return {
-    ...baseConfig,
-    // Use table prefix for test tables
-    entityPrefix: tablePrefix,
-    // Drop schema each time in test environment for clean tests
-    synchronize: syncSchema,
-    // Don't log queries in tests by default
-    logging: configService.get<string>('LOG_LEVEL') === 'debug' ? ['error', 'warn', 'schema'] as any : false,
-    // Disable connection keepalive
-    autoLoadEntities: true,
-    // Don't retry connections as much in tests
-    retryAttempts: configService.get<number>('DATABASE_RETRY_ATTEMPTS', 3),
-    retryDelay: configService.get<number>('DATABASE_RETRY_DELAY', 1000),
-    // Additional test settings
-    migrationsRun: false,
-    // Optimize for test environment
-    extra: {
-      ...(baseConfig.extra as Record<string, any>),
-      // Use smaller pool for tests
-      min: configService.get<number>('DB_POOL_MIN', 1),
-      max: configService.get<number>('DB_POOL_MAX', 5),
-      idleTimeoutMillis: configService.get<number>('DB_POOL_IDLE_TIMEOUT', 10000),
-      acquireTimeoutMillis: configService.get<number>('DB_POOL_ACQUIRE_TIMEOUT', 30000),
-      // Shorter statement timeout for tests
-      statement_timeout: 15000, // 15 seconds
-    },
+export default registerAs('database', () => {
+  return (configService: ConfigService): TypeOrmModuleOptions => {
+    // Basic connection configuration
+    return {
+      type: 'postgres',
+      url: configService.get<string>('DATABASE_URL'),
+      schema: configService.get<string>('DATABASE_SCHEMA', 'public'),
+      synchronize: configService.get<boolean>('DATABASE_SYNC_SCHEMA', false),
+      logging: configService.get<string>('NODE_ENV') === 'development',
+      
+      // Retry configuration for tests
+      retryAttempts: configService.get<number>('DATABASE_RETRY_ATTEMPTS', 3),
+      retryDelay: configService.get<number>('DATABASE_RETRY_DELAY', 1000),
+      
+      // Connection pool configuration for tests
+      // Use the extra field for specific postgres pool configuration
+      extra: {
+        min: configService.get<number>('DB_POOL_MIN', 1),
+        max: configService.get<number>('DB_POOL_MAX', 5),
+        idleTimeoutMillis: configService.get<number>('DB_POOL_IDLE_TIMEOUT', 10000),
+        acquireTimeoutMillis: configService.get<number>('DB_POOL_ACQUIRE_TIMEOUT', 30000),
+        reapIntervalMillis: configService.get<number>('DB_POOL_REAP_INTERVAL', 1000),
+      },
+      
+      // Entity discovery configuration
+      entities: [__dirname + '/../**/*.entity{.ts,.js}'],
+      migrations: [__dirname + '/../migrations/*{.ts,.js}'],
+      
+      // Disable migrations in tests
+      migrationsRun: false,
+      
+      // Ensure we don't use cache for tests
+      cache: false,
+    };
   };
-}; 
+}); 

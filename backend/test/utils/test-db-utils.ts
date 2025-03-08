@@ -8,95 +8,196 @@ dotenv.config({
 });
 
 /**
- * Prefix used for test tables
- * This helps isolate test data from development/production data
- */
-export const TEST_TABLE_PREFIX = process.env.DATABASE_TABLE_PREFIX || 'test_';
-
-/**
- * Utility functions for managing test database
+ * Test database utilities
+ * 
+ * Provides functions for managing the test database, including:
+ * - Getting a list of all tables to truncate
+ * - Cleaning up the database between tests
+ * - Seeding test data
  */
 export class TestDbUtils {
   private static tableCreated = false;
   
   /**
-   * Get list of all test tables that might need to be cleaned up
-   * This list should be kept in sync with the actual tables used in tests
+   * Get a list of all application tables in the test database
    * 
-   * @returns List of test table names
+   * @returns Array of table names to be used in tests
    */
   static getTestTables(): string[] {
     return [
-      'sales_metrics',
-      'inventory_metrics',
-      'customer_metrics',
-      'real_time_metrics',
-      'orders',
-      'order_items',
-      'products',
-      'product_variants',
-      'product_images',
-      'inventory_items',
-      'profiles',
-      'shopping_carts',
+      'addresses',
       'cart_items',
+      'categories',
+      'categories_closure',
+      'customer_metrics',
+      'discounts',
+      'events',
+      'gift_cards',
+      'inventory_items',
+      'inventory_metrics',
+      'order_discounts',
+      'order_items',
+      'orders',
+      'payments',
+      'product_categories',
+      'product_images',
+      'product_variants',
+      'products',
+      'profiles',
+      'rate_limits',
+      'real_time_metrics',
+      'refunds',
+      'sales_metrics',
+      'sessions',
+      'shipments',
+      'shopping_carts',
       'stores',
-    ].map(table => `${TEST_TABLE_PREFIX}${table}`);
+      'user_addresses'
+    ];
   }
 
   /**
-   * Clean up test tables in the database
-   * This should be run after tests to ensure a clean state
+   * Clear all data from the test database
    * 
-   * @param dataSource TypeORM DataSource instance
+   * @param dataSource - TypeORM DataSource
    */
-  static async cleanupTestTables(dataSource: DataSource): Promise<void> {
-    if (!dataSource.isInitialized) {
-      throw new Error('DataSource not initialized');
+  static async cleanDatabase(dataSource: DataSource): Promise<void> {
+    if (!dataSource || !dataSource.isInitialized) {
+      throw new Error('Database connection not initialized');
     }
 
-    // Get all test tables
-    const tables = this.getTestTables();
-    const queryRunner = dataSource.createQueryRunner();
-    
+    // Disable foreign key checks temporarily
+    await dataSource.query('SET session_replication_role = "replica";');
+
     try {
-      // Start transaction
-      await queryRunner.connect();
-      await queryRunner.startTransaction();
+      // Truncate all tables in reverse order to handle foreign key dependencies
+      const tables = this.getTestTables().reverse();
       
-      // Truncate each test table
       for (const table of tables) {
         try {
-          // First check if the table exists
-          const tableExists = await queryRunner.query(
-            `SELECT EXISTS (
-              SELECT FROM information_schema.tables 
-              WHERE table_schema = 'public' 
-              AND table_name = $1
-            )`,
-            [table]
-          );
-          
-          if (tableExists[0].exists) {
-            // Use TRUNCATE to efficiently remove all rows
-            await queryRunner.query(`TRUNCATE TABLE "${table}" CASCADE`);
-            console.log(`✓ Truncated test table: ${table}`);
-          }
-        } catch (err) {
-          console.warn(`Warning: Could not truncate table ${table}: ${err.message}`);
+          await dataSource.query(`TRUNCATE TABLE "${table}" CASCADE;`);
+        } catch (error) {
+          console.warn(`Could not truncate table ${table}: ${error.message}`);
+          // Continue with other tables even if one fails
         }
       }
-      
-      // Commit the transaction
-      await queryRunner.commitTransaction();
-    } catch (err) {
-      // Rollback on error
-      await queryRunner.rollbackTransaction();
-      throw err;
     } finally {
-      // Release the query runner
-      await queryRunner.release();
+      // Re-enable foreign key checks
+      await dataSource.query('SET session_replication_role = "origin";');
     }
+  }
+
+  /**
+   * Seed the test database with minimal required data
+   * 
+   * @param dataSource - TypeORM DataSource
+   */
+  static async seedDatabase(dataSource: DataSource): Promise<void> {
+    if (!dataSource || !dataSource.isInitialized) {
+      throw new Error('Database connection not initialized');
+    }
+
+    // Seed stores (usually needed for many tests)
+    await dataSource.query(`
+      INSERT INTO stores (id, name, status, created_at, updated_at)
+      VALUES 
+        (gen_random_uuid(), 'Test Store 1', 'active', NOW(), NOW()),
+        (gen_random_uuid(), 'Test Store 2', 'active', NOW(), NOW())
+      ON CONFLICT DO NOTHING;
+    `);
+
+    // Seed categories
+    const categoryId1 = await this.seedCategory(dataSource, 'Test Category 1', 'test-category-1', null);
+    const categoryId2 = await this.seedCategory(dataSource, 'Test Category 2', 'test-category-2', categoryId1);
+    
+    // Seed a test product
+    await this.seedProduct(dataSource, 'Test Product', 'test-product', categoryId1);
+  }
+
+  /**
+   * Helper to seed a category and return its ID
+   */
+  private static async seedCategory(
+    dataSource: DataSource, 
+    name: string, 
+    slug: string, 
+    parentId: string | null
+  ): Promise<string> {
+    // Create the category
+    const result = await dataSource.query(`
+      INSERT INTO categories (name, slug, parent_id, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW())
+      ON CONFLICT (slug) DO UPDATE SET name = $1
+      RETURNING id;
+    `, [name, slug, parentId]);
+
+    const categoryId = result[0]?.id;
+    
+    // Add category closure for self-reference
+    if (categoryId) {
+      await dataSource.query(`
+        INSERT INTO categories_closure (id_ancestor, id_descendant, depth)
+        VALUES ($1, $1, 0)
+        ON CONFLICT DO NOTHING;
+      `, [categoryId]);
+      
+      // If it has a parent, add parent-child relationship
+      if (parentId) {
+        // First get all ancestors of the parent
+        const ancestorRows = await dataSource.query(`
+          SELECT id_ancestor, depth FROM categories_closure
+          WHERE id_descendant = $1;
+        `, [parentId]);
+        
+        // Add each ancestor-descendant relationship
+        for (const row of ancestorRows) {
+          await dataSource.query(`
+            INSERT INTO categories_closure (id_ancestor, id_descendant, depth)
+            VALUES ($1, $2, $3)
+            ON CONFLICT DO NOTHING;
+          `, [row.id_ancestor, categoryId, row.depth + 1]);
+        }
+      }
+    }
+    
+    return categoryId;
+  }
+
+  /**
+   * Helper to seed a product and return its ID
+   */
+  private static async seedProduct(
+    dataSource: DataSource, 
+    name: string, 
+    slug: string, 
+    categoryId: string
+  ): Promise<string> {
+    // Create the product
+    const result = await dataSource.query(`
+      INSERT INTO products (
+        name, slug, description, active, price, sale_price,
+        sku, stock, created_at, updated_at
+      )
+      VALUES (
+        $1, $2, 'Test product description', TRUE, 
+        99.99, 79.99, 'TEST-SKU-001', 100, NOW(), NOW()
+      )
+      ON CONFLICT (slug) DO UPDATE SET name = $1
+      RETURNING id;
+    `, [name, slug]);
+
+    const productId = result[0]?.id;
+    
+    // Add product-category relationship
+    if (productId && categoryId) {
+      await dataSource.query(`
+        INSERT INTO product_categories (product_id, category_id)
+        VALUES ($1, $2)
+        ON CONFLICT DO NOTHING;
+      `, [productId, categoryId]);
+    }
+    
+    return productId;
   }
 
   /**
@@ -123,6 +224,6 @@ export class TestDbUtils {
    * @param dataSource TypeORM DataSource instance
    */
   static async resetDatabase(dataSource: DataSource): Promise<void> {
-    await this.cleanupTestTables(dataSource);
+    await this.cleanDatabase(dataSource);
   }
 } 

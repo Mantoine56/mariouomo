@@ -51,12 +51,22 @@ describe('Analytics Authentication Integration Tests', () => {
   // Store test data
   const testStoreId = uuidv4();
   
-  // Token storage
-  const tokens = {
+  // Add interface for tokens object with index signature
+  interface TokenMap {
+    admin: string;
+    merchant: string;
+    regularUser: string;
+    invalid: string;
+    expired: string;
+    [key: string]: string; // Add index signature to allow using string as index
+  }
+
+  // Update the tokens declaration to use the interface
+  const tokens: TokenMap = {
     admin: '',
     merchant: '',
     regularUser: '',
-    invalid: 'invalid.token.format',
+    invalid: '',
     expired: '',
   };
 

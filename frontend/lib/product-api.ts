@@ -193,12 +193,8 @@ export class ProductApi {
     product: Partial<Omit<Product, 'id' | 'created_at' | 'updated_at'>>
   ): Promise<Product> {
     try {
-      // Since ApiClient doesn't have a PUT method, we'll use POST with a _method parameter
-      // to indicate this should be a PUT request on the backend
-      const response = await ApiClient.post<Product>(`${this.baseUrl}/${id}`, {
-        ...product,
-        _method: 'PUT'
-      });
+      // Use proper PUT method instead of POST with _method parameter
+      const response = await ApiClient.put<Product>(`${this.baseUrl}/${id}`, product);
       return response;
     } catch (error) {
       throw this.handleError(error, 'Failed to update product');
@@ -212,11 +208,8 @@ export class ProductApi {
    */
   public async deleteProduct(id: string): Promise<void> {
     try {
-      // Since ApiClient doesn't have a DELETE method, we'll use POST with a _method parameter
-      // to indicate this should be a DELETE request on the backend
-      await ApiClient.post<void>(`${this.baseUrl}/${id}`, {
-        _method: 'DELETE'
-      });
+      // Use proper DELETE method
+      await ApiClient.delete(`${this.baseUrl}/${id}`);
     } catch (error) {
       throw this.handleError(error, 'Failed to delete product');
     }
@@ -247,10 +240,8 @@ export class ProductApi {
    */
   public async removeProductImage(productId: string, imageId: string): Promise<void> {
     try {
-      // Since ApiClient doesn't have a DELETE method, we'll use POST with a _method parameter
-      await ApiClient.post<void>(`${this.baseUrl}/${productId}/images/${imageId}`, {
-        _method: 'DELETE'
-      });
+      // Use proper DELETE method
+      await ApiClient.delete(`${this.baseUrl}/${productId}/images/${imageId}`);
     } catch (error) {
       throw this.handleError(error, 'Failed to remove product image');
     }

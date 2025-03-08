@@ -24,10 +24,10 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "test:integration": "jest --config ./test/jest-integration.json",
-    "test:integration:db": "NODE_ENV=test jest --config ./test/jest-integration.json --runInBand --forceExit",
-    "test:integration:db:products": "NODE_ENV=test jest --config ./test/jest-integration.json --runInBand --forceExit --testPathPattern=products",
-    "test:integration:db:analytics": "NODE_ENV=test jest --config ./test/jest-integration.json --runInBand --forceExit --testPathPattern=analytics",
+    "test:integration": "jest test/integration",
+    "test:integration:mock": "DB_MOCK=true NODE_ENV=test jest test/integration",
+    "test:integration:db": "NODE_ENV=test jest test/integration",
+    "test:integration:db:analytics": "NODE_ENV=test jest test/integration/analytics",
     "seed": "nest start --entryFile dist/seed/seed-command"
   },
   "dependencies": {
@@ -116,22 +116,5 @@
   },
   "engines": {
     "node": "18.x"
-  },
-  "jest": {
-    "moduleFileExtensions": [
-      "js",
-      "json",
-      "ts"
-    ],
-    "rootDir": "src",
-    "testRegex": ".*\\.spec\\.ts$",
-    "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
-    },
-    "collectCoverageFrom": [
-      "**/*.(t|j)s"
-    ],
-    "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
   }
 }

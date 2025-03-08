@@ -102,6 +102,9 @@ export interface OrderSearchParams {
   customerId?: string;
   startDate?: string;
   endDate?: string;
+  // Additional date fields for different API formats
+  fromDate?: Date;
+  toDate?: Date;
   minAmount?: number;
   maxAmount?: number;
   sortBy?: string;
@@ -155,27 +158,33 @@ export class OrderApi {
    */
   public async searchOrders(params: OrderSearchParams = {}): Promise<PaginatedResponse<Order>> {
     try {
-      // Build query parameters
       const queryParams: Record<string, string> = {};
       
       // Add pagination params
-      if (params.page) queryParams.page = params.page.toString();
       if (params.limit) queryParams.limit = params.limit.toString();
+      if (params.page) queryParams.page = params.page.toString();
       
-      // Add search params
-      if (params.query) queryParams.query = params.query;
+      // Add filter params
       if (params.status) queryParams.status = params.status;
-      if (params.paymentStatus) queryParams.paymentStatus = params.paymentStatus;
       if (params.customerId) queryParams.customerId = params.customerId;
+      
+      // Handle date parameters - support both formats
       if (params.startDate) queryParams.startDate = params.startDate;
       if (params.endDate) queryParams.endDate = params.endDate;
-      if (params.minAmount !== undefined) queryParams.minAmount = params.minAmount.toString();
-      if (params.maxAmount !== undefined) queryParams.maxAmount = params.maxAmount.toString();
+      
+      // Handle Date objects if provided
+      if (params.fromDate instanceof Date) {
+        queryParams.fromDate = params.fromDate.toISOString().split('T')[0];
+      }
+      if (params.toDate instanceof Date) {
+        queryParams.toDate = params.toDate.toISOString().split('T')[0];
+      }
       
       // Add sort params
       if (params.sortBy) queryParams.sortBy = params.sortBy;
       if (params.sortOrder) queryParams.sortDirection = params.sortOrder;
       
+      // Make authenticated request to the orders endpoint
       const response = await ApiClient.get<PaginatedResponse<Order>>(this.baseUrl, queryParams);
       return response;
     } catch (error) {
@@ -208,11 +217,8 @@ export class OrderApi {
     order: Partial<Omit<Order, 'id' | 'created_at' | 'updated_at'>>
   ): Promise<Order> {
     try {
-      // Since ApiClient doesn't have a PUT method, we'll use POST with a _method parameter
-      const response = await ApiClient.post<Order>(`${this.baseUrl}/${id}`, {
-        ...order,
-        _method: 'PUT'
-      });
+      // Use proper PUT method instead of POST with _method parameter
+      const response = await ApiClient.put<Order>(`${this.baseUrl}/${id}`, order);
       return response;
     } catch (error) {
       throw this.handleError(error, 'Failed to update order');

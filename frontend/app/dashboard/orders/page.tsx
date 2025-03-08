@@ -1,107 +1,125 @@
 'use client';
 
 /**
- * Orders management page
+ * Simplified Orders Page
  * 
- * Displays all orders with filtering, sorting and detailed views
+ * This is a minimal implementation to debug the infinite redirect issue
  */
 
 import React, { useState, useEffect } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Heading } from '@/components/ui/heading';
 import { Separator } from '@/components/ui/separator';
-import { DataTable } from './components/data-table';
-import { columns } from './components/columns';
 import { useToast } from '@/components/ui/use-toast';
-import { Order, fetchOrders } from '@/lib/mock-api';
 import { useRouter } from 'next/navigation';
 
+// Import API client
+import { ApiClient } from '@/lib/api-client';
+import { config } from '@/lib/config';
+
 /**
- * Orders page component with data fetching and interaction handling
+ * Simplified Orders page for debugging
  */
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [backendAvailable, setBackendAvailable] = useState<boolean | null>(null);
+  const [orderCount, setOrderCount] = useState<number>(0);
   const { toast } = useToast();
   const router = useRouter();
 
-  /**
-   * Load orders from API on component mount
-   */
+  // Disable all automatic loading and redirects to debug the issue
   useEffect(() => {
-    loadOrders();
-  }, []);
+    const checkBackend = async () => {
+      try {
+        console.log("Manually checking backend availability...");
+        const isAvailable = await ApiClient.isBackendAvailable();
+        console.log("Backend available:", isAvailable);
+        setBackendAvailable(isAvailable);
+      } catch (error) {
+        console.error("Error checking backend:", error);
+        setBackendAvailable(false);
+      }
+    };
+    
+    checkBackend();
+  }, []); // Empty dependency array - only run once
 
-  /**
-   * Fetch order data from API
-   */
-  const loadOrders = async () => {
+  // Simple manual load function
+  const handleManualLoad = async () => {
     try {
       setIsLoading(true);
-      const data = await fetchOrders();
-      setOrders(data);
+      console.log("Manually attempting to load orders...");
+      
+      // Simple fetch to test API connectivity
+      const response = await fetch(`${config.api.baseUrl}/health`, {
+        method: 'GET'
+      });
+      
+      if (response.ok) {
+        console.log("Health check successful");
+        setOrderCount(5); // Dummy count for testing
+        toast({
+          title: "Success",
+          description: "Connected to backend successfully!",
+          variant: "default",
+        });
+      } else {
+        console.error("Health check failed:", response.status);
+        toast({
+          title: "Error",
+          description: `Backend responded with status: ${response.status}`,
+          variant: "destructive",
+        });
+      }
     } catch (error) {
-      console.error('Failed to load orders:', error);
+      console.error("Error in manual load:", error);
       toast({
-        title: 'Error',
-        description: 'Failed to load orders. Please try again.',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to connect to backend server",
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
   };
 
-  /**
-   * Handler for order status changes
-   */
-  const handleOrderStatusChange = async (orderId: string, newStatus: string) => {
-    try {
-      // In a real app, this would call an API endpoint
-      toast({
-        title: 'Status Updated',
-        description: `Order ${orderId} status changed to ${newStatus}`,
-        variant: 'success',
-      });
-      
-      // Refresh orders list
-      await loadOrders();
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to update order status',
-        variant: 'destructive',
-      });
-    }
-  };
-
   return (
-    <div className="flex-col">
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        {/* Header Section */}
-        <div className="flex items-center justify-between">
-          <Heading title="Orders" description="Manage customer orders" />
-          <div className="flex items-center gap-2">
-            <Button 
-              onClick={loadOrders} 
-              variant="outline" 
-              size="icon"
-              disabled={isLoading}
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </Button>
-            <Button onClick={() => router.push('/dashboard/orders/create')}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create order
-            </Button>
-          </div>
+    <div className="container mx-auto py-10">
+      <div className="flex items-center justify-between mb-4">
+        <Heading
+          title="Orders (Debug Mode)"
+          description="Debugging the orders page"
+        />
+      </div>
+      
+      <Separator className="my-4" />
+      
+      <div className="space-y-4">
+        <div className="p-4 bg-muted rounded-md">
+          <p className="text-lg font-semibold">Debug Information:</p>
+          <ul className="list-disc pl-5 space-y-2 mt-2">
+            <li>Backend Available: {backendAvailable === null ? 'Checking...' : backendAvailable ? 'Yes' : 'No'}</li>
+            <li>Loading State: {isLoading ? 'Loading' : 'Idle'}</li>
+            <li>Order Count: {orderCount}</li>
+            <li>Backend URL: {config.api.baseUrl}</li>
+          </ul>
         </div>
         
-        <Separator />
-        
-        {/* Data Table */}
-        <DataTable columns={columns} data={orders} />
+        <div className="flex space-x-4">
+          <Button 
+            onClick={handleManualLoad} 
+            disabled={isLoading}
+          >
+            {isLoading ? "Loading..." : "Test Backend Connection"}
+          </Button>
+          
+          <Button 
+            onClick={() => router.push('/dashboard')}
+            variant="outline"
+          >
+            Return to Dashboard
+          </Button>
+        </div>
       </div>
     </div>
   );
