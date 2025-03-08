@@ -1,24 +1,27 @@
-// Disable New Relic completely
-process.env.NEW_RELIC_ENABLED = 'false';
-process.env.NEW_RELIC_NO_CONFIG_FILE = 'true';
-process.env.NEW_RELIC_LOG_ENABLED = 'false';
+// Disable New Relic in test environment
+if (process.env.NODE_ENV === 'test') {
+  process.env.NEW_RELIC_ENABLED = 'false';
+  process.env.NEW_RELIC_NO_CONFIG_FILE = 'true';
+  process.env.NEW_RELIC_LOG_ENABLED = 'false';
+} else {
+  // In non-test environments, we might still want to disable New Relic if we don't have proper config
+  // Load environment variables first with proper priority
+  // Load .env.local first (for development overrides), then fall back to .env
+  require('dotenv').config({ path: '.env.local' });
+  require('dotenv').config(); // This will not overwrite existing env vars
 
-// Load environment variables first with proper priority
-// Load .env.local first (for development overrides), then fall back to .env
-require('dotenv').config({ path: '.env.local' });
-require('dotenv').config(); // This will not overwrite existing env vars
+  // In development mode, disable the seed service by default to prevent startup issues
+  // This can be overridden by explicitly setting DISABLE_SEED=false in .env
+  if (process.env.NODE_ENV === 'development' && process.env.DISABLE_SEED === undefined) {
+    process.env.DISABLE_SEED = 'true';
+    console.log('Development mode detected - Setting DISABLE_SEED=true to improve startup time');
+    console.log('To enable seed service, set DISABLE_SEED=false in .env.local');
+  }
 
-// In development mode, disable the seed service by default to prevent startup issues
-// This can be overridden by explicitly setting DISABLE_SEED=false in .env
-if (process.env.NODE_ENV === 'development' && process.env.DISABLE_SEED === undefined) {
-  process.env.DISABLE_SEED = 'true';
-  console.log('Development mode detected - Setting DISABLE_SEED=true to improve startup time');
-  console.log('To enable seed service, set DISABLE_SEED=false in .env.local');
-}
-
-// Only load New Relic if license key is present
-if (process.env.NEW_RELIC_LICENSE_KEY && process.env.NEW_RELIC_LICENSE_KEY !== 'your-dev-sentry-dsn') {
-  require('newrelic');
+  // Only load New Relic if license key is present and we're not in test mode
+  if (process.env.NEW_RELIC_LICENSE_KEY && process.env.NEW_RELIC_LICENSE_KEY !== 'your-dev-sentry-dsn') {
+    require('newrelic');
+  }
 }
 
 // Add crypto polyfill for Node.js versions that don't have it globally
