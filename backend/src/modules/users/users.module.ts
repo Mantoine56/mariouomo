@@ -4,6 +4,8 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Profile } from './entities/profile.entity';
 import { ProfileService } from './services/profile.service';
 import { ProfileController } from './controllers/profile.controller';
+import { UserAddress } from './entities/user-address.entity';
+import { Address } from './entities/address.entity';
 
 /**
  * Users Module
@@ -19,7 +21,9 @@ import { ProfileController } from './controllers/profile.controller';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      Profile
+      Profile,
+      UserAddress,
+      Address
     ]),
     EventEmitterModule.forRoot(),
   ],

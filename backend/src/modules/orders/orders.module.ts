@@ -8,6 +8,8 @@ import { ProductVariant } from '../products/entities/product-variant.entity';
 import { Profile } from '../users/entities/profile.entity';
 import { InventoryItem } from '../products/entities/inventory-item.entity';
 import { Product } from '../products/entities/product.entity';
+import { PaymentsModule } from '../payments/payments.module';
+import { ShipmentsModule } from '../shipments/shipments.module';
 
 /**
  * Orders Module
@@ -30,6 +32,8 @@ import { Product } from '../products/entities/product.entity';
       InventoryItem,
       Product
     ]),
+    PaymentsModule,
+    ShipmentsModule
   ],
   controllers: [OrderController],
   providers: [OrderService],

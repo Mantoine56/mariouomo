@@ -1,15 +1,19 @@
 /**
  * Entity representing a user's address in the system
  */
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
-import { Profile } from '../interfaces/profile.interface';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColumn } from 'typeorm';
+import { Profile } from './profile.entity';
 
 @Entity('addresses')
 export class Address {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne('Profile', 'addresses')
+  @Column({ type: 'uuid', nullable: true })
+  user_id: string;
+
+  @ManyToOne(() => Profile, profile => profile.addresses)
+  @JoinColumn({ name: 'user_id' })
   user: Profile;
 
   @Column()

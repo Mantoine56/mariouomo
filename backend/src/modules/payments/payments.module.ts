@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { Payment } from './entities/payment.entity';
 
 /**
  * Payments Module
@@ -16,6 +17,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
   imports: [
     TypeOrmModule.forFeature([
       // Payment entities will be registered here
+      Payment
     ]),
   ],
   controllers: [
@@ -26,6 +28,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
   ],
   exports: [
     // Exported services
+    TypeOrmModule
   ],
 })
 export class PaymentsModule {} 
