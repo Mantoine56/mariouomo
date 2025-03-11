@@ -1,0 +1,7 @@
+---
+description: for database tables, schema and information
+globs: 
+alwaysApply: true
+---
+- when you need access to databasee information, tables, schema or anything else please call the supabase mcp server.
+- This MCP server provides read only access.

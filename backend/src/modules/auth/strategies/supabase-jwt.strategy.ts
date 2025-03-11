@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
+import { AuthService } from '../services/auth.service';
 
 /**
  * Supabase JWT Strategy for Passport authentication
@@ -19,9 +20,11 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'jwt') {
    */
   // Create a logger instance for this class
   private readonly logger = new Logger(SupabaseJwtStrategy.name);
+  private readonly isDevelopment: boolean;
 
   constructor(
     private readonly configService: ConfigService,
+    private readonly authService: AuthService
   ) {
     // Get JWT secret from environment variables
     // Try different possible environment variable names
@@ -41,48 +44,48 @@ export class SupabaseJwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
     
     // Now we can use 'this' after the super() call
+    this.isDevelopment = isDevelopment;
+    
     if (isDevelopment && jwtSecret === 'development_jwt_secret_for_testing') {
       this.logger.warn('Using development JWT secret. This should not be used in production!');
     }
   }
 
   /**
-   * Validate the Supabase JWT payload and return the user information
+   * Validate the JWT payload and return the user
    * This method is called by Passport after the token is verified
    * 
-   * @param payload - The decoded JWT payload from Supabase
+   * @param payload - The decoded JWT payload
    * @returns The user object to be attached to the request
    */
   async validate(payload: any) {
-    // In development mode, we'll accept any token
-    const isDevelopment = this.configService.get<string>('NODE_ENV') !== 'production';
-    
-    if (isDevelopment) {
-      // For development, if payload is missing, create a mock user
-      if (!payload || !payload.sub) {
-        this.logger.warn('Using mock user for development');
+    try {
+      this.logger.debug(`Validating JWT payload: ${JSON.stringify(payload)}`);
+      
+      // Use the AuthService to validate the user
+      const user = await this.authService.validateUser(payload);
+      
+      if (!user) {
+        this.logger.error('User validation failed');
+        throw new UnauthorizedException('Invalid user');
+      }
+      
+      // Return the user object to be attached to the request
+      return user;
+    } catch (error) {
+      this.logger.error(`JWT validation error: ${error.message}`);
+      
+      // In development mode, we can return a mock user
+      if (this.isDevelopment) {
+        this.logger.warn('Development mode: Returning mock user');
         return {
-          id: 'mock-user-id',
-          email: 'dev@example.com',
-          role: 'admin', // Give admin access in development
-          metadata: {},
+          id: payload.sub,
+          email: payload.email || 'online@mariouomo.com',
+          role: payload.role || 'user'
         };
       }
-    } else {
-      // In production, validate the token payload
-      if (!payload || !payload.sub) {
-        throw new UnauthorizedException('Invalid token payload');
-      }
+      
+      throw new UnauthorizedException('Invalid token');
     }
-
-    // Return user information from the token
-    // This will be attached to the request object as req.user
-    return {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.role || 'customer',
-      // Include any other relevant user data from the Supabase token
-      metadata: payload.user_metadata || {},
-    };
   }
 }

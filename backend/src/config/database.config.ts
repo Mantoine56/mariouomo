@@ -71,6 +71,12 @@ export default registerAs('database', () => {
       // Check if connecting to Supabase
       const isSupabase = dbUrl.includes('.supabase.co');
       
+      if (isSupabase) {
+        console.log('Connecting to Supabase database...');
+        console.log('Schema:', configService.get<string>('DATABASE_SCHEMA', 'public'));
+        console.log('SSL:', isSupabase ? 'Enabled (rejectUnauthorized: false)' : 'Using production setting');
+      }
+      
       return {
         type: 'postgres' as const,
         url: dbUrl,
@@ -101,6 +107,9 @@ export default registerAs('database', () => {
         
         // Add common configuration
         ...commonConfig,
+        
+        // Always enable logging for Supabase connections to diagnose issues
+        logging: isSupabase ? ['query', 'error', 'schema', 'warn', 'info', 'log'] : commonConfig.logging,
       } as PostgresConnectionOptions;
     }
 
@@ -224,6 +233,12 @@ export const getDatabaseConfig = (configService: ConfigService): TypeOrmModuleOp
           // Check if connecting to Supabase
           const isSupabase = dbUrl.includes('.supabase.co');
           
+          if (isSupabase) {
+            console.log('Connecting to Supabase database...');
+            console.log('Schema:', config.get<string>('DATABASE_SCHEMA', 'public'));
+            console.log('SSL:', isSupabase ? 'Enabled (rejectUnauthorized: false)' : 'Using production setting');
+          }
+          
           return {
             type: 'postgres' as const,
             url: dbUrl,
@@ -254,6 +269,9 @@ export const getDatabaseConfig = (configService: ConfigService): TypeOrmModuleOp
             
             // Add common configuration
             ...commonConfig,
+            
+            // Always enable logging for Supabase connections to diagnose issues
+            logging: isSupabase ? ['query', 'error', 'schema', 'warn', 'info', 'log'] : commonConfig.logging,
           } as PostgresConnectionOptions;
         }
 

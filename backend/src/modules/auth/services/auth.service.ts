@@ -5,199 +5,131 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Profile } from '../../users/entities/profile.entity';
 import { Role } from '../enums/role.enum';
+import { SupabaseService } from '../../../common/supabase/supabase.service';
 
 /**
- * Authentication Service
+ * Authentication Service integrated with Supabase
  * 
  * Handles authentication-related operations including:
- * - User validation
- * - Mock user creation for development
- * - Token validation and verification
- * - User profile retrieval
+ * - Supabase JWT validation
+ * - User profile management via Supabase
+ * - Development mode support
  */
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly isDevelopment: boolean;
+  // Use the actual Supabase user ID for development
+  private readonly DEV_USER_ID = '682efcd1-4701-429f-9ab4-e024ae5ed076';
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     @InjectRepository(Profile)
     private readonly profileRepository: Repository<Profile>,
+    private readonly supabaseService: SupabaseService
   ) {
-    // Determine if we're in development mode
     this.isDevelopment = configService.get<string>('NODE_ENV') !== 'production';
     
     if (this.isDevelopment) {
-      this.logger.warn('Running in development mode - authentication will be flexible');
+      this.logger.warn('Running in development mode - using Supabase test user');
     }
   }
 
   /**
-   * Validates a user based on the payload from the JWT token
-   * In development mode, creates a mock user if no user is found
+   * Validates a user based on the Supabase JWT payload
+   * Uses Supabase directly to get profile information
    * 
-   * @param payload - The decoded JWT payload
+   * @param payload - The decoded Supabase JWT payload
    * @returns The user profile or throws an exception
    */
-  async validateUser(payload: any): Promise<Profile> {
-    // Extract user ID from the payload
-    const userId = payload.sub || payload.user_id || payload.id;
+  async validateUser(payload: any): Promise<any> {
+    // Extract user ID from Supabase payload
+    const userId = payload.sub;
+    
+    this.logger.debug(`Validating user with payload: ${JSON.stringify(payload)}`);
     
     if (!userId) {
-      this.logger.error('Invalid token payload - no user ID found');
+      this.logger.error('Invalid Supabase token payload - no user ID found');
       throw new UnauthorizedException('Invalid token payload');
     }
 
-    // Try to find the user in the database
-    let user = await this.profileRepository.findOne({ where: { id: userId } });
-
-    // In development mode, create a mock user if none exists
-    if (!user && this.isDevelopment) {
-      this.logger.warn(`Creating mock user for development with ID: ${userId}`);
+    try {
+      this.logger.debug(`Getting user profile from Supabase for user ID: ${userId}`);
       
-      // Create a mock admin user for development
-      // Include both old and new field names for compatibility
-      user = this.profileRepository.create({
-        id: userId,
-        email: payload.email || 'dev@example.com',
-        full_name: payload.name || 'Development User',
-        // Support both first_name/last_name and full_name
-        first_name: payload.given_name || 'Development',
-        last_name: payload.family_name || 'User',
-        // Support both phone and phone_number
-        phone: payload.phone_number || null,
-        phone_number: payload.phone_number || null,
-        role: Role.ADMIN, // Give admin role in development
-        status: 'active',
-        preferences: { theme: 'light', notifications: true },
-        metadata: { isDevelopmentUser: true }
-      });
+      // Get user profile from Supabase
+      const profile = await this.supabaseService.getUserProfile(userId);
       
-      try {
-        await this.profileRepository.save(user);
-        this.logger.log('Mock user created successfully');
-      } catch (error) {
-        this.logger.error(`Failed to create mock user: ${error.message}`);
-        // Continue even if save fails - return the unsaved entity
+      this.logger.debug(`Supabase profile result: ${JSON.stringify(profile)}`);
+      
+      if (!profile) {
+        this.logger.warn(`No profile found for user ${userId}, creating one...`);
+        
+        // Extract user info from Supabase token
+        const email = payload.email || 'online@mariouomo.com';
+        const name = payload.user_metadata?.full_name || 'Mario Uomo User';
+        
+        this.logger.debug(`Creating profile with email: ${email}, name: ${name}`);
+        
+        // Create a basic profile with default values
+        const newProfile = {
+          id: userId,
+          email,
+          full_name: name,
+          role: Role.USER,
+          status: 'active',
+          preferences: { theme: 'light', notifications: true },
+          metadata: { provider: 'supabase' }
+        };
+        
+        // Create profile in Supabase
+        this.logger.debug(`Updating profile in Supabase: ${JSON.stringify(newProfile)}`);
+        const createdProfile = await this.supabaseService.updateUserProfile(userId, newProfile);
+        
+        this.logger.debug(`Created profile result: ${JSON.stringify(createdProfile)}`);
+        
+        if (!createdProfile) {
+          this.logger.error('Failed to create user profile');
+          throw new UnauthorizedException('Failed to create user profile');
+        }
+        
+        return createdProfile;
       }
+      
+      return profile;
+    } catch (error) {
+      this.logger.error(`Error managing user profile: ${error.message}`);
+      this.logger.error(`Error stack: ${error.stack}`);
+      throw new UnauthorizedException('Error managing user profile');
     }
-
-    // In production, strictly enforce user existence
-    if (!user && !this.isDevelopment) {
-      this.logger.error(`User with ID ${userId} not found`);
-      throw new UnauthorizedException('User not found');
-    }
-
-    // If we reach here in development mode without a user, throw an exception
-    // This should never happen as we create a mock user above, but TypeScript needs this check
-    if (!user) {
-      this.logger.error(`Unexpected: User with ID ${userId} not found even after mock creation`);
-      throw new UnauthorizedException('User not found');
-    }
-
-    return user;
   }
 
   /**
-   * Gets the current user's profile information
-   * Handles both old and new schema formats for compatibility
+   * Gets the current user's profile information directly from Supabase
    * 
-   * @param userId - The ID of the user
+   * @param userId - The Supabase user ID
    * @returns The user profile with sensitive information removed
    */
-  async getCurrentUser(userId: string): Promise<Partial<Profile>> {
-    // In development mode, we can return a mock user to avoid database issues
-    if (this.isDevelopment) {
-      this.logger.warn(`Returning mock user for development with ID: ${userId}`);
-      
-      // Create a mock user for development without saving to database
-      // Using a partial object that matches the entity structure
-      const mockUser = this.profileRepository.create({
-        email: 'dev@example.com',
-        full_name: 'Development User',
-        // Support both first_name/last_name and full_name
-        first_name: 'Development',
-        last_name: 'User',
-        // Support both phone and phone_number
-        phone: '',
-        phone_number: '',
-        role: Role.ADMIN,
-        status: 'active',
-        preferences: { theme: 'light', notifications: true },
-        metadata: { isDevelopmentUser: true }
-      });
-      
-      // Set the ID after creation
-      mockUser.id = userId;
-      
-      // Return user without sensitive information
-      const { metadata, ...userInfo } = mockUser;
-      return userInfo;
-    }
-    
+  async getCurrentUser(userId: string): Promise<any> {
     try {
-      // In production, query for the user without including relations
-      // to avoid database errors if the schema doesn't match
-      const user = await this.profileRepository.findOne({ 
-        where: { id: userId }
-      });
+      const profile = await this.supabaseService.getUserProfile(userId);
       
-      // Handle field mapping if needed
-      if (user) {
-        // If full_name is missing but first_name and last_name exist, create it
-        if (!user.full_name && (user.first_name || user.last_name)) {
-          user.full_name = `${user.first_name || ''} ${user.last_name || ''}`.trim();
-        }
-        
-        // If phone is missing but phone_number exists, map it
-        if (!user.phone && user.phone_number) {
-          user.phone = user.phone_number;
-        }
-        
-        // Ensure preferences exists
-        if (!user.preferences) {
-          user.preferences = {};
-        }
-      }
-
-      if (!user) {
-        throw new UnauthorizedException('User not found');
+      if (!profile) {
+        throw new UnauthorizedException('User profile not found');
       }
 
       // Return user without sensitive information
-      const { metadata, ...userInfo } = user;
+      const { metadata, ...userInfo } = profile;
       return userInfo;
     } catch (error) {
-      this.logger.error(`Error retrieving user: ${error.message}`);
-      
-      if (this.isDevelopment) {
-        // In development, return a mock user even if database query fails
-        this.logger.warn('Database error in development mode - returning mock user');
-        return {
-          id: userId,
-          email: 'dev@example.com',
-          full_name: 'Development User',
-          first_name: 'Development',
-          last_name: 'User',
-          phone: '',
-          phone_number: '',
-          role: Role.ADMIN,
-          status: 'active',
-          preferences: { theme: 'light', notifications: true }
-        };
-      }
-      
+      this.logger.error(`Error retrieving user profile: ${error.message}`);
       throw new UnauthorizedException('Error retrieving user profile');
     }
   }
 
   /**
-   * Validates a JWT token and returns the decoded payload
-   * 
-   * @param token - The JWT token to validate
-   * @returns The decoded token payload
+   * Validates a Supabase JWT token
+   * In development mode, allows test tokens but still requires proper UUID
    */
   validateToken(token: string): any {
     try {
@@ -205,18 +137,54 @@ export class AuthService {
     } catch (error) {
       this.logger.error(`Token validation failed: ${error.message}`);
       
-      // In development mode, return a mock payload for testing
+      // In development mode, accept test tokens with proper Supabase user ID
       if (this.isDevelopment) {
-        this.logger.warn('Returning mock payload for development');
+        this.logger.warn('Development mode: Returning test payload with actual Supabase ID');
         return {
-          sub: 'dev-user-id',
-          email: 'dev@example.com',
-          name: 'Development User',
-          role: Role.ADMIN
+          sub: this.DEV_USER_ID,
+          email: 'online@mariouomo.com',
+          role: Role.USER
         };
       }
       
       throw new UnauthorizedException('Invalid token');
+    }
+  }
+
+  /**
+   * Tests the Supabase connection by attempting to query the profiles table
+   * 
+   * @returns The connection test result
+   */
+  async testSupabaseConnection() {
+    try {
+      this.logger.log('Testing Supabase connection...');
+      
+      // Get the Supabase client
+      const supabase = this.supabaseService.getClient();
+      
+      // Try to query the profiles table
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('count')
+        .limit(1);
+
+      if (error) {
+        this.logger.error(`Supabase connection test failed: ${error.message}`);
+        this.logger.error(`Error details: ${JSON.stringify(error)}`);
+        throw error;
+      }
+
+      return {
+        connected: true,
+        timestamp: new Date().toISOString(),
+        environment: this.configService.get<string>('NODE_ENV'),
+        supabaseUrl: this.configService.get<string>('SUPABASE_URL'),
+        testQuery: 'Success'
+      };
+    } catch (error) {
+      this.logger.error(`Exception during Supabase connection test: ${error.message}`);
+      throw error;
     }
   }
 }

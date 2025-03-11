@@ -56,6 +56,12 @@ This guide provides detailed instructions for setting up development, staging, a
    brew services start redis
    ```
 
+6. **Supabase Setup**
+   - Create a Supabase account at [https://supabase.com](https://supabase.com)
+   - Create a new project
+   - Note your project URL and API keys (found in Project Settings > API)
+   - Set up the required tables (profiles, etc.) or use the migration scripts
+
 ### Project Setup
 
 1. **Clone Repository**
@@ -76,12 +82,26 @@ This guide provides detailed instructions for setting up development, staging, a
 3. **Environment Configuration**
    ```bash
    # Copy environment templates
-   cp .env.example .env
-   cp backend/.env.example backend/.env
-   cp frontend/.env.example frontend/.env
+   cp .env.example .env.local
+   cp backend/.env.example backend/.env.local
+   cp frontend/.env.example frontend/.env.local
    ```
 
-4. **Database Migration**
+4. **Configure Supabase Environment Variables**
+   
+   Edit `backend/.env.local` to include your Supabase credentials:
+   ```
+   # Supabase Configuration
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_SERVICE_KEY=your-service-role-key
+   SUPABASE_JWT_SECRET=your-jwt-secret
+   
+   # JWT Configuration (can be the same as SUPABASE_JWT_SECRET)
+   JWT_SECRET=your-jwt-secret
+   JWT_EXPIRES_IN=1d
+   ```
+
+5. **Database Migration**
    ```bash
    # Run migrations
    cd backend

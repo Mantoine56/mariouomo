@@ -12,6 +12,7 @@ import { CorsModule } from './common/cors/cors.module';
 import { HealthModule } from './common/health/health.module';
 import { LoggingModule } from './common/logging/logging.module';
 import { SeedModule } from './seed/seed.module';
+import { SupabaseModule } from './common/supabase/supabase.module';
 
 // Import feature modules
 // These will be uncommented as they are implemented
@@ -28,6 +29,7 @@ import { DiscountsModule } from './modules/discounts/discounts.module';
 import { EventsModule } from './modules/events/events.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CartsModule } from './modules/carts/carts.module';
+import { DevModule } from './modules/dev/dev.module';
 
 /**
  * Main application module
@@ -73,9 +75,10 @@ import { CartsModule } from './modules/carts/carts.module';
     CorsModule,
     CachePolicyModule,
     HealthModule,
+    SupabaseModule,
     
-    // Development Modules
-    ...(process.env.NODE_ENV !== 'production' ? [SeedModule] : []),
+    // Development Modules - only included in non-production environments
+    ...(process.env.NODE_ENV !== 'production' ? [SeedModule, DevModule] : []),
   ],
   providers: [],
 })

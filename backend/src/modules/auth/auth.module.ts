@@ -7,6 +7,7 @@ import { SupabaseJwtStrategy } from './strategies/supabase-jwt.strategy';
 import { AuthController } from './controllers/auth.controller';
 import { AuthService } from './services/auth.service';
 import { Profile } from '../users/entities/profile.entity';
+import { SupabaseModule } from '../../common/supabase/supabase.module';
 
 /**
  * Authentication Module
@@ -22,6 +23,9 @@ import { Profile } from '../users/entities/profile.entity';
   imports: [
     // Import TypeORM module for Profile entity
     TypeOrmModule.forFeature([Profile]),
+    
+    // Import Supabase module for Supabase client
+    SupabaseModule,
     
     // Configure Passport with JWT as the default strategy
     PassportModule.register({ defaultStrategy: 'jwt' }),

@@ -1,5 +1,5 @@
 import { config } from './config';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from './supabase';
 
 /**
  * API Error class for handling API-specific errors
@@ -16,8 +16,10 @@ export class ApiError extends Error {
 }
 
 /**
- * Base API client for making authenticated requests to the backend
- * Connects to the NestJS backend API endpoints
+ * API Client Service
+ * 
+ * Handles API requests to the backend
+ * Manages authentication, error handling, and response parsing
  */
 export class ApiClient {
   /**
@@ -27,7 +29,6 @@ export class ApiClient {
   static async getAuthToken(): Promise<string | null> {
     try {
       console.log('Getting authentication token from Supabase...');
-      const supabase = createClient(config.supabase.url, config.supabase.anonKey);
       const { data, error } = await supabase.auth.getSession();
       
       if (error) {
@@ -40,8 +41,17 @@ export class ApiClient {
         console.log('Retrieved token successfully', {
           hasToken: !!data.session.access_token,
           tokenLength: data.session.access_token?.length,
-          expiresAt: data.session.expires_at
+          expiresAt: data.session.expires_at,
+          // Log more details for debugging
+          sessionType: typeof data.session,
+          tokenType: typeof data.session.access_token
         });
+        
+        // Check if token is valid before returning
+        if (!data.session.access_token) {
+          console.error('Access token is missing from session');
+          return null;
+        }
         
         return data.session.access_token;
       } else {

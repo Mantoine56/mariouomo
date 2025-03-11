@@ -91,4 +91,69 @@ export class AuthController {
     this.logger.log('Token validation requested');
     return this.authService.validateToken(tokenData.token);
   }
+
+  @Get('debug-token')
+  @Public()
+  @ApiOperation({ summary: 'Debug token validation (development only)' })
+  @ApiResponse({ status: 200, description: 'Token debug information' })
+  async debugToken(@Request() req: ExpressRequest) {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      return {
+        status: 'error',
+        message: 'No token provided',
+        headers: req.headers
+      };
+    }
+
+    try {
+      const decoded = this.authService.validateToken(token);
+      const user = await this.authService.validateUser(decoded);
+      return {
+        status: 'success',
+        token: token,
+        decoded: decoded,
+        user: user,
+        headers: req.headers
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: error.message,
+        stack: error.stack,
+        headers: req.headers
+      };
+    }
+  }
+
+  /**
+   * Public endpoint to test Supabase connectivity
+   * 
+   * @returns The status of the Supabase connection
+   */
+  @Get('test-supabase')
+  @Public()
+  @ApiOperation({ summary: 'Test Supabase connectivity' })
+  @ApiResponse({ status: 200, description: 'Supabase connection status' })
+  async testSupabaseConnection() {
+    this.logger.log('Testing Supabase connectivity');
+    try {
+      const result = await this.authService.testSupabaseConnection();
+      return {
+        status: 'success',
+        message: 'Supabase connection test completed',
+        result: result
+      };
+    } catch (error) {
+      this.logger.error(`Supabase connection test failed: ${error.message}`);
+      return {
+        status: 'error',
+        message: 'Supabase connection test failed',
+        error: error.message,
+        stack: error.stack
+      };
+    }
+  }
 }
