@@ -55,39 +55,36 @@ export default function ProductsPage() {
    * Convert backend Product to frontend format
    */
   const adaptProductToFrontend = (product: Product): FrontendProduct => {
-    // Calculate inventory from variants or use a default
-    const inventory = product.variants?.reduce((sum, variant) => sum + variant.current_stock, 0) || 0;
+    // Calculate inventory - in real data this might come from variants
+    // For now, we'll use a default value or extract from metadata
+    const inventory = 10; // Default value
     
     // Determine status based on inventory or backend status
     let status: 'Active' | 'Low Stock' | 'Out of Stock';
-    if (product.status === ProductStatus.ACTIVE) {
+    if (product.status === 'active') {
       status = inventory > 10 ? 'Active' : inventory > 0 ? 'Low Stock' : 'Out of Stock';
     } else {
       status = 'Out of Stock';
     }
     
-    // Map images to frontend format
-    const images = product.images?.map(img => ({
-      id: img.id,
-      url: img.original_url,
-      name: img.original_url.split('/').pop() || 'product-image',
-      size: 0, // Size information not available from backend
-    }));
+    // Extract category from metadata or use a default
+    const category = product.metadata?.category || 'Uncategorized';
+    
+    // Extract cost from cost_price field
+    const cost = product.cost_price;
     
     return {
       id: product.id,
       name: product.name,
-      price: product.base_price,
-      category: product.type || 'Uncategorized',
+      price: product.price,
+      category,
       description: product.description,
       photo_url: product.images?.[0]?.original_url,
       created_at: product.created_at,
       updated_at: product.updated_at,
       inventory,
       status,
-      images,
-      // Cost might be stored in metadata
-      cost: product.metadata?.cost as number | undefined,
+      cost,
     };
   };
 
@@ -117,13 +114,13 @@ export default function ProductsPage() {
       if (selectedStatus) {
         // Map frontend status to backend status
         if (selectedStatus === 'Active') {
-          searchParams.status = ProductStatus.ACTIVE;
+          searchParams.status = 'active';
         } else if (selectedStatus === 'Out of Stock') {
-          searchParams.status = ProductStatus.INACTIVE;
+          searchParams.status = 'inactive';
         }
       }
 
-      // Call the real API
+      // Call the API
       const response = await productApi.searchProducts(searchParams);
       
       // Convert backend products to frontend format
@@ -215,7 +212,7 @@ export default function ProductsPage() {
         } else {
           // For archive/activate, update the product status
           await productApi.updateProduct(id, {
-            status: action === 'activate' ? ProductStatus.ACTIVE : ProductStatus.INACTIVE,
+            status: action === 'activate' ? 'active' : 'inactive',
           });
         }
       }

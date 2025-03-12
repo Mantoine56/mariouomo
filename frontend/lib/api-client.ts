@@ -79,8 +79,11 @@ export class ApiClient {
     }
   ): Promise<T> {
     try {
+      // Ensure endpoint starts with a slash if not already
+      const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      
       // Construct URL with query parameters
-      let url = `${config.api.baseUrl}${endpoint}`;
+      let url = `${config.api.baseUrl}${normalizedEndpoint}`;
       if (params && Object.keys(params).length > 0) {
         const queryString = new URLSearchParams(params).toString();
         url += `?${queryString}`;
@@ -171,7 +174,10 @@ export class ApiClient {
    */
   static async post<T>(endpoint: string, data: any): Promise<T> {
     try {
-      const url = `${config.api.baseUrl}${endpoint}`;
+      // Ensure endpoint starts with a slash if not already
+      const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      
+      const url = `${config.api.baseUrl}${normalizedEndpoint}`;
       console.log(`Making POST request to: ${url}`);
       
       // Get auth token
@@ -246,7 +252,10 @@ export class ApiClient {
    */
   static async delete<T>(endpoint: string): Promise<T> {
     try {
-      const url = `${config.api.baseUrl}${endpoint}`;
+      // Ensure endpoint starts with a slash if not already
+      const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      
+      const url = `${config.api.baseUrl}${normalizedEndpoint}`;
       console.log(`Making DELETE request to: ${url}`);
       
       // Get auth token
@@ -321,7 +330,10 @@ export class ApiClient {
    */
   static async put<T>(endpoint: string, data: any): Promise<T> {
     try {
-      const url = `${config.api.baseUrl}${endpoint}`;
+      // Ensure endpoint starts with a slash if not already
+      const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      
+      const url = `${config.api.baseUrl}${normalizedEndpoint}`;
       console.log(`Making PUT request to: ${url}`);
       
       // Get auth token

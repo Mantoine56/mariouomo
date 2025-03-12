@@ -12,6 +12,7 @@ import { CacheService } from '../../../common/cache/cache.service';
 import { ProductImage } from '../entities/product-image.entity';
 import { ProductImageRepository } from '../repositories/product-image.repository';
 import { NotFoundException } from '@nestjs/common';
+import { In } from 'typeorm';
 
 @Injectable()
 export class ProductService {
@@ -20,7 +21,6 @@ export class ProductService {
   private readonly CACHE_TTL = 3600; // 1 hour
 
   constructor(
-    @InjectRepository(ProductRepository)
     private readonly productRepository: ProductRepository,
     @InjectRepository(ProductVariant)
     private readonly variantRepository: Repository<ProductVariant>,
@@ -79,7 +79,10 @@ export class ProductService {
     this.logger.debug(`Cache miss for product ${id}, fetching from database`);
     const product = await this.productRepository.getProductById(id);
     
+    // Manually load relations
     if (product) {
+      await this.loadProductRelations(product);
+      
       try {
         await this.cacheService.set(cacheKey, JSON.stringify(product), this.CACHE_TTL);
       } catch (error) {
@@ -100,34 +103,24 @@ export class ProductService {
   }
 
   /**
-   * Search products using full-text search
+   * Search products by criteria
    * @param searchDto Search criteria
    * @param paginationDto Pagination options
-   * @returns Products matching the search criteria
+   * @returns Paginated list of products matching criteria
    */
   async searchProducts(searchDto: SearchProductsDto, paginationDto: PaginationQueryDto) {
-    const cacheKey = `${this.CACHE_KEY_PREFIX}search:${JSON.stringify(searchDto)}:${JSON.stringify(paginationDto)}`;
-    const cached = await this.cacheService.get(cacheKey);
+    this.logger.debug(`Searching products with criteria: ${JSON.stringify(searchDto)}`);
     
-    if (cached) {
-      this.logger.debug('Cache hit for product search');
-      try {
-        return JSON.parse(cached);
-      } catch (error) {
-        this.logger.warn(`Failed to parse cached search results: ${error.message}`);
-      }
-    }
-
-    this.logger.debug('Cache miss for product search, fetching from database');
-    const results = await this.productRepository.searchProducts(searchDto, paginationDto);
+    // Call repository method with simplified query
+    const result = await this.productRepository.searchProducts(searchDto, paginationDto);
     
-    try {
-      await this.cacheService.set(cacheKey, JSON.stringify(results), this.CACHE_TTL);
-    } catch (error) {
-      this.logger.warn(`Failed to cache search results: ${error.message}`);
+    // Manually load relations for better data consistency
+    if (result.items.length > 0) {
+      await this.loadProductsRelations(result.items);
+      this.logger.debug(`Loaded relations for ${result.items.length} products from search results`);
     }
     
-    return results;
+    return result;
   }
 
   /**
@@ -207,5 +200,118 @@ export class ProductService {
     await this.cacheService.delPattern(searchPattern);
     
     this.logger.debug(`Cache invalidated for ${id ? `product ${id}` : 'all products'}`);
+  }
+
+  /**
+   * Manually load relationships for a product
+   * This works around the soft-delete inconsistency by using separate queries
+   * @param product The product to load relations for
+   */
+  private async loadProductRelations(product: Product): Promise<void> {
+    try {
+      // Load variants 
+      product.variants = await this.variantRepository.find({
+        where: { product_id: product.id }
+      });
+      
+      // Load images
+      product.images = await this.productImageRepository.find({
+        where: { product_id: product.id }
+      });
+      
+      // Load categories
+      if (!product.categories) {
+        // Use the entity manager from variantRepository since it's from TypeORM core
+        product.categories = await this.variantRepository.manager
+          .createQueryBuilder()
+          .select('c.*')
+          .from('categories', 'c')
+          .innerJoin('product_categories', 'pc', 'pc.category_id = c.id')
+          .where('pc.product_id = :productId', { productId: product.id })
+          .getRawMany();
+      }
+      
+      this.logger.debug(`Loaded relations for product ${product.id}: ` +
+        `${product.variants?.length || 0} variants, ` +
+        `${product.images?.length || 0} images, ` +
+        `${product.categories?.length || 0} categories`);
+    } catch (error) {
+      this.logger.error(`Failed to load relations for product ${product.id}: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Manually load relationships for multiple products
+   * @param products An array of products to load relations for
+   */
+  private async loadProductsRelations(products: Product[]): Promise<void> {
+    if (!products?.length) return;
+    
+    try {
+      const productIds = products.map(p => p.id);
+      this.logger.debug(`Loading relations for ${productIds.length} products`);
+      
+      // Load variants for all products
+      const variants = await this.variantRepository.find({
+        where: { product_id: In(productIds) }
+      });
+      
+      // Load images for all products
+      const images = await this.productImageRepository.find({
+        where: { product_id: In(productIds) }
+      });
+      
+      // Load categories for all products using the entity manager
+      const categoriesMap = await this.variantRepository.manager
+        .createQueryBuilder()
+        .select('pc.product_id')
+        .addSelect('c.*')
+        .from('categories', 'c')
+        .innerJoin('product_categories', 'pc', 'pc.category_id = c.id')
+        .where('pc.product_id IN (:...productIds)', { productIds })
+        .getRawMany()
+        .then((rows: any[]) => {
+          const map = new Map<string, any[]>();
+          rows.forEach((row: any) => {
+            if (!map.has(row.product_id)) {
+              map.set(row.product_id, []);
+            }
+            map.get(row.product_id)?.push(row);
+          });
+          return map;
+        });
+      
+      // Assign relations to each product
+      products.forEach(product => {
+        product.variants = variants.filter(v => v.product_id === product.id);
+        product.images = images.filter(i => i.product_id === product.id);
+        product.categories = categoriesMap.get(product.id) || [];
+      });
+      
+      this.logger.debug(`Successfully loaded relations for ${products.length} products`);
+    } catch (error) {
+      this.logger.error(`Failed to load relations for multiple products: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get products by store ID with pagination
+   * @param storeId The store ID
+   * @param query Pagination and search options
+   * @returns Paginated products for the store with all relations loaded
+   */
+  async getProductsByStoreId(storeId: string, query: PaginationQueryDto) {
+    this.logger.debug(`Fetching products for store ${storeId} with query: ${JSON.stringify(query)}`);
+    
+    // Use the repository method with simplified query
+    const result = await this.productRepository.findByStoreId(storeId, query);
+    
+    // Manually load relations for better data consistency
+    if (result.items.length > 0) {
+      await this.loadProductsRelations(result.items);
+      this.logger.debug(`Loaded relations for ${result.items.length} products from store ${storeId}`);
+    }
+    
+    return result;
   }
 }

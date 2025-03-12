@@ -1,61 +1,60 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsNumber, IsUUID, IsArray, ValidateNested, IsBoolean, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsUUID, Min, IsArray, ValidateNested, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateProductDto, CreateProductVariantDto } from './create-product.dto';
+import { ProductStatus } from './create-product.dto';
+import { UpdateProductVariantDto } from './update-product-variant.dto';
 
 /**
- * DTO for updating a product
- * Contains all fields that can be updated for a product
+ * DTO for updating an existing product
  */
-export class UpdateProductDto extends PartialType(CreateProductDto) {
-  /**
-   * Optional product ID
-   */
-  @IsOptional()
-  @IsUUID()
-  id?: string;
-
-  @ApiProperty({ description: 'Product name', required: false })
+export class UpdateProductDto {
+  @ApiProperty({ description: 'Product name' })
   @IsString()
   @IsOptional()
   name?: string;
-
-  @ApiProperty({ description: 'Product description', required: false })
+  
+  @ApiProperty({ description: 'Product description' })
   @IsString()
   @IsOptional()
   description?: string;
-
-  @ApiProperty({ description: 'Base price', required: false })
+  
+  @ApiProperty({ description: 'Product status', enum: ProductStatus })
+  @IsEnum(ProductStatus)
+  @IsOptional()
+  status?: ProductStatus;
+  
+  @ApiProperty({ description: 'Product price', minimum: 0 })
   @IsNumber()
+  @Min(0)
   @IsOptional()
   price?: number;
-
-  @ApiProperty({ description: 'Product SKU', required: false })
-  @IsString()
+  
+  @ApiProperty({ description: 'Compare-at price for showing discounted pricing', minimum: 0 })
+  @IsNumber()
+  @Min(0)
   @IsOptional()
-  sku?: string;
-
-  @ApiProperty({ description: 'Whether the product is featured', required: false })
-  @IsBoolean()
+  compare_at_price?: number;
+  
+  @ApiProperty({ description: 'Cost price for profit calculations', minimum: 0 })
+  @IsNumber()
+  @Min(0)
   @IsOptional()
-  is_featured?: boolean;
-
-  @ApiProperty({ description: 'Whether the product is active', required: false })
-  @IsBoolean()
+  cost_price?: number;
+  
+  @ApiProperty({ description: 'Additional metadata' })
   @IsOptional()
-  is_active?: boolean;
-
-  @ApiProperty({ description: 'Category IDs', required: false, type: [String] })
-  @IsArray()
-  @IsUUID('4', { each: true })
+  metadata?: Record<string, any>;
+  
+  @ApiProperty({ description: 'Product variants' })
   @IsOptional()
-  category_ids?: string[];
-
-  @ApiProperty({ description: 'Product variants', required: false, type: [CreateProductVariantDto] })
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => CreateProductVariantDto)
+  @Type(() => UpdateProductVariantDto)
+  variants?: UpdateProductVariantDto[];
+  
+  @ApiProperty({ description: 'Category IDs to assign to this product' })
   @IsOptional()
-  variants?: CreateProductVariantDto[];
+  @IsArray()
+  @IsUUID(4, { each: true })
+  category_ids?: string[];
 } 

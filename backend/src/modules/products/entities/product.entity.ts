@@ -32,33 +32,21 @@ export class Product extends BaseEntity {
   })
   status: string;
 
-  @ApiProperty({ description: 'Product type' })
-  @Column({ type: 'varchar', length: 50 })
-  type: string;
-
-  /**
-   * Legacy category field - will be deprecated in favor of the categories relation
-   * Kept for backward compatibility during migration
-   */
-  @ApiProperty({ description: 'Legacy product category (deprecated)' })
-  @Column({ type: 'varchar', length: 50, nullable: true })
-  category?: string;
-
-  @ApiProperty({ description: 'Base price of the product' })
+  @ApiProperty({ description: 'Regular price of the product' })
   @Column({ type: 'decimal', precision: 10, scale: 2 })
-  base_price: number;
+  price: number;
 
-  @ApiProperty({ description: 'Product tags' })
-  @Column({ type: 'varchar', array: true, nullable: true })
-  tags?: string[];
+  @ApiProperty({ description: 'Original/Compare-at price (for showing discounts)' })
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  compare_at_price?: number;
 
-  @ApiProperty({ description: 'SEO metadata in JSON format' })
+  @ApiProperty({ description: 'Cost price (for profit calculations)' })
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  cost_price?: number;
+
+  @ApiProperty({ description: 'Additional metadata in JSON format' })
   @Column({ type: 'jsonb', nullable: true })
-  seo_metadata?: Record<string, any>;
-
-  @ApiProperty({ description: 'Additional product attributes in JSON format' })
-  @Column({ type: 'jsonb', nullable: true })
-  attributes?: Record<string, any>;
+  metadata?: Record<string, any>;
 
   // Relationships
   @ManyToOne(() => Store, store => store.products)
@@ -74,7 +62,6 @@ export class Product extends BaseEntity {
   /**
    * Categories this product belongs to
    * Many-to-many relationship with Category entity
-   * This replaces the legacy 'category' string field
    */
   @ApiProperty({ description: 'Product categories', type: () => [Category] })
   @ManyToMany(() => Category, (category: Category) => category.products)

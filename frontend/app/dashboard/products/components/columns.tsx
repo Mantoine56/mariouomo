@@ -1,16 +1,36 @@
 'use client';
-import { Product } from '@/lib/mock-api';
 import { ColumnDef } from '@tanstack/react-table';
 import Image from 'next/image';
 import { CellAction } from './cell-action';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 
+// Define the FrontendProduct type to match what's used in the page component
+interface FrontendProduct {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  description?: string;
+  photo_url?: string;
+  created_at?: string;
+  updated_at?: string;
+  inventory: number;
+  status: 'Active' | 'Low Stock' | 'Out of Stock';
+  images?: Array<{
+    id: string;
+    url: string;
+    name: string;
+    size: number;
+  }>;
+  cost?: number;
+}
+
 /**
  * Column definitions for the product table
  * Defines how each column should be rendered
  */
-export const columns: ColumnDef<Product>[] = [
+export const columns: ColumnDef<FrontendProduct>[] = [
   {
     accessorKey: 'id',
     header: 'ID',

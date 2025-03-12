@@ -34,7 +34,7 @@ export class ProductRepository extends BaseRepository<Product> {
    * @returns Created product
    */
   async createProduct(createProductDto: CreateProductDto): Promise<Product> {
-    const { variants, ...productData } = createProductDto;
+    const { variants, category_ids, ...productData } = createProductDto;
     
     // Create product entity
     const product = this.create(productData);
@@ -42,16 +42,34 @@ export class ProductRepository extends BaseRepository<Product> {
     
     // Create variants if provided
     if (variants?.length) {
-      const createdVariants = variants.map(variantData => {
+      // Create individual variants to avoid array nesting issues
+      for (const variantData of variants) {
         const variant = this.variantRepository.create({
           ...variantData,
           product_id: product.id
         });
-        return variant;
-      });
+        await this.variantRepository.save(variant);
+      }
       
-      await this.variantRepository.save(createdVariants);
-      product.variants = createdVariants;
+      // Fetch the newly created variants
+      product.variants = await this.variantRepository.find({
+        where: { product_id: product.id }
+      });
+    }
+    
+    // Add categories if provided
+    if (category_ids?.length) {
+      // Use em method from BaseRepository
+      await this.getEntityManager().createQueryBuilder()
+        .insert()
+        .into('product_categories')
+        .values(
+          category_ids.map(category_id => ({
+            product_id: product.id,
+            category_id
+          }))
+        )
+        .execute();
     }
     
     return product;
@@ -64,7 +82,7 @@ export class ProductRepository extends BaseRepository<Product> {
    * @returns Updated product
    */
   async updateProduct(id: string, updateProductDto: UpdateProductDto): Promise<Product> {
-    const { variants, ...productData } = updateProductDto;
+    const { variants, category_ids, ...productData } = updateProductDto;
     
     // Update product
     await this.update(id, productData);
@@ -82,19 +100,42 @@ export class ProductRepository extends BaseRepository<Product> {
           await this.variantRepository.delete({ product_id: id });
         }
         
-        // Create new variants
-        const updatedVariants = variants.map(variantData => {
-          return this.variantRepository.create({
+        // Create individual variants to avoid array nesting issues
+        for (const variantData of variants) {
+          const variant = this.variantRepository.create({
             ...variantData,
             product_id: id
           });
+          await this.variantRepository.save(variant);
+        }
+        
+        // Fetch the newly created variants
+        product.variants = await this.variantRepository.find({
+          where: { product_id: id }
         });
         
-        // Save new variants
-        await this.variantRepository.save(updatedVariants);
+        // Update categories if provided
+        if (category_ids?.length) {
+          // First delete existing categories
+          await this.getEntityManager().createQueryBuilder()
+            .delete()
+            .from('product_categories')
+            .where('product_id = :id', { id })
+            .execute();
+            
+          // Then add new categories
+          await this.getEntityManager().createQueryBuilder()
+            .insert()
+            .into('product_categories')
+            .values(
+              category_ids.map(category_id => ({
+                product_id: id,
+                category_id
+              }))
+            )
+            .execute();
+        }
         
-        // Update product with new variants
-        product.variants = updatedVariants;
         return this.save(product);
       }
     }
@@ -109,10 +150,22 @@ export class ProductRepository extends BaseRepository<Product> {
    * @throws NotFoundException if product not found
    */
   async getProductById(id: string): Promise<Product> {
+    // Use same approach as other methods to avoid deleted_at issues
     const product = await this.createQueryBuilder('product')
-      .leftJoinAndSelect('product.variants', 'variants')
-      .leftJoinAndSelect('product.categories', 'categories')
-      .leftJoinAndSelect('product.images', 'images')
+      // Use explicit joins to avoid automatic soft delete conditions
+      .leftJoin('product.variants', 'variants')
+      .leftJoin('product.categories', 'categories')
+      .leftJoin('product.images', 'images')
+      // Only select needed columns to avoid issues with missing columns
+      .addSelect('variants.id')
+      .addSelect('variants.name')
+      .addSelect('variants.sku')
+      .addSelect('variants.price_adjustment')
+      .addSelect('categories.id')
+      .addSelect('categories.name')
+      .addSelect('images.id')
+      .addSelect('images.original_url')
+      .addSelect('images.thumbnail_url')
       .where('product.id = :id', { id })
       .andWhere('product.deleted_at IS NULL')
       .getOne();
@@ -130,75 +183,108 @@ export class ProductRepository extends BaseRepository<Product> {
    * @param paginationDto Pagination options
    * @returns Paginated products matching search criteria
    */
-  async searchProducts(searchDto: SearchProductsDto, paginationDto: PaginationQueryDto) {
+  public async searchProducts(searchDto: SearchProductsDto, paginationDto: PaginationQueryDto) {
     const { query, categories, minPrice, maxPrice, sortBy, sortOrder } = searchDto;
     const { page = 1, limit = 10 } = paginationDto;
 
     const skip = (page - 1) * limit;
     
-    // Create base query builder
-    const qb = this.createQueryBuilder('product')
-      .leftJoinAndSelect('product.variants', 'variants')
-      .leftJoinAndSelect('product.categories', 'categories')
-      .leftJoinAndSelect('product.images', 'images')
-      .where('product.deleted_at IS NULL');
-    
-    // Apply full-text search if query provided
-    if (query) {
-      qb.andWhere(
-        "to_tsvector('english', product.name || ' ' || product.description) @@ plainto_tsquery('english', :query)",
-        { query }
-      );
-    }
-
-    // Apply category filter
-    if (categories?.length) {
-      qb.andWhere('categories.id IN (:...categories)', { categories });
-    }
-
-    // Apply price range filter
-    if (typeof minPrice === 'number') {
-      qb.andWhere('product.price >= :minPrice', { minPrice });
-    }
-    if (typeof maxPrice === 'number') {
-      qb.andWhere('product.price <= :maxPrice', { maxPrice });
-    }
-
-    // Apply sorting
-    switch (sortBy) {
-      case ProductSortField.NAME:
-        qb.orderBy('product.name', sortOrder);
-        break;
-      case ProductSortField.PRICE:
-        qb.orderBy('product.price', sortOrder);
-        break;
-      case ProductSortField.CREATED_AT:
-        qb.orderBy('product.created_at', sortOrder);
-        break;
-      case ProductSortField.UPDATED_AT:
-        qb.orderBy('product.updated_at', sortOrder);
-        break;
-      default:
-        qb.orderBy('product.created_at', 'DESC');
-    }
-
-    // Apply pagination
-    qb.skip(skip).take(limit);
-
     try {
-      const [items, total] = await qb.getManyAndCount();
+      this.logger.log('Starting product search query construction');
+      
+      // Simplified approach without joins to avoid deleted_at column issues
+      const qb = this.createQueryBuilder('product')
+        .where('product.deleted_at IS NULL');
+      
+      this.logger.log('Base query builder created');
+      
+      // Apply full-text search if query provided
+      if (query) {
+        this.logger.log(`Applying text search for query: ${query}`);
+        qb.andWhere(
+          "to_tsvector('english', product.name || ' ' || product.description) @@ plainto_tsquery('english', :query)",
+          { query }
+        );
+      }
 
-      return {
-        items,
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-        hasNextPage: page * limit < total,
-        hasPreviousPage: page > 1,
-      };
+      // Apply category filter - need to use subquery for categories since we're avoiding joins
+      if (categories?.length) {
+        this.logger.log(`Filtering by categories: ${categories.join(', ')}`);
+        qb.andWhere(
+          'product.id IN (SELECT product_id FROM product_categories WHERE category_id IN (:...categories))',
+          { categories }
+        );
+      }
+
+      // Apply price range filter
+      if (typeof minPrice === 'number') {
+        this.logger.log(`Filtering by minimum price: ${minPrice}`);
+        qb.andWhere('product.price >= :minPrice', { minPrice });
+      }
+      if (typeof maxPrice === 'number') {
+        this.logger.log(`Filtering by maximum price: ${maxPrice}`);
+        qb.andWhere('product.price <= :maxPrice', { maxPrice });
+      }
+
+      // Apply sorting
+      switch (sortBy) {
+        case ProductSortField.NAME:
+          this.logger.log(`Sorting by name: ${sortOrder}`);
+          qb.orderBy('product.name', sortOrder);
+          break;
+        case ProductSortField.PRICE:
+          this.logger.log(`Sorting by price: ${sortOrder}`);
+          qb.orderBy('product.price', sortOrder);
+          break;
+        case ProductSortField.CREATED_AT:
+          this.logger.log(`Sorting by created_at: ${sortOrder}`);
+          qb.orderBy('product.created_at', sortOrder);
+          break;
+        case ProductSortField.UPDATED_AT:
+          this.logger.log(`Sorting by updated_at: ${sortOrder}`);
+          qb.orderBy('product.updated_at', sortOrder);
+          break;
+        default:
+          this.logger.log('Using default sort by created_at DESC');
+          qb.orderBy('product.created_at', 'DESC');
+      }
+
+      // Log the SQL query being executed
+      const rawQuery = qb.getSql();
+      this.logger.log(`Executing SQL query: ${rawQuery}`);
+
+      // Execute the query and count
+      try {
+        // Count total before pagination
+        const total = await qb.getCount();
+        
+        // Apply pagination
+        this.logger.log(`Applying pagination: skip=${skip}, limit=${limit}`);
+        qb.skip(skip).take(limit);
+        
+        // Get products
+        const items = await qb.getMany();
+        
+        this.logger.debug(`Found ${total} products matching search criteria`);
+
+        // Return paginated result
+        return {
+          items,
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+          hasNextPage: page * limit < total,
+          hasPreviousPage: page > 1,
+        };
+      } catch (queryError) {
+        this.logger.error(`Database query error: ${queryError.message}`);
+        this.logger.error(`SQL error details: ${JSON.stringify(queryError)}`);
+        throw queryError;
+      }
     } catch (error) {
       this.logger.error(`Error searching products: ${error.message}`, error.stack);
+      this.logger.error(`Complete error object: ${JSON.stringify(error)}`);
       throw error;
     }
   }
@@ -212,10 +298,22 @@ export class ProductRepository extends BaseRepository<Product> {
   async findByStoreId(storeId: string, query: PaginationQueryDto) {
     const { page = 1, limit = 10, search } = query;
     
+    // Use the same approach as searchProducts to avoid deleted_at issues
     const qb = this.createQueryBuilder('product')
-      .leftJoinAndSelect('product.variants', 'variants')
-      .leftJoinAndSelect('product.categories', 'categories')
-      .leftJoinAndSelect('product.images', 'images')
+      // Use explicit joins to avoid automatic soft delete conditions
+      .leftJoin('product.variants', 'variants')
+      .leftJoin('product.categories', 'categories')
+      .leftJoin('product.images', 'images')
+      // Only select needed columns to avoid issues with missing columns
+      .addSelect('variants.id')
+      .addSelect('variants.name')
+      .addSelect('variants.sku')
+      .addSelect('variants.price_adjustment')
+      .addSelect('categories.id')
+      .addSelect('categories.name')
+      .addSelect('images.id')
+      .addSelect('images.original_url')
+      .addSelect('images.thumbnail_url')
       .where('product.store_id = :storeId', { storeId })
       .andWhere('product.deleted_at IS NULL');
 
@@ -268,5 +366,14 @@ export class ProductRepository extends BaseRepository<Product> {
     });
     
     return this.variantRepository.save(variant);
+  }
+
+  /**
+   * Helper method to access entity manager from BaseRepository
+   * @returns EntityManager instance
+   */
+  private getEntityManager(): EntityManager {
+    // Access the entity manager provided in the constructor
+    return this.repository.manager;
   }
 }

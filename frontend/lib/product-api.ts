@@ -41,13 +41,26 @@ export interface Product {
   id: string;
   name: string;
   description?: string;
-  base_price: number;
-  status: ProductStatus;
-  type?: string;
+  price: number;
+  compare_at_price?: number;
+  cost_price?: number;
+  status: string;
   store_id: string;
   created_at: string;
   updated_at: string;
-  metadata?: Record<string, any>;
+  metadata?: {
+    type?: string;
+    category?: string;
+    tags?: string[];
+    weight?: number;
+    featured?: boolean;
+    dimensions?: {
+      unit: string;
+      width: number;
+      height: number;
+      length: number;
+    };
+  };
   variants?: ProductVariant[];
   images?: ProductImage[];
 }
@@ -115,7 +128,7 @@ export class ProductApi {
    * Constructor initializes the base URL
    */
   constructor() {
-    this.baseUrl = `/products`;
+    this.baseUrl = '/products';
   }
 
   /**
@@ -139,33 +152,100 @@ export class ProductApi {
    */
   public async searchProducts(params: ProductSearchParams = {}): Promise<PaginatedResponse<Product>> {
     try {
-      // Build query parameters
-      const queryParams: Record<string, string> = {};
+      console.log('Fetching products from database with admin role');
       
-      // Add pagination params
-      if (params.page) queryParams.page = params.page.toString();
-      if (params.limit) queryParams.limit = params.limit.toString();
+      // Build search query parameters
+      const searchParams: Record<string, string> = {};
       
-      // Add search params
-      if (params.query) queryParams.query = params.query;
-      if (params.storeId) queryParams.storeId = params.storeId;
-      if (params.minPrice !== undefined) queryParams.minPrice = params.minPrice.toString();
-      if (params.maxPrice !== undefined) queryParams.maxPrice = params.maxPrice.toString();
+      // Add search params - only include the ones that the backend expects
+      if (params.query) searchParams.query = params.query;
+      if (params.storeId) searchParams.storeId = params.storeId;
+      if (params.minPrice !== undefined) searchParams.minPrice = params.minPrice.toString();
+      if (params.maxPrice !== undefined) searchParams.maxPrice = params.maxPrice.toString();
       
       // Add sort params
-      if (params.sortBy) queryParams.sortBy = params.sortBy;
-      if (params.sortOrder) queryParams.sortDirection = params.sortOrder;
+      if (params.sortBy) searchParams.sortBy = params.sortBy;
+      if (params.sortOrder) searchParams.sortDirection = params.sortOrder;
       
-      // Add categories if present (as comma-separated string)
+      // Add categories if present
       if (params.categories && params.categories.length > 0) {
-        queryParams.categories = params.categories.join(',');
+        searchParams.categories = params.categories.join(',');
       }
       
-      const response = await ApiClient.get<PaginatedResponse<Product>>(this.baseUrl, queryParams);
-      return response;
+      // Add status filter if present
+      if (params.status) {
+        searchParams.status = params.status;
+      }
+      
+      console.log('Sending query params to backend:', searchParams);
+      
+      // Make the API request
+      try {
+        const response = await ApiClient.get<any>(this.baseUrl, searchParams);
+        
+        console.log('Response from backend:', response);
+        
+        // Map the response to the expected format
+        const paginatedResponse: PaginatedResponse<Product> = {
+          items: response.items || response,
+          total: response.total || (response.length || 0),
+          page: response.page || params.page || 1,
+          limit: response.limit || params.limit || 10,
+          totalPages: response.totalPages || Math.ceil((response.total || response.length || 0) / (params.limit || 10)),
+          hasNextPage: response.hasNextPage || false,
+          hasPreviousPage: response.hasPreviousPage || false,
+        };
+        
+        return paginatedResponse;
+      } catch (error: any) {
+        console.error('API request error:', error);
+        
+        // Extract detailed error info if available
+        let errorMessage = 'Failed to fetch products. Please try again.';
+        let errorDetails = '';
+        
+        if (error instanceof Error) {
+          errorMessage = error.message;
+          errorDetails = JSON.stringify(error);
+        }
+        
+        if (error.response) {
+          errorDetails += ` Status: ${error.response.status}`;
+          
+          if (error.response.data) {
+            errorDetails += ` Data: ${JSON.stringify(error.response.data)}`;
+          }
+        }
+        
+        console.error(`API Error Details: ${errorDetails}`);
+        
+        // Create ApiError with appropriate status code
+        const statusCode = error.statusCode || (error.response ? error.response.status : 500);
+        throw new ApiError(`${errorMessage} (${errorDetails})`, statusCode);
+      }
     } catch (error) {
-      throw this.handleError(error, 'Failed to search products');
+      console.error('Error fetching products from database:', error);
+      // Do not fall back to mock data, re-throw the error
+      throw this.handleError(error, 'Failed to fetch products. Please try again.');
     }
+  }
+  
+  /**
+   * Fetch products directly from the database
+   * This method is no longer used - all requests should go through the API
+   * @deprecated Use searchProducts instead
+   */
+  private async fetchProductsFromDatabase(params: ProductSearchParams = {}): Promise<PaginatedResponse<Product>> {
+    throw new Error('fetchProductsFromDatabase is deprecated. Use searchProducts instead.');
+  }
+  
+  /**
+   * Mock product response with hardcoded data
+   * This method is no longer used - all requests should go through the API
+   * @deprecated Never use mock data in production
+   */
+  private async mockProductsResponse(params: ProductSearchParams = {}): Promise<PaginatedResponse<Product>> {
+    throw new Error('mockProductsResponse is deprecated. Never use mock data in production.');
   }
 
   /**

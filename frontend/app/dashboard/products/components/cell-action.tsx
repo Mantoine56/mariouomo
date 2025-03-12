@@ -1,9 +1,30 @@
 'use client';
 import { Button } from '@/components/ui/button';
-import { fakeProducts, Product } from '@/lib/mock-api';
+import { productApi } from '@/lib/product-api';
 import { useState } from 'react';
 import { MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+
+// Define the FrontendProduct type to match what's used in the page component
+interface FrontendProduct {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  description?: string;
+  photo_url?: string;
+  created_at?: string;
+  updated_at?: string;
+  inventory: number;
+  status: 'Active' | 'Low Stock' | 'Out of Stock';
+  images?: Array<{
+    id: string;
+    url: string;
+    name: string;
+    size: number;
+  }>;
+  cost?: number;
+}
 
 // Import the necessary UI components
 // We'll recreate them in a simplified version as we don't have the full shadcn components
@@ -157,7 +178,7 @@ const useToast = () => {
  * CellAction component for product row actions (edit, delete)
  */
 interface CellActionProps {
-  product: Product;
+  product: FrontendProduct;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({
@@ -177,24 +198,16 @@ export const CellAction: React.FC<CellActionProps> = ({
       setIsLoading(true);
       
       // Call the API to delete the product
-      const result = await fakeProducts.deleteProduct(product.id);
+      await productApi.deleteProduct(product.id);
       
-      if (result.success) {
-        toast({
-          title: "Product deleted",
-          description: `${product.name} has been successfully removed.`,
-          variant: "default",
-        });
-        
-        // Refresh the page to update the product list
-        router.refresh();
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to delete the product. Please try again.",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Product deleted",
+        description: `${product.name} has been successfully removed.`,
+        variant: "default",
+      });
+      
+      // Refresh the page to update the product list
+      router.refresh();
     } catch (error) {
       console.error('Error deleting product:', error);
       toast({

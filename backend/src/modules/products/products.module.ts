@@ -33,7 +33,6 @@ import { RedisCacheModule } from '../../common/cache/cache.module';
       ProductVariant,
       ProductImage,
       Category,
-      ProductRepository,
       ProductImageRepository,
     ]),
     RedisCacheModule,

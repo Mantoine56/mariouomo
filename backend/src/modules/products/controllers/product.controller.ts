@@ -11,6 +11,8 @@ import {
   ParseUUIDPipe,
   HttpStatus,
   HttpCode,
+  Logger,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -33,6 +35,8 @@ import { Product } from '../entities/product.entity';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class ProductController {
+  private readonly logger = new Logger(ProductController.name);
+
   constructor(private readonly productService: ProductService) {}
 
   /**
@@ -89,7 +93,19 @@ export class ProductController {
     @Query() searchDto: SearchProductsDto,
     @Query() paginationDto: PaginationQueryDto,
   ) {
-    return this.productService.searchProducts(searchDto, paginationDto);
+    try {
+      this.logger.log(`Searching products with criteria: ${JSON.stringify(searchDto)}`);
+      this.logger.log(`Pagination: ${JSON.stringify(paginationDto)}`);
+      
+      const result = await this.productService.searchProducts(searchDto, paginationDto);
+      
+      this.logger.log(`Successfully found ${result.total} products`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Failed to search products: ${error.message}`, error.stack);
+      this.logger.error(`Error details: ${JSON.stringify(error)}`);
+      throw new InternalServerErrorException(`Failed to search products: ${error.message}`);
+    }
   }
 
   /**

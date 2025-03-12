@@ -80,7 +80,7 @@ export class OrderService {
           );
         }
 
-        // Get base price from product and add variant adjustment
+        // Get price from product and add variant adjustment
         const product = await manager.findOne(Product, {
           where: { id: variant.product_id }
         });
@@ -88,7 +88,7 @@ export class OrderService {
           throw new NotFoundException(`Product not found for variant: ${variant.id}`);
         }
 
-        const price = product.base_price + variant.price_adjustment;
+        const price = product.price + variant.price_adjustment;
         subtotal += price * item.quantity;
       }
 
@@ -145,7 +145,7 @@ export class OrderService {
             throw new NotFoundException(`Product not found for variant: ${variant.id}`);
           }
 
-          const price = product.base_price + variant.price_adjustment;
+          const price = product.price + variant.price_adjustment;
 
           // Create order item
           const orderItem = new OrderItem();
