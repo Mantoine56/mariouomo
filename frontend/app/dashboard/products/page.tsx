@@ -12,7 +12,15 @@ import { DashboardCard } from '@/components/ui/dashboard-card';
 import { Package, Plus, Search, Loader2, Trash2, Archive, CheckCircle } from 'lucide-react';
 import { DataTable } from '@/components/ui/table/data-table';
 import { columns } from './components/columns';
-import { Product, productApi, ProductSearchParams, PaginatedResponse, ProductStatus } from '@/lib/product-api';
+import { 
+  Product, 
+  productApi, 
+  ProductSearchParams, 
+  PaginatedResponse, 
+  ProductStatus,
+  ProductSortField,
+  SortDirection 
+} from '@/lib/product-api';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -49,6 +57,7 @@ export default function ProductsPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [availableCategories, setAvailableCategories] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   /**
@@ -57,7 +66,7 @@ export default function ProductsPage() {
   const adaptProductToFrontend = (product: Product): FrontendProduct => {
     // Calculate inventory - in real data this might come from variants
     // For now, we'll use a default value or extract from metadata
-    const inventory = 10; // Default value
+    const inventory = product.variants?.reduce((total, variant) => total + (variant.current_stock || 0), 0) || 10;
     
     // Determine status based on inventory or backend status
     let status: 'Active' | 'Low Stock' | 'Out of Stock';
@@ -98,33 +107,61 @@ export default function ProductsPage() {
       const searchParams: ProductSearchParams = {
         page: currentPage,
         limit: itemsPerPage,
+        sortBy: ProductSortField.CREATED_AT,
+        // Don't include sortOrder as it's causing validation errors
       };
 
-      // Add search query if present
+      // Store search query for client-side filtering
       if (searchQuery) {
         searchParams.query = searchQuery;
       }
 
-      // Add category filter if selected
-      if (selectedCategory) {
-        searchParams.categories = [selectedCategory];
+      // For category filtering, we'll use client-side filtering
+      // We're no longer sending category info in the query parameter
+      if (selectedCategory && selectedCategory !== '') {
+        // Keep track of the selected category for client-side filtering
+        // The actual filtering will happen in the ProductApi class
       }
 
       // Add status filter if selected
       if (selectedStatus) {
         // Map frontend status to backend status
         if (selectedStatus === 'Active') {
-          searchParams.status = 'active';
+          searchParams.status = ProductStatus.ACTIVE;
         } else if (selectedStatus === 'Out of Stock') {
-          searchParams.status = 'inactive';
+          searchParams.status = ProductStatus.INACTIVE;
+        } else if (selectedStatus === 'Low Stock') {
+          // This status doesn't map directly to backend status
+          // We'd need a custom API endpoint to handle this
+          // For now, we'll use active but could add additional filters
+          searchParams.status = ProductStatus.ACTIVE;
         }
       }
+
+      console.log('Fetching products with params:', searchParams);
 
       // Call the API
       const response = await productApi.searchProducts(searchParams);
       
+      // Apply additional client-side filtering for category if needed
+      let filteredProducts = response.items;
+      if (selectedCategory && selectedCategory !== '') {
+        filteredProducts = filteredProducts.filter(product => 
+          product.metadata?.category === selectedCategory
+        );
+      }
+      
       // Convert backend products to frontend format
-      const frontendProducts = response.items.map(adaptProductToFrontend);
+      const frontendProducts = filteredProducts.map(adaptProductToFrontend);
+      
+      // Extract unique categories for the filter dropdown
+      const newCategories = new Set(availableCategories);
+      response.items.forEach(product => {  // Use all products for categories, not just filtered ones
+        if (product.metadata?.category) {
+          newCategories.add(product.metadata.category);
+        }
+      });
+      setAvailableCategories(newCategories);
       
       // Update state with the response data
       setProducts(frontendProducts);
@@ -315,10 +352,11 @@ export default function ProductsPage() {
           onChange={handleCategoryChange}
         >
           <option value="">All Categories</option>
-          <option value="Apparel">Apparel</option>
-          <option value="Accessories">Accessories</option>
-          <option value="Footwear">Footwear</option>
-          <option value="Outerwear">Outerwear</option>
+          {Array.from(availableCategories).map(category => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
         </select>
         <select 
           className="block w-full p-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500"

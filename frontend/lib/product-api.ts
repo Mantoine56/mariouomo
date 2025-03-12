@@ -157,15 +157,15 @@ export class ProductApi {
       // Build search query parameters
       const searchParams: Record<string, string> = {};
       
-      // Add search params - only include the ones that the backend expects
-      if (params.query) searchParams.query = params.query;
+      // Only add parameters that backend accepts
+      // Note: Even though 'query' is in the DTO, it's getting rejected with "property query should not exist"
+      // Therefore we'll avoid sending it
       if (params.storeId) searchParams.storeId = params.storeId;
       if (params.minPrice !== undefined) searchParams.minPrice = params.minPrice.toString();
       if (params.maxPrice !== undefined) searchParams.maxPrice = params.maxPrice.toString();
       
       // Add sort params
       if (params.sortBy) searchParams.sortBy = params.sortBy;
-      if (params.sortOrder) searchParams.sortDirection = params.sortOrder;
       
       // Add categories if present
       if (params.categories && params.categories.length > 0) {
@@ -185,9 +185,25 @@ export class ProductApi {
         
         console.log('Response from backend:', response);
         
+        // If query parameter was provided, filter results on client side
+        // This is a workaround since the server isn't accepting the query parameter
+        let filteredItems = response.items || response;
+        
+        if (params.query && params.query.trim() !== '') {
+          const searchTerm = params.query.toLowerCase();
+          filteredItems = filteredItems.filter((product: Product) => {
+            return (
+              (product.name && product.name.toLowerCase().includes(searchTerm)) || 
+              (product.description && product.description.toLowerCase().includes(searchTerm)) ||
+              (product.metadata?.category && product.metadata.category.toLowerCase().includes(searchTerm)) ||
+              (product.metadata?.tags && product.metadata.tags.some(tag => tag.toLowerCase().includes(searchTerm)))
+            );
+          });
+        }
+        
         // Map the response to the expected format
         const paginatedResponse: PaginatedResponse<Product> = {
-          items: response.items || response,
+          items: filteredItems,
           total: response.total || (response.length || 0),
           page: response.page || params.page || 1,
           limit: response.limit || params.limit || 10,
