@@ -24,6 +24,7 @@ import {
 import { ApiError } from '@/lib/api-client';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/use-toast';
+import { SortingState, ColumnFiltersState } from '@tanstack/react-table';
 
 // Define a frontend product type that matches what the UI expects
 // This helps us adapt between the backend and frontend data structures
@@ -60,6 +61,8 @@ export default function ProductsPage() {
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [availableCategories, setAvailableCategories] = useState<Set<string>>(new Set());
   const [isCategoriesLoading, setIsCategoriesLoading] = useState(true);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const { toast } = useToast();
   
   /**
@@ -100,7 +103,7 @@ export default function ProductsPage() {
   };
 
   /**
-   * Fetch products based on filters
+   * Fetch products based on filters, sorting and pagination
    */
   const fetchProducts = async () => {
     setLoading(true);
@@ -132,6 +135,32 @@ export default function ProductsPage() {
           searchParams.status = ProductStatus.INACTIVE;
         }
         // 'Low Stock' would require inventory filtering which might not be available in the API
+      }
+
+      // Add sorting from the table if available
+      if (sorting.length > 0) {
+        const sortColumn = sorting[0].id;
+        const sortDirection = sorting[0].desc ? SortDirection.DESC : SortDirection.ASC;
+        
+        // Map column IDs to backend sort fields
+        switch (sortColumn) {
+          case 'name':
+            searchParams.sortBy = ProductSortField.NAME;
+            break;
+          case 'price':
+            searchParams.sortBy = ProductSortField.PRICE;
+            break;
+          case 'created_at':
+            searchParams.sortBy = ProductSortField.CREATED_AT;
+            break;
+          case 'updated_at':
+            searchParams.sortBy = ProductSortField.UPDATED_AT;
+            break;
+        }
+        
+        if (searchParams.sortBy) {
+          searchParams.sortOrder = sortDirection;
+        }
       }
 
       console.log('Fetching products with params:', searchParams);
@@ -236,10 +265,40 @@ export default function ProductsPage() {
     }
   };
 
-  // Fetch products when filters change
+  // Handle sorting changes
+  const handleSortingChange = (newSorting: SortingState) => {
+    console.log('Sorting changed:', newSorting);
+    setSorting(newSorting);
+    setCurrentPage(1); // Reset to first page when sorting changes
+  };
+
+  // Handle column filter changes
+  const handleFiltersChange = (newFilters: ColumnFiltersState) => {
+    console.log('Filters changed:', newFilters);
+    setColumnFilters(newFilters);
+    
+    // Extract filters that can be applied to the backend API
+    // We can map certain column filters to corresponding backend filters
+    newFilters.forEach(filter => {
+      if (filter.id === 'category' && filter.value) {
+        setSelectedCategory(filter.value as string);
+      }
+      if (filter.id === 'status' && filter.value) {
+        setSelectedStatus(filter.value as string);
+      }
+      if (filter.id === 'name' && filter.value) {
+        // Use name filter as search query
+        setSearchQuery(filter.value as string);
+      }
+    });
+    
+    setCurrentPage(1); // Reset to first page when filters change
+  };
+
+  // Fetch products when filters, sorting, or pagination change
   useEffect(() => {
     fetchProducts();
-  }, [searchQuery, selectedCategory, selectedStatus, currentPage, itemsPerPage]);
+  }, [searchQuery, selectedCategory, selectedStatus, currentPage, itemsPerPage, sorting]);
 
   // Fetch all categories when component mounts
   useEffect(() => {
@@ -488,6 +547,8 @@ export default function ProductsPage() {
             onPageSizeChange={handlePageSizeChange}
             currentPage={currentPage - 1} // Convert 1-based to 0-based for DataTable
             pageSize={itemsPerPage}
+            onSortingChange={handleSortingChange}
+            onFiltersChange={handleFiltersChange}
             enableRowSelection={true}
             selectedRows={selectedRows}
             onSelectedRowsChange={setSelectedRows}

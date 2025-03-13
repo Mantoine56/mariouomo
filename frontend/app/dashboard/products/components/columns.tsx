@@ -56,7 +56,8 @@ export const columns: ColumnDef<FrontendProduct>[] = [
           />
         </div>
       );
-    }
+    },
+    enableSorting: false,
   },
   {
     accessorKey: 'name',
@@ -70,15 +71,16 @@ export const columns: ColumnDef<FrontendProduct>[] = [
           {row.getValue('name')}
         </Link>
       );
-    }
+    },
+    enableSorting: true,
+    filterFn: 'includesString',
   },
   {
     accessorKey: 'category',
     header: 'Category',
     cell: ({ row }) => <div>{row.getValue('category')}</div>,
-    filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id));
-    }
+    enableSorting: true,
+    filterFn: 'includesString',
   },
   {
     accessorKey: 'price',
@@ -90,7 +92,8 @@ export const columns: ColumnDef<FrontendProduct>[] = [
         currency: 'USD',
       }).format(amount);
       return <div className="text-right font-medium">{formatted}</div>;
-    }
+    },
+    enableSorting: true,
   },
   {
     accessorKey: 'inventory',
@@ -98,7 +101,8 @@ export const columns: ColumnDef<FrontendProduct>[] = [
     cell: ({ row }) => {
       const inventory = row.getValue('inventory') as number;
       return <div className="text-center">{inventory}</div>;
-    }
+    },
+    enableSorting: true,
   },
   {
     accessorKey: 'status',
@@ -114,10 +118,13 @@ export const columns: ColumnDef<FrontendProduct>[] = [
       return (
         <Badge variant={variant as any}>{status}</Badge>
       );
-    }
+    },
+    enableSorting: true,
+    filterFn: 'includesString',
   },
   {
     id: 'actions',
-    cell: ({ row }) => <CellAction product={row.original} />
+    cell: ({ row }) => <CellAction product={row.original} />,
+    enableSorting: false,
   }
 ]; 

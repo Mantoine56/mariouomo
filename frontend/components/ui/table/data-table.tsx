@@ -12,14 +12,27 @@ import {
   ColumnDef,
   flexRender,
   getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  SortingState,
+  ColumnFiltersState,
   useReactTable,
-  Row
+  Row,
+  OnChangeFn,
+  Column
 } from '@tanstack/react-table';
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon, ArrowUpDown, ChevronDown, ChevronUp, Filter } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 /**
- * DataTable component for displaying data in a table format with pagination
+ * DataTable component for displaying data in a table format with pagination, sorting, and filtering
  * 
  * @param columns - Column definitions for the table
  * @param data - Data to display in the table
@@ -29,6 +42,7 @@ import { useEffect, useState } from 'react';
  * @param pageSize - Number of items per page
  * @param onPageChange - Callback for page changes
  * @param onPageSizeChange - Callback for page size changes
+ * @param onSortingChange - Callback for sorting changes
  * @param enableRowSelection - Enable row selection functionality
  * @param selectedRows - Currently selected rows (controlled mode)
  * @param onSelectedRowsChange - Callback when selected rows change
@@ -43,11 +57,157 @@ interface DataTableProps<TData, TValue> {
   pageSize?: number;
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (size: number) => void;
+  onSortingChange?: (sorting: SortingState) => void;
+  onFiltersChange?: (filters: ColumnFiltersState) => void;
   // Selection props
   enableRowSelection?: boolean;
   selectedRows?: Record<string, boolean>;
   onSelectedRowsChange?: (selectedRows: Record<string, boolean>) => void;
   renderBulkActions?: (selectedRows: Record<string, boolean>) => React.ReactNode;
+}
+
+/**
+ * Filter component for columns
+ */
+function ColumnFilterPopover<TData, TValue>({
+  column,
+  data,
+}: {
+  column: Column<TData, TValue>;
+  data: TData[];
+}) {
+  const [value, setValue] = useState<string>(
+    (column.getFilterValue() as string) ?? ''
+  );
+  // Add state to control the popover
+  const [open, setOpen] = useState(false);
+
+  const handleFilterChange = (newValue: string) => {
+    setValue(newValue);
+    column.setFilterValue(newValue);
+  };
+
+  // Function to apply filter and close popover
+  const applyFilter = () => {
+    column.setFilterValue(value);
+    setOpen(false); // Close the popover
+  };
+
+  // Function to reset filter and close popover
+  const resetFilter = () => {
+    setValue('');
+    column.setFilterValue('');
+    setOpen(false); // Close the popover
+  };
+
+  // Get unique values for this column for checkbox filters
+  const uniqueValues = new Set<string>();
+  
+  // Extract unique values directly from data
+  data.forEach((row: any) => {
+    const cellValue = row[column.id];
+    if (cellValue !== null && cellValue !== undefined && typeof cellValue === 'string') {
+      uniqueValues.add(cellValue);
+    }
+  });
+  
+  // Sort values alphabetically
+  const sortedValues = Array.from(uniqueValues).sort();
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className={cn(
+            "h-8 w-8 p-0 hover:bg-muted",
+            column.getIsFiltered() && "bg-muted text-primary"
+          )}
+          aria-label="Filter"
+        >
+          <Filter className="h-4 w-4" />
+          {column.getIsFiltered() && (
+            <span className="sr-only">Filtered</span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-60 p-3" align="start">
+        <div className="space-y-2">
+          <h4 className="font-medium">Filter by {column.id}</h4>
+          <div className="pt-2">
+            {sortedValues.length > 0 ? (
+              // Checkbox list for columns with enumerable values
+              <div className="space-y-2 max-h-48 overflow-auto pr-1">
+                <div className="flex items-center mb-2">
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    className="flex w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                    value={value}
+                    onChange={(e) => handleFilterChange(e.target.value)}
+                  />
+                </div>
+                {sortedValues.length <= 10 && sortedValues.map((val) => (
+                  <div key={val} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id={`${column.id}-${val}`}
+                      checked={value?.includes(val) || false}
+                      onChange={(e) => {
+                        // Toggle filter value
+                        if (e.target.checked) {
+                          handleFilterChange(val);
+                        } else {
+                          handleFilterChange('');
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <label
+                      htmlFor={`${column.id}-${val}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      {val}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              // Text input for columns without enumerable values or with many values
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  placeholder="Filter..."
+                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={value}
+                  onChange={(e) => handleFilterChange(e.target.value)}
+                />
+              </div>
+            )}
+            <div className="flex items-center justify-between pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="px-3 py-1 h-7"
+                onClick={resetFilter}
+              >
+                Reset
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                className="px-3 py-1 h-7"
+                onClick={applyFilter}
+              >
+                Apply
+              </Button>
+            </div>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export function DataTable<TData, TValue>({
@@ -59,6 +219,8 @@ export function DataTable<TData, TValue>({
   pageSize: externalPageSize,
   onPageChange,
   onPageSizeChange,
+  onSortingChange,
+  onFiltersChange,
   // Selection props
   enableRowSelection = false,
   selectedRows: externalSelectedRows,
@@ -68,6 +230,10 @@ export function DataTable<TData, TValue>({
   // Pagination state using React useState
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(10);
+  // Sorting state
+  const [sorting, setSorting] = useState<SortingState>([]);
+  // Filtering state
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   // Internal selection state (if not controlled)
   const [internalSelectedRows, setInternalSelectedRows] = useState<Record<string, boolean>>({});
 
@@ -78,6 +244,34 @@ export function DataTable<TData, TValue>({
   const currentSelectedRows = externalSelectedRows !== undefined ? externalSelectedRows : internalSelectedRows;
 
   const pageCount = Math.ceil(totalItems / currentPageSize);
+  
+  // Handle sorting changes
+  const handleSortingChange = (updatedSorting: SortingState) => {
+    setSorting(updatedSorting);
+    if (onSortingChange) {
+      onSortingChange(updatedSorting);
+    }
+    // Reset to first page when sorting changes
+    if (onPageChange) {
+      onPageChange(0);
+    } else {
+      setPageIndex(0);
+    }
+  };
+
+  // Handle filter changes
+  const handleFiltersChange = (updatedFilters: ColumnFiltersState) => {
+    setColumnFilters(updatedFilters);
+    if (onFiltersChange) {
+      onFiltersChange(updatedFilters);
+    }
+    // Reset to first page when filters change
+    if (onPageChange) {
+      onPageChange(0);
+    } else {
+      setPageIndex(0);
+    }
+  };
   
   // Row selection handlers
   const handleRowSelectionChange = (rowId: string, isSelected: boolean) => {
@@ -128,7 +322,29 @@ export function DataTable<TData, TValue>({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
     manualPagination: true,
+    state: {
+      sorting,
+      columnFilters,
+    },
+    onSortingChange: onSortingChange 
+      ? ((updater) => {
+          const newValue = typeof updater === 'function'
+            ? updater(sorting)
+            : updater;
+          handleSortingChange(newValue);
+        }) as OnChangeFn<SortingState>
+      : setSorting,
+    onColumnFiltersChange: onFiltersChange 
+      ? ((updater) => {
+          const newValue = typeof updater === 'function'
+            ? updater(columnFilters)
+            : updater;
+          handleFiltersChange(newValue);
+        }) as OnChangeFn<ColumnFiltersState>
+      : setColumnFilters,
     pageCount,
   });
 
@@ -162,8 +378,62 @@ export function DataTable<TData, TValue>({
     }
   };
 
+  // Function to display active filters
+  const getActiveFilters = () => {
+    return table.getState().columnFilters
+      .filter(filter => 
+        filter.value !== undefined && 
+        filter.value !== '' && 
+        filter.value !== null
+      )
+      .map(filter => {
+        const column = table.getColumn(filter.id);
+        return {
+          id: filter.id,
+          value: filter.value,
+          label: column?.columnDef?.header as string || filter.id
+        };
+      });
+  };
+
   return (
     <div className='flex flex-1 flex-col space-y-4'>
+      {/* Active Filters Bar */}
+      {getActiveFilters().length > 0 && (
+        <div className="flex flex-wrap gap-2 pb-2">
+          <div className="text-sm text-muted-foreground mr-2 py-1">Filters:</div>
+          {getActiveFilters().map(filter => (
+            <Badge 
+              key={filter.id} 
+              variant="outline"
+              className="flex items-center gap-1 px-2 py-1"
+            >
+              <span>{filter.label}: {typeof filter.value === 'string' ? filter.value : 'Active'}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-4 w-4 p-0 ml-1 hover:bg-transparent"
+                onClick={() => table.getColumn(filter.id)?.setFilterValue('')}
+              >
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </Badge>
+          ))}
+          {getActiveFilters().length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-sm"
+              onClick={() => {
+                table.resetColumnFilters();
+              }}
+            >
+              Reset all
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Bulk Actions Bar */}
       {enableRowSelection && selectedRowsCount > 0 && renderBulkActions && (
         <div className="bg-muted/80 py-2 px-4 rounded-md flex items-center justify-between">
@@ -197,12 +467,42 @@ export function DataTable<TData, TValue>({
                   {/* Regular Columns */}
                   {headerGroup.headers.map((header) => (
                     <TableHead key={header.id} className="bg-gray-50 p-4">
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
+                      {header.isPlaceholder ? null : (
+                        <div className="flex items-center justify-between gap-1">
+                          <div 
+                            className={
+                              header.column.getCanSort() 
+                                ? "flex items-center gap-1 cursor-pointer select-none"
+                                : ""
+                            }
+                            onClick={header.column.getCanSort() 
+                              ? header.column.getToggleSortingHandler() 
+                              : undefined}
+                          >
+                            {flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                            {header.column.getCanSort() && (
+                              <div className="ml-1">
+                                {header.column.getIsSorted() === "asc" ? (
+                                  <ChevronUp className="h-4 w-4" />
+                                ) : header.column.getIsSorted() === "desc" ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ArrowUpDown className="h-4 w-4 opacity-50" />
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          {/* Filter button for columns that can be filtered */}
+                          {header.column.getCanFilter() && (
+                            <div className="flex items-center ml-2">
+                              <ColumnFilterPopover column={header.column} data={data} />
+                            </div>
                           )}
+                        </div>
+                      )}
                     </TableHead>
                   ))}
                 </TableRow>
