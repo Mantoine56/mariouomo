@@ -167,9 +167,18 @@ export class ProductService {
 
     // Create new image entity
     const image = new ProductImage();
+    
+    // Set the primary URL field (the actual database column)
+    image.url = imageData.originalUrl;
+    
+    // These setter methods will map to the url field
     image.originalUrl = imageData.originalUrl;
     image.thumbnailUrl = imageData.thumbnailUrl;
+    
     image.product_id = productId;
+    
+    // Log the mapping for debugging
+    this.logger.debug(`Creating product image with url: ${image.url}, product_id: ${productId}`);
     
     // Save image
     await this.productImageRepository.save(image);
@@ -196,8 +205,8 @@ export class ProductService {
     // Remove image (using soft delete)
     await this.productImageRepository.softDelete(imageId);
 
-    // Clear cache
-    await this.cacheService.del(`product:${productId}`);
+    // Clear cache using the common invalidation method
+    await this.invalidateCache(productId);
   }
 
   /**
@@ -228,14 +237,17 @@ export class ProductService {
     }
     
     this.logger.debug(`Loading relations for product ${product.id}`);
+    const startTime = Date.now();
     
     try {
       // Load variants with safe handling
+      const variantStartTime = Date.now();
       try {
         product.variants = await this.variantRepository.find({
           where: { product_id: product.id }
         });
-        this.logger.debug(`Loaded ${product.variants.length} variants for product ${product.id}`);
+        const variantTime = Date.now() - variantStartTime;
+        this.logger.debug(`Loaded ${product.variants.length} variants for product ${product.id} in ${variantTime}ms`);
       } catch (variantError) {
         this.logger.error(`Failed to load variants for product ${product.id}: ${variantError.message}`);
         // Graceful degradation - set empty array instead of failing
@@ -243,11 +255,13 @@ export class ProductService {
       }
       
       // Load images with safe handling
+      const imageStartTime = Date.now();
       try {
         product.images = await this.productImageRepository.find({
           where: { product_id: product.id }
         });
-        this.logger.debug(`Loaded ${product.images.length} images for product ${product.id}`);
+        const imageTime = Date.now() - imageStartTime;
+        this.logger.debug(`Loaded ${product.images.length} images for product ${product.id} in ${imageTime}ms`);
       } catch (imageError) {
         this.logger.error(`Failed to load images for product ${product.id}: ${imageError.message}`);
         // Graceful degradation - set empty array instead of failing
@@ -255,6 +269,7 @@ export class ProductService {
       }
       
       // Load categories with safe handling
+      const categoryStartTime = Date.now();
       try {
         if (!product.categories || product.categories.length === 0) {
           // Simpler query to reduce complexity and avoid RLS issues
@@ -266,7 +281,8 @@ export class ProductService {
             .where('pc.product_id = :productId', { productId: product.id });
             
           product.categories = await categoriesQuery.getRawMany();
-          this.logger.debug(`Loaded ${product.categories.length} categories for product ${product.id}`);
+          const categoryTime = Date.now() - categoryStartTime;
+          this.logger.debug(`Loaded ${product.categories.length} categories for product ${product.id} in ${categoryTime}ms`);
         }
       } catch (categoryError) {
         this.logger.error(`Failed to load categories for product ${product.id}: ${categoryError.message}`);
@@ -274,7 +290,8 @@ export class ProductService {
         product.categories = [];
       }
       
-      this.logger.debug(`Successfully loaded all relations for product ${product.id}`);
+      const totalTime = Date.now() - startTime;
+      this.logger.debug(`Successfully loaded all relations for product ${product.id} in ${totalTime}ms`);
     } catch (error) {
       // Log but don't throw - this allows the product to be returned even with incomplete relations
       this.logger.error(`Error in loadProductRelations for ${product.id}: ${error.message}`);

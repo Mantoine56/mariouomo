@@ -183,15 +183,17 @@ export default function ProductDetailPage() {
     );
   }
 
-  // Get product image URL
-  const primaryImage = product.images && product.images.length > 0 
-    ? (product.images[0].original_url || product.images[0].thumbnail_url) 
-    : '/placeholder-product.png';
+  // Get the primary image or use a placeholder
+  const mainImage = product.images && product.images.length > 0 
+    ? (product.images[0].original_url || product.images[0].thumbnail_url || '/images/placeholder-product.png')
+    : '/images/placeholder-product.png';
   
-  // Format product status
-  const statusDisplay = product.status.charAt(0).toUpperCase() + product.status.slice(1);
+  // Format product status with graceful fallback
+  const statusDisplay = product.status 
+    ? product.status.charAt(0).toUpperCase() + product.status.slice(1) 
+    : 'Unknown';
   
-  // Get product category
+  // Get product category with fallback
   const category = product.metadata?.category || 'Uncategorized';
   
   // Calculate profit margin if cost price is available
@@ -261,7 +263,7 @@ export default function ProductDetailPage() {
               <div className="flex flex-col items-center justify-center p-4">
                 <div className="relative h-48 w-48 overflow-hidden rounded-md">
                   <Image 
-                    src={primaryImage} 
+                    src={mainImage} 
                     alt={product.name}
                     fill
                     style={{ objectFit: 'contain' }}

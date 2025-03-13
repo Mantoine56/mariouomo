@@ -164,25 +164,29 @@ export class ProductApi {
    */
   public async getProduct(id: string): Promise<Product> {
     try {
-      // Check for cached product first
+      console.log(`[FETCH STRATEGY] Starting fetch for product ${id}`);
+      
+      // Check for cached product first - increase performance by using cache more aggressively
       const cacheKey = `product_${id}`;
       const cachedData = ProductApi.productCache.get(cacheKey);
       
+      // Use cached data if available and not too old
       if (cachedData && Date.now() - cachedData.timestamp < ProductApi.CACHE_TTL) {
-        console.log(`Using cached data for product ${id}`);
+        console.log(`[FETCH STRATEGY] Using cached data for product ${id}`);
         return cachedData.data;
       }
       
-      console.log(`Fetching product with ID: ${id}`);
-      let response: Product;
+      console.log(`[FETCH STRATEGY] Cache miss - attempting API fetch for product ${id}`);
       let retryCount = 0;
-      const maxRetries = 2;
+      const maxRetries = 1; // Reduce retries for faster fallback
       
       while (retryCount <= maxRetries) {
         try {
           // Attempt to get product from API
-          response = await ApiClient.get<Product>(`${this.baseUrl}/${id}`);
+          console.log(`[FETCH STRATEGY] API attempt ${retryCount + 1}/${maxRetries + 1} for product ${id}`);
+          const response = await ApiClient.get<Product>(`${this.baseUrl}/${id}`);
           
+          console.log(`[FETCH STRATEGY] API fetch succeeded for product ${id}`);
           // Cache successful response
           ProductApi.productCache.set(cacheKey, {
             data: response,
@@ -191,15 +195,15 @@ export class ProductApi {
           
           return response;
         } catch (error) {
-          console.error(`Error fetching product (attempt ${retryCount + 1}/${maxRetries + 1}):`, error);
+          console.error(`[FETCH STRATEGY] API fetch failed (attempt ${retryCount + 1}/${maxRetries + 1}):`, error);
           
           if (retryCount === maxRetries) {
-            // Try fallback to direct database query on last attempt
-            console.log(`Attempting direct database fallback for product ${id}`);
+            // Try fallback to direct database query on last attempt - fail fast
+            console.log(`[FETCH STRATEGY] All API attempts failed, attempting direct database fallback for product ${id}`);
             try {
               const fallbackProduct = await this.fetchProductDirectlyById(id);
               if (fallbackProduct) {
-                console.log(`Successfully retrieved product ${id} via fallback`);
+                console.log(`[FETCH STRATEGY] Successfully retrieved product ${id} via database fallback`);
                 ProductApi.productCache.set(cacheKey, {
                   data: fallbackProduct,
                   timestamp: Date.now()
@@ -207,21 +211,22 @@ export class ProductApi {
                 return fallbackProduct;
               }
             } catch (fallbackError) {
-              console.error(`Fallback retrieval failed for product ${id}:`, fallbackError);
+              console.error(`[FETCH STRATEGY] Database fallback failed for product ${id}:`, fallbackError);
             }
             throw error;
           }
           
-          // Wait before retrying (exponential backoff)
-          const delay = Math.pow(2, retryCount) * 500;
+          // Wait before retrying (shorter delay for faster response)
+          const delay = 500;
+          console.log(`[FETCH STRATEGY] Waiting ${delay}ms before retry`);
           await new Promise(resolve => setTimeout(resolve, delay));
           retryCount++;
         }
       }
       
-      throw new Error(`Failed to fetch product after ${maxRetries} retries`);
+      throw new Error(`[FETCH STRATEGY] Failed to fetch product after ${maxRetries} retries`);
     } catch (error) {
-      console.error(`Error in getProduct for ID ${id}:`, error);
+      console.error(`[FETCH STRATEGY] All fetch strategies failed for product ${id}:`, error);
       throw new ApiError(`Product with ID ${id} not found`, 404);
     }
   }
@@ -233,7 +238,7 @@ export class ProductApi {
    */
   private async fetchProductDirectlyById(id: string): Promise<Product | null> {
     try {
-      console.log(`Fetching product ${id} directly from Supabase database using simpler approach`);
+      console.log(`[DB FALLBACK] Fetching product ${id} directly from Supabase database`);
       
       // Create a simplified version of the product with mock data in case all else fails
       // This ensures we can at least show something to the user
@@ -255,7 +260,7 @@ export class ProductApi {
         // This avoids the RLS policies entirely
         const apiUrl = `${config.supabase.url}/rest/v1/products?id=eq.${id}&select=id,name,description,price,compare_at_price,cost_price,status,store_id,created_at,updated_at,metadata`;
         
-        console.log(`Attempting direct REST API call to ${apiUrl}`);
+        console.log(`[DB FALLBACK] Attempting direct REST API call to ${apiUrl}`);
         
         const response = await fetch(apiUrl, {
           method: 'GET',
@@ -266,13 +271,13 @@ export class ProductApi {
         });
         
         if (!response.ok) {
-          throw new Error(`Direct REST API call failed with status ${response.status}`);
+          throw new Error(`[DB FALLBACK] Direct REST API call failed with status ${response.status}`);
         }
         
         const productData = await response.json();
         
         if (Array.isArray(productData) && productData.length > 0) {
-          console.log(`Successfully retrieved basic product data for ${id}`);
+          console.log(`[DB FALLBACK] Successfully retrieved basic product data for ${id}`);
           
           // Update our fallback with the real basic data
           fallbackProduct = {
@@ -282,8 +287,10 @@ export class ProductApi {
           
           // Now try to get variants and images separately
           try {
-            const variantsUrl = `${config.supabase.url}/rest/v1/product_variants?product_id=eq.${id}&select=id,name,sku,price_adjustment,current_stock,product_id`;
+            // Based on database schema, product_variants doesn't have name or current_stock
+            const variantsUrl = `${config.supabase.url}/rest/v1/product_variants?product_id=eq.${id}&select=id,sku,barcode,price_adjustment,position,product_id,option_values`;
             
+            console.log(`[DB FALLBACK] Fetching variants from ${variantsUrl}`);
             const variantsResponse = await fetch(variantsUrl, {
               method: 'GET',
               headers: {
@@ -294,16 +301,31 @@ export class ProductApi {
             
             if (variantsResponse.ok) {
               const variantsData = await variantsResponse.json();
-              fallbackProduct.variants = variantsData;
-              console.log(`Successfully retrieved ${variantsData.length} variants for product ${id}`);
+              // Map variant data to match our expected format, providing a default name
+              // and setting current_stock based on option_values if possible
+              fallbackProduct.variants = variantsData.map((variant: any) => ({
+                id: variant.id,
+                sku: variant.sku || '',
+                barcode: variant.barcode,
+                price_adjustment: parseFloat(variant.price_adjustment) || 0,
+                position: variant.position,
+                product_id: variant.product_id,
+                option_values: variant.option_values,
+                // Add derived fields our app expects but aren't in the database
+                name: variant.option_values?.name || `Variant ${variant.sku || 'Unknown'}`,
+                current_stock: variant.option_values?.stock || 0
+              }));
+              console.log(`[DB FALLBACK] Successfully retrieved and mapped ${variantsData.length} variants for product ${id}`);
             }
           } catch (variantError) {
-            console.warn(`Could not fetch variants for product ${id}:`, variantError);
+            console.warn(`[DB FALLBACK] Could not fetch variants for product ${id}:`, variantError);
           }
           
           try {
-            const imagesUrl = `${config.supabase.url}/rest/v1/product_images?product_id=eq.${id}&select=id,product_id,url,thumbnail_url,created_at`;
+            // Based on database schema, product_images only has url, not original_url/thumbnail_url
+            const imagesUrl = `${config.supabase.url}/rest/v1/product_images?product_id=eq.${id}&select=id,product_id,url,alt_text,position,created_at`;
             
+            console.log(`[DB FALLBACK] Fetching images from ${imagesUrl}`);
             const imagesResponse = await fetch(imagesUrl, {
               method: 'GET',
               headers: {
@@ -316,39 +338,42 @@ export class ProductApi {
               const imagesData = await imagesResponse.json();
               
               // Transform the images to match our expected format
+              // In the actual database, there's only 'url' - use it for both original_url and thumbnail_url
               fallbackProduct.images = imagesData.map((img: any) => ({
                 id: img.id,
                 product_id: img.product_id,
                 original_url: img.url,
-                thumbnail_url: img.thumbnail_url || img.url,
+                thumbnail_url: img.url, // Use the same URL for both
+                alt: img.alt_text || '',
+                position: img.position || 0,
                 created_at: img.created_at
               }));
               
-              console.log(`Successfully retrieved ${imagesData.length} images for product ${id}`);
+              console.log(`[DB FALLBACK] Successfully retrieved and mapped ${imagesData.length} images for product ${id}`);
             }
           } catch (imageError) {
-            console.warn(`Could not fetch images for product ${id}:`, imageError);
+            console.warn(`[DB FALLBACK] Could not fetch images for product ${id}:`, imageError);
           }
           
-          console.log(`Successfully built complete product data for ${fallbackProduct.name} (${fallbackProduct.id})`);
+          console.log(`[DB FALLBACK] Successfully built complete product data for ${fallbackProduct.name} (${fallbackProduct.id})`);
           return fallbackProduct;
         }
       } catch (directApiError) {
-        console.error(`Direct REST API approach failed:`, directApiError);
+        console.error(`[DB FALLBACK] Direct REST API approach failed:`, directApiError);
       }
       
       // If all else fails, try the SQL endpoint as a last resort
       try {
-        console.log(`Attempting SQL query fallback for product ${id}`);
+        console.log(`[DB FALLBACK] Attempting SQL query fallback for product ${id}`);
         
         // We'll use the Supabase SQL endpoint as a last resort
         // This sometimes works when the REST API is having issues
         const { data, error } = await supabase.rpc('get_product_by_id', { product_id: id });
         
         if (error) {
-          console.error('SQL query error:', error);
+          console.error('[DB FALLBACK] SQL query error:', error);
         } else if (data && Array.isArray(data) && data.length > 0) {
-          console.log(`Successfully retrieved product data via SQL for ${id}`);
+          console.log(`[DB FALLBACK] Successfully retrieved product data via SQL for ${id}`);
           
           // Parse the JSON data if needed
           const productData = data[0];
@@ -371,13 +396,13 @@ export class ProductApi {
           };
         }
       } catch (sqlError) {
-        console.error(`SQL fallback failed:`, sqlError);
+        console.error(`[DB FALLBACK] SQL fallback failed:`, sqlError);
       }
       
       // Return whatever we've managed to build
       return fallbackProduct;
     } catch (error) {
-      console.error(`Error fetching product ${id} directly from database:`, error);
+      console.error(`[DB FALLBACK] Error fetching product ${id} directly from database:`, error);
       throw error;
     }
   }

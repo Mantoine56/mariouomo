@@ -8,6 +8,7 @@ import { UpdateProductDto } from '../dtos/update-product.dto';
 import { SearchProductsDto, ProductSortField } from '../dtos/search-products.dto';
 import { PaginationQueryDto } from '../../../common/dtos/pagination.dto';
 import { ProductVariant } from '../entities/product-variant.entity';
+import { ProductImage } from '../entities/product-image.entity';
 
 /**
  * Repository for Product entity
@@ -150,31 +151,121 @@ export class ProductRepository extends BaseRepository<Product> {
    * @throws NotFoundException if product not found
    */
   async getProductById(id: string): Promise<Product> {
-    // Use same approach as other methods to avoid deleted_at issues
-    const product = await this.createQueryBuilder('product')
-      // Use explicit joins to avoid automatic soft delete conditions
-      .leftJoin('product.variants', 'variants')
-      .leftJoin('product.categories', 'categories')
-      .leftJoin('product.images', 'images')
-      // Only select needed columns to avoid issues with missing columns
-      .addSelect('variants.id')
-      .addSelect('variants.name')
-      .addSelect('variants.sku')
-      .addSelect('variants.price_adjustment')
-      .addSelect('categories.id')
-      .addSelect('categories.name')
-      .addSelect('images.id')
-      .addSelect('images.originalUrl')
-      .addSelect('images.thumbnailUrl')
-      .where('product.id = :id', { id })
-      .andWhere('product.deleted_at IS NULL')
-      .getOne();
+    try {
+      // Execute a completely raw query to bypass TypeORM's automatic soft delete handling
+      const rawQuery = `
+        SELECT 
+          p.id as product_id, 
+          p.name as product_name, 
+          p.description as product_description,
+          p.price as product_price,
+          p.compare_at_price as product_compare_at_price,
+          p.cost_price as product_cost_price,
+          p.status as product_status,
+          p.store_id as product_store_id,
+          p.created_at as product_created_at,
+          p.updated_at as product_updated_at,
+          p.metadata as product_metadata,
+          
+          v.id as variants_id,
+          v.sku as variants_sku,
+          v.price_adjustment as variants_price_adjustment,
+          v.option_values as variants_option_values,
+          
+          c.id as categories_id,
+          c.name as categories_name,
+          
+          i.id as images_id,
+          i.url as images_url,
+          i.alt_text as images_alt_text
+        FROM 
+          products p
+        LEFT JOIN 
+          product_variants v ON v.product_id = p.id
+        LEFT JOIN 
+          product_categories pc ON pc.product_id = p.id
+        LEFT JOIN 
+          categories c ON c.id = pc.category_id AND c.deleted_at IS NULL
+        LEFT JOIN 
+          product_images i ON i.product_id = p.id
+        WHERE 
+          p.id = $1 AND p.deleted_at IS NULL
+      `;
       
-    if (!product) {
-      throw new NotFoundException(`Product with ID "${id}" not found`);
+      // Execute raw query directly
+      const result = await this.repository.manager.query(rawQuery, [id]);
+      
+      if (!result || result.length === 0) {
+        throw new NotFoundException(`Product with ID "${id}" not found`);
+      }
+      
+      // Convert raw query result to proper Product entity with relations
+      const productData = result[0];
+      
+      // Map base product properties
+      const productEntity = new Product();
+      productEntity.id = productData.product_id;
+      productEntity.name = productData.product_name;
+      productEntity.description = productData.product_description;
+      productEntity.price = productData.product_price;
+      productEntity.compare_at_price = productData.product_compare_at_price;
+      productEntity.cost_price = productData.product_cost_price;
+      productEntity.status = productData.product_status;
+      productEntity.store_id = productData.product_store_id;
+      productEntity.created_at = productData.product_created_at;
+      productEntity.updated_at = productData.product_updated_at;
+      productEntity.metadata = productData.product_metadata;
+      
+      // Map variants - group by variant ID to avoid duplicates
+      const variantMap = new Map();
+      result.forEach((row: any) => {
+        if (row.variants_id && !variantMap.has(row.variants_id)) {
+          const variant = new ProductVariant();
+          variant.id = row.variants_id;
+          variant.product_id = productEntity.id;
+          variant.sku = row.variants_sku;
+          variant.price_adjustment = row.variants_price_adjustment;
+          variant.option_values = row.variants_option_values;
+          variantMap.set(row.variants_id, variant);
+        }
+      });
+      productEntity.variants = Array.from(variantMap.values());
+      
+      // Map images - group by image ID to avoid duplicates
+      const imageMap = new Map();
+      result.forEach((row: any) => {
+        if (row.images_id && !imageMap.has(row.images_id)) {
+          const image = new ProductImage();
+          image.id = row.images_id;
+          image.product_id = productEntity.id;
+          image.url = row.images_url;
+          image.alt = row.images_alt_text;
+          imageMap.set(row.images_id, image);
+        }
+      });
+      productEntity.images = Array.from(imageMap.values());
+      
+      // Map categories - group by category ID to avoid duplicates
+      const categoryMap = new Map();
+      result.forEach((row: any) => {
+        if (row.categories_id && !categoryMap.has(row.categories_id)) {
+          const category = {
+            id: row.categories_id,
+            name: row.categories_name
+          };
+          categoryMap.set(row.categories_id, category);
+        }
+      });
+      productEntity.categories = Array.from(categoryMap.values());
+      
+      this.logger.debug(`Product ${id} loaded with ${productEntity.variants.length} variants, ${productEntity.images.length} images, and ${productEntity.categories?.length || 0} categories`);
+      
+      return productEntity;
+    } catch (error) {
+      this.logger.error(`Error fetching product ${id}: ${error.message}`);
+      this.logger.error(`Error stack: ${error.stack}`);
+      throw error;
     }
-    
-    return product;
   }
 
   /**
@@ -351,54 +442,71 @@ export class ProductRepository extends BaseRepository<Product> {
    * @returns Paginated products for the store
    */
   async findByStoreId(storeId: string, query: PaginationQueryDto) {
-    const { page = 1, limit = 10, search } = query;
-    
-    // Use the same approach as searchProducts to avoid deleted_at issues
-    const qb = this.createQueryBuilder('product')
-      // Use explicit joins to avoid automatic soft delete conditions
-      .leftJoin('product.variants', 'variants')
-      .leftJoin('product.categories', 'categories')
-      .leftJoin('product.images', 'images')
-      // Only select needed columns to avoid issues with missing columns
-      .addSelect('variants.id')
-      .addSelect('variants.name')
-      .addSelect('variants.sku')
-      .addSelect('variants.price_adjustment')
-      .addSelect('categories.id')
-      .addSelect('categories.name')
-      .addSelect('images.id')
-      .addSelect('images.originalUrl')
-      .addSelect('images.thumbnailUrl')
-      .where('product.store_id = :storeId', { storeId })
-      .andWhere('product.deleted_at IS NULL');
+    try {
+      const { page = 1, limit = 10, search } = query;
+      
+      // Use direct table names instead of entity relations to avoid deleted_at issues
+      const qb = this.createQueryBuilder('product')
+        // Custom joins with manual conditions
+        .leftJoinAndSelect(
+          'product_variants',
+          'variants',
+          'variants.product_id = product.id'
+        )
+        .leftJoinAndSelect(
+          'product_categories',
+          'product_categories',
+          'product_categories.product_id = product.id'
+        )
+        .leftJoinAndSelect(
+          'categories',
+          'categories',
+          'categories.id = product_categories.category_id AND categories.deleted_at IS NULL'
+        )
+        .leftJoinAndSelect(
+          'product_images',
+          'images',
+          'images.product_id = product.id'
+        )
+        // Only select needed columns that actually exist in the database
+        .where('product.store_id = :storeId', { storeId })
+        .andWhere('product.deleted_at IS NULL');
 
-    // Apply search if provided
-    if (search) {
-      qb.andWhere(
-        "to_tsvector('english', product.name || ' ' || product.description) @@ plainto_tsquery('english', :search)",
-        { search }
-      );
+      // Apply search if provided
+      if (search) {
+        qb.andWhere(
+          "to_tsvector('english', product.name || ' ' || product.description) @@ plainto_tsquery('english', :search)",
+          { search }
+        );
+      }
+
+      // Count total before pagination
+      const total = await qb.getCount();
+
+      // Apply pagination
+      const skip = (page - 1) * limit;
+      qb.skip(skip).take(limit);
+
+      // Get products
+      const products = await qb.getMany();
+      
+      // Note: Relations are loaded by product service's loadProductsRelations method, 
+      // which will be called after this repository method returns
+
+      return {
+        items: products,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page * limit < total,
+        hasPreviousPage: page > 1,
+      };
+    } catch (error) {
+      this.logger.error(`Error fetching products for store ${storeId}: ${error.message}`);
+      this.logger.error(`Error stack: ${error.stack}`);
+      throw error;
     }
-
-    // Count total before pagination
-    const total = await qb.getCount();
-
-    // Apply pagination
-    const skip = (page - 1) * limit;
-    qb.skip(skip).take(limit);
-
-    // Get products
-    const products = await qb.getMany();
-
-    return {
-      items: products,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-      hasNextPage: page * limit < total,
-      hasPreviousPage: page > 1,
-    };
   }
 
   /**

@@ -13,16 +13,45 @@ export class ProductImage extends BaseEntity {
   @Column({ type: 'uuid' })
   product_id: string;
 
-  @ApiProperty({ description: 'Original image URL (S3/CDN)' })
-  @Column({ type: 'varchar', length: 255, name: 'original_url' })
-  originalUrl: string;
+  /**
+   * URL of the image
+   * This is the actual database column
+   */
+  @ApiProperty({ description: 'Image URL (S3/CDN)' })
+  @Column({ type: 'text' })
+  url: string;
 
+  /**
+   * Original URL - maps to 'url' database field
+   * Virtual property that maps to url for frontend compatibility
+   */
+  @ApiProperty({ description: 'Original image URL (S3/CDN)' })
+  get originalUrl(): string {
+    return this.url;
+  }
+
+  set originalUrl(value: string) {
+    this.url = value;
+  }
+
+  /**
+   * Thumbnail URL - virtual property for frontend compatibility
+   * In our current schema, we use the same URL for both
+   */
   @ApiProperty({ description: 'Thumbnail image URL (S3/CDN)' })
-  @Column({ type: 'varchar', length: 255, name: 'thumbnail_url' })
-  thumbnailUrl: string;
+  get thumbnailUrl(): string {
+    return this.url;
+  }
+
+  set thumbnailUrl(value: string) {
+    // Only set url if it's not already set
+    if (!this.url) {
+      this.url = value;
+    }
+  }
 
   @ApiProperty({ description: 'Image alt text' })
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true, name: 'alt_text' })
   alt: string;
 
   @ApiProperty({ description: 'Display order of the image' })
