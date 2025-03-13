@@ -109,18 +109,32 @@ export class ProductService {
    * @returns Paginated list of products matching criteria
    */
   async searchProducts(searchDto: SearchProductsDto, paginationDto: PaginationQueryDto) {
-    this.logger.debug(`Searching products with criteria: ${JSON.stringify(searchDto)}`);
+    // Ensure pagination parameters have default values
+    const page = paginationDto.page || 1;
+    const limit = paginationDto.limit || 10;
     
-    // Call repository method with simplified query
-    const result = await this.productRepository.searchProducts(searchDto, paginationDto);
+    this.logger.log(`Searching products with page: ${page}, limit: ${limit}`);
+    this.logger.log(`Search criteria: ${JSON.stringify(searchDto)}`);
     
-    // Manually load relations for better data consistency
-    if (result.items.length > 0) {
-      await this.loadProductsRelations(result.items);
-      this.logger.debug(`Loaded relations for ${result.items.length} products from search results`);
+    try {
+      // Call repository method with simplified query
+      const result = await this.productRepository.searchProducts(searchDto, paginationDto);
+      
+      this.logger.debug(`Search found ${result.items.length} products out of ${result.total} total`);
+      this.logger.debug(`Pagination result: page ${result.page}/${result.totalPages}, hasNextPage: ${result.hasNextPage}`);
+      
+      // Manually load relations for better data consistency
+      if (result.items.length > 0) {
+        await this.loadProductsRelations(result.items);
+        this.logger.debug(`Loaded relations for ${result.items.length} products from search results`);
+      }
+      
+      return result;
+    } catch (error) {
+      this.logger.error(`Error searching products: ${error.message}`);
+      this.logger.error(`Error stack: ${error.stack}`);
+      throw error;
     }
-    
-    return result;
   }
 
   /**

@@ -85,7 +85,16 @@ export class ApiClient {
       // Construct URL with query parameters
       let url = `${config.api.baseUrl}${normalizedEndpoint}`;
       if (params && Object.keys(params).length > 0) {
-        const queryString = new URLSearchParams(params).toString();
+        // Ensure all params are properly stringified
+        const validParams: Record<string, string> = {};
+        
+        for (const key in params) {
+          if (params[key] !== undefined && params[key] !== null) {
+            validParams[key] = String(params[key]);
+          }
+        }
+        
+        const queryString = new URLSearchParams(validParams).toString();
         url += `?${queryString}`;
       }
       
@@ -130,6 +139,22 @@ export class ApiClient {
       if (response.status === 401) {
         console.error('Authentication error - token might be invalid or expired');
         throw new ApiError('Unauthorized', response.status);
+      }
+      
+      // Handle bad request errors
+      if (response.status === 400) {
+        let errorMessage = 'Bad request';
+        
+        try {
+          // Try to parse error details from response
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          console.error('API error details:', errorData);
+        } catch (e) {
+          console.error('Could not parse error response');
+        }
+        
+        throw new ApiError(errorMessage, response.status);
       }
       
       // Handle other error responses

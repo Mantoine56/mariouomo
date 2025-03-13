@@ -184,23 +184,29 @@ export class ProductRepository extends BaseRepository<Product> {
    * @returns Paginated products matching search criteria
    */
   public async searchProducts(searchDto: SearchProductsDto, paginationDto: PaginationQueryDto) {
-    const { query, categories, minPrice, maxPrice, sortBy, sortOrder } = searchDto;
+    const { query, categories, minPrice, maxPrice, sortBy, sortOrder, status } = searchDto;
     const { page = 1, limit = 10 } = paginationDto;
 
     const skip = (page - 1) * limit;
     
     try {
-      this.logger.log('Starting product search query construction');
+      this.logger.log(`Building product search query for page ${page}, limit ${limit}, skip ${skip}`);
       
       // Simplified approach without joins to avoid deleted_at column issues
       const qb = this.createQueryBuilder('product')
         .where('product.deleted_at IS NULL');
       
-      this.logger.log('Base query builder created');
+      this.logger.debug('Base query builder created');
+      
+      // Apply status filter if provided
+      if (status) {
+        this.logger.debug(`Filtering by status: ${status}`);
+        qb.andWhere('product.status = :status', { status });
+      }
       
       // Apply full-text search if query provided
       if (query) {
-        this.logger.log(`Applying text search for query: ${query}`);
+        this.logger.debug(`Applying text search for query: ${query}`);
         qb.andWhere(
           "to_tsvector('english', product.name || ' ' || product.description) @@ plainto_tsquery('english', :query)",
           { query }
@@ -209,7 +215,7 @@ export class ProductRepository extends BaseRepository<Product> {
 
       // Apply category filter - need to use subquery for categories since we're avoiding joins
       if (categories?.length) {
-        this.logger.log(`Filtering by categories: ${categories.join(', ')}`);
+        this.logger.debug(`Filtering by categories: ${categories.join(', ')}`);
         qb.andWhere(
           'product.id IN (SELECT product_id FROM product_categories WHERE category_id IN (:...categories))',
           { categories }
@@ -218,73 +224,100 @@ export class ProductRepository extends BaseRepository<Product> {
 
       // Apply price range filter
       if (typeof minPrice === 'number') {
-        this.logger.log(`Filtering by minimum price: ${minPrice}`);
+        this.logger.debug(`Filtering by minimum price: ${minPrice}`);
         qb.andWhere('product.price >= :minPrice', { minPrice });
       }
       if (typeof maxPrice === 'number') {
-        this.logger.log(`Filtering by maximum price: ${maxPrice}`);
+        this.logger.debug(`Filtering by maximum price: ${maxPrice}`);
         qb.andWhere('product.price <= :maxPrice', { maxPrice });
       }
 
       // Apply sorting
       switch (sortBy) {
         case ProductSortField.NAME:
-          this.logger.log(`Sorting by name: ${sortOrder}`);
+          this.logger.debug(`Sorting by name: ${sortOrder}`);
           qb.orderBy('product.name', sortOrder);
           break;
         case ProductSortField.PRICE:
-          this.logger.log(`Sorting by price: ${sortOrder}`);
+          this.logger.debug(`Sorting by price: ${sortOrder}`);
           qb.orderBy('product.price', sortOrder);
           break;
         case ProductSortField.CREATED_AT:
-          this.logger.log(`Sorting by created_at: ${sortOrder}`);
+          this.logger.debug(`Sorting by created_at: ${sortOrder}`);
           qb.orderBy('product.created_at', sortOrder);
           break;
         case ProductSortField.UPDATED_AT:
-          this.logger.log(`Sorting by updated_at: ${sortOrder}`);
+          this.logger.debug(`Sorting by updated_at: ${sortOrder}`);
           qb.orderBy('product.updated_at', sortOrder);
           break;
         default:
-          this.logger.log('Using default sort by created_at DESC');
+          this.logger.debug('Using default sort by created_at DESC');
           qb.orderBy('product.created_at', 'DESC');
       }
-
-      // Log the SQL query being executed
-      const rawQuery = qb.getSql();
-      this.logger.log(`Executing SQL query: ${rawQuery}`);
-
-      // Execute the query and count
-      try {
-        // Count total before pagination
-        const total = await qb.getCount();
-        
-        // Apply pagination
-        this.logger.log(`Applying pagination: skip=${skip}, limit=${limit}`);
-        qb.skip(skip).take(limit);
-        
-        // Get products
-        const items = await qb.getMany();
-        
-        this.logger.debug(`Found ${total} products matching search criteria`);
-
-        // Return paginated result
-        return {
-          items,
-          total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit),
-          hasNextPage: page * limit < total,
-          hasPreviousPage: page > 1,
-        };
-      } catch (queryError) {
-        this.logger.error(`Database query error: ${queryError.message}`);
-        this.logger.error(`SQL error details: ${JSON.stringify(queryError)}`);
-        throw queryError;
+      
+      // Count total products matching the query before pagination
+      const totalQb = this.createQueryBuilder('product');
+      
+      // Apply same WHERE conditions manually instead of using qb.getQuery()
+      // This avoids the "subquery must return only one column" error
+      
+      // Copy the WHERE conditions without copying the SELECT/FROM part
+      const whereExpressions = qb.expressionMap.wheres;
+      
+      if (whereExpressions && whereExpressions.length > 0) {
+        // Apply the same where conditions individually
+        for (const expr of whereExpressions) {
+          if (expr.type === 'simple') {
+            totalQb.andWhere(expr.condition, qb.getParameters());
+          } else if (expr.type === 'and') {
+            totalQb.andWhere(expr.condition, qb.getParameters());
+          } else if (expr.type === 'or') {
+            totalQb.orWhere(expr.condition, qb.getParameters());
+          }
+        }
       }
+      
+      // Select count after applying the WHERE conditions
+      totalQb.select('COUNT(DISTINCT product.id)', 'count');
+        
+      // Get the count result
+      const { count } = await totalQb.getRawOne();
+      const total = parseInt(count, 10);
+      
+      this.logger.debug(`Total products matching query: ${total}`);
+
+      // Apply pagination
+      qb.skip(skip).take(limit);
+      
+      // Log the final query for debugging
+      const finalQuery = qb.getQuery();
+      const finalParams = qb.getParameters();
+      
+      this.logger.debug(`Final query: ${finalQuery}`);
+      this.logger.debug(`Query parameters: ${JSON.stringify(finalParams)}`);
+      
+      // Execute the query
+      const items = await qb.getMany();
+      
+      this.logger.debug(`Query returned ${items.length} products for page ${page}`);
+      
+      // Calculate pagination metadata
+      const totalPages = Math.ceil(total / limit);
+      const hasNextPage = page < totalPages;
+      const hasPreviousPage = page > 1;
+      
+      return {
+        items,
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage,
+        hasPreviousPage
+      };
     } catch (error) {
-      this.logger.error(`Error searching products: ${error.message}`, error.stack);
-      this.logger.error(`Complete error object: ${JSON.stringify(error)}`);
+      this.logger.error(`Error executing product search: ${error.message}`);
+      this.logger.error(`Error stack: ${error.stack}`);
       throw error;
     }
   }

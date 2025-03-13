@@ -11,6 +11,7 @@ import { useCookies } from 'next-client-cookies';
 import AppSidebar from '@/components/layout/app-sidebar';
 import Header from '@/components/layout/header';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { useToast } from '@/components/ui/use-toast';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -21,6 +22,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const cookies = useCookies();
   const initialCollapsed = cookies.get('sidebar:state') === 'true';
   
+  // Initialize toast context
+  const { ToastContainer } = useToast();
+  
   // Save sidebar state to cookie when it changes
   const handleStateChange = React.useCallback((collapsed: boolean) => {
     cookies.set('sidebar:state', String(collapsed));
@@ -28,7 +32,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   
   return (
     <SidebarProvider defaultCollapsed={initialCollapsed} onStateChange={handleStateChange}>
-      <div className="flex h-screen overflow-hidden bg-background">
+      <div className="flex h-screen overflow-hidden bg-background relative">
         {/* Sidebar */}
         <AppSidebar />
         
@@ -39,6 +43,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             {children}
           </main>
         </div>
+        
+        {/* Toast notifications - render above all other content */}
+        <ToastContainer />
       </div>
     </SidebarProvider>
   );

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsNumber, IsEnum, IsUUID, Min, Max } from 'class-validator';
+import { IsOptional, IsString, IsNumber, IsEnum, IsUUID, Min, Max, IsInt } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -18,6 +18,15 @@ export enum ProductSortField {
 export enum SortOrder {
   ASC = 'ASC',
   DESC = 'DESC',
+}
+
+/**
+ * Enum for product status
+ */
+export enum ProductStatus {
+  DRAFT = 'draft',
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
 }
 
 /**
@@ -45,6 +54,18 @@ export class SearchProductsDto {
   @IsOptional()
   @IsUUID()
   storeId?: string;
+
+  /**
+   * Filter by product status
+   */
+  @ApiProperty({
+    description: 'Filter products by status',
+    required: false,
+    enum: ProductStatus,
+  })
+  @IsOptional()
+  @IsEnum(ProductStatus)
+  status?: ProductStatus;
 
   /**
    * Filter by category IDs
@@ -110,4 +131,36 @@ export class SearchProductsDto {
   @IsOptional()
   @IsEnum(SortOrder)
   sortOrder?: SortOrder = SortOrder.DESC;
+  
+  /**
+   * Page number for pagination
+   */
+  @ApiProperty({
+    description: 'Page number (1-based)',
+    required: false,
+    default: 1,
+    minimum: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  /**
+   * Number of items per page
+   */
+  @ApiProperty({
+    description: 'Number of items per page',
+    required: false,
+    default: 10,
+    minimum: 1,
+    maximum: 100,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
 }

@@ -13,14 +13,10 @@ import { SupabaseService } from '../../../common/supabase/supabase.service';
  * Handles authentication-related operations including:
  * - Supabase JWT validation
  * - User profile management via Supabase
- * - Development mode support
  */
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  private readonly isDevelopment: boolean;
-  // Use the actual Supabase user ID for development
-  private readonly DEV_USER_ID = '682efcd1-4701-429f-9ab4-e024ae5ed076';
 
   constructor(
     private readonly jwtService: JwtService,
@@ -28,13 +24,7 @@ export class AuthService {
     @InjectRepository(Profile)
     private readonly profileRepository: Repository<Profile>,
     private readonly supabaseService: SupabaseService
-  ) {
-    this.isDevelopment = configService.get<string>('NODE_ENV') !== 'production';
-    
-    if (this.isDevelopment) {
-      this.logger.warn('Running in development mode - using Supabase test user');
-    }
-  }
+  ) {}
 
   /**
    * Validates a user based on the Supabase JWT payload
@@ -60,14 +50,26 @@ export class AuthService {
       // Get user profile from Supabase
       const profile = await this.supabaseService.getUserProfile(userId);
       
-      this.logger.debug(`Supabase profile result: ${JSON.stringify(profile)}`);
+      this.logger.debug(`Supabase profile result: ${profile ? 'Found' : 'Not found'}`);
+      if (profile) {
+        this.logger.debug(`User profile: ${JSON.stringify({
+          id: profile.id,
+          email: profile.email,
+          role: profile.role
+        })}`);
+      }
       
       if (!profile) {
         this.logger.warn(`No profile found for user ${userId}, creating one...`);
         
         // Extract user info from Supabase token
-        const email = payload.email || 'online@mariouomo.com';
-        const name = payload.user_metadata?.full_name || 'Mario Uomo User';
+        const email = payload.email;
+        const name = payload.user_metadata?.full_name || 'User';
+        
+        if (!email) {
+          this.logger.error('No email found in token payload');
+          throw new UnauthorizedException('Invalid user token - missing email');
+        }
         
         this.logger.debug(`Creating profile with email: ${email}, name: ${name}`);
         
@@ -76,7 +78,7 @@ export class AuthService {
           id: userId,
           email,
           full_name: name,
-          role: Role.USER,
+          role: Role.USER, // Default to USER role
           status: 'active',
           preferences: { theme: 'light', notifications: true },
           metadata: { provider: 'supabase' }
@@ -86,13 +88,12 @@ export class AuthService {
         this.logger.debug(`Updating profile in Supabase: ${JSON.stringify(newProfile)}`);
         const createdProfile = await this.supabaseService.updateUserProfile(userId, newProfile);
         
-        this.logger.debug(`Created profile result: ${JSON.stringify(createdProfile)}`);
-        
         if (!createdProfile) {
           this.logger.error('Failed to create user profile');
           throw new UnauthorizedException('Failed to create user profile');
         }
         
+        this.logger.debug(`Created new profile with ID: ${createdProfile.id}, role: ${createdProfile.role}`);
         return createdProfile;
       }
       
@@ -100,7 +101,7 @@ export class AuthService {
     } catch (error) {
       this.logger.error(`Error managing user profile: ${error.message}`);
       this.logger.error(`Error stack: ${error.stack}`);
-      throw new UnauthorizedException('Error managing user profile');
+      throw new UnauthorizedException(`Error managing user profile: ${error.message}`);
     }
   }
 
@@ -112,48 +113,43 @@ export class AuthService {
    */
   async getCurrentUser(userId: string): Promise<any> {
     try {
+      this.logger.debug(`Fetching profile for user ID: ${userId}`);
       const profile = await this.supabaseService.getUserProfile(userId);
       
       if (!profile) {
+        this.logger.error(`User profile not found for ID: ${userId}`);
         throw new UnauthorizedException('User profile not found');
       }
 
       // Return user without sensitive information
       const { metadata, ...userInfo } = profile;
+      this.logger.debug(`Retrieved profile for user: ${userInfo.email}, role: ${userInfo.role}`);
       return userInfo;
     } catch (error) {
       this.logger.error(`Error retrieving user profile: ${error.message}`);
-      throw new UnauthorizedException('Error retrieving user profile');
+      throw new UnauthorizedException(`Error retrieving user profile: ${error.message}`);
     }
   }
 
   /**
    * Validates a Supabase JWT token
-   * In development mode, allows test tokens but still requires proper UUID
+   * @param token The JWT token to validate
+   * @returns The decoded token payload
    */
   validateToken(token: string): any {
     try {
-      return this.jwtService.verify(token);
+      this.logger.debug(`Validating token (length: ${token.length})`);
+      const payload = this.jwtService.verify(token);
+      this.logger.debug(`Token validation successful, payload has user ID: ${payload.sub}`);
+      return payload;
     } catch (error) {
       this.logger.error(`Token validation failed: ${error.message}`);
-      
-      // In development mode, accept test tokens with proper Supabase user ID
-      if (this.isDevelopment) {
-        this.logger.warn('Development mode: Returning test payload with actual Supabase ID');
-        return {
-          sub: this.DEV_USER_ID,
-          email: 'online@mariouomo.com',
-          role: Role.USER
-        };
-      }
-      
-      throw new UnauthorizedException('Invalid token');
+      throw new UnauthorizedException(`Invalid token: ${error.message}`);
     }
   }
 
   /**
    * Tests the Supabase connection by attempting to query the profiles table
-   * 
    * @returns The connection test result
    */
   async testSupabaseConnection() {
@@ -174,17 +170,27 @@ export class AuthService {
         this.logger.error(`Error details: ${JSON.stringify(error)}`);
         throw error;
       }
-
+      
+      // Return connection details
       return {
         connected: true,
         timestamp: new Date().toISOString(),
         environment: this.configService.get<string>('NODE_ENV'),
         supabaseUrl: this.configService.get<string>('SUPABASE_URL'),
-        testQuery: 'Success'
+        testQuery: 'Success',
+        data
       };
     } catch (error) {
       this.logger.error(`Exception during Supabase connection test: ${error.message}`);
-      throw error;
+      this.logger.error(`Error stack: ${error.stack}`);
+      
+      // Return error details
+      return {
+        connected: false,
+        timestamp: new Date().toISOString(),
+        environment: this.configService.get<string>('NODE_ENV'),
+        error: error.message
+      };
     }
   }
 }

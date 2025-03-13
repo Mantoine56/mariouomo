@@ -19,8 +19,9 @@ import {
   PaginatedResponse, 
   ProductStatus,
   ProductSortField,
-  SortDirection 
+  SortDirection
 } from '@/lib/product-api';
+import { ApiError } from '@/lib/api-client';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -59,7 +60,7 @@ export default function ProductsPage() {
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [availableCategories, setAvailableCategories] = useState<Set<string>>(new Set());
   const { toast } = useToast();
-
+  
   /**
    * Convert backend Product to frontend format
    */
@@ -107,72 +108,71 @@ export default function ProductsPage() {
       const searchParams: ProductSearchParams = {
         page: currentPage,
         limit: itemsPerPage,
-        sortBy: ProductSortField.CREATED_AT,
-        // Don't include sortOrder as it's causing validation errors
+        // Removed sortBy and sortOrder parameters that could be causing SQL errors
       };
 
-      // Store search query for client-side filtering
+      // Add search query for backend filtering
       if (searchQuery) {
         searchParams.query = searchQuery;
       }
 
-      // For category filtering, we'll use client-side filtering
-      // We're no longer sending category info in the query parameter
-      if (selectedCategory && selectedCategory !== '') {
-        // Keep track of the selected category for client-side filtering
-        // The actual filtering will happen in the ProductApi class
-      }
-
-      // Add status filter if selected
+      // Add status filter if selected and supported by backend
       if (selectedStatus) {
         // Map frontend status to backend status
         if (selectedStatus === 'Active') {
           searchParams.status = ProductStatus.ACTIVE;
         } else if (selectedStatus === 'Out of Stock') {
           searchParams.status = ProductStatus.INACTIVE;
-        } else if (selectedStatus === 'Low Stock') {
-          // This status doesn't map directly to backend status
-          // We'd need a custom API endpoint to handle this
-          // For now, we'll use active but could add additional filters
-          searchParams.status = ProductStatus.ACTIVE;
         }
+        // 'Low Stock' would require inventory filtering which might not be available in the API
       }
 
       console.log('Fetching products with params:', searchParams);
 
-      // Call the API
+      // Fetch products from API - no fallback data, focus on real database connection
       const response = await productApi.searchProducts(searchParams);
       
-      // Apply additional client-side filtering for category if needed
-      let filteredProducts = response.items;
-      if (selectedCategory && selectedCategory !== '') {
-        filteredProducts = filteredProducts.filter(product => 
-          product.metadata?.category === selectedCategory
-        );
-      }
+      // Extract product data
+      const { items, total } = response;
       
-      // Convert backend products to frontend format
-      const frontendProducts = filteredProducts.map(adaptProductToFrontend);
+      console.log(`Fetched ${items.length} products out of ${total} total`);
       
-      // Extract unique categories for the filter dropdown
-      const newCategories = new Set(availableCategories);
-      response.items.forEach(product => {  // Use all products for categories, not just filtered ones
+      // Update available categories based on incoming products
+      const categoriesSet = new Set<string>();
+      items.forEach(product => {
         if (product.metadata?.category) {
-          newCategories.add(product.metadata.category);
+          categoriesSet.add(product.metadata.category);
         }
       });
-      setAvailableCategories(newCategories);
+      setAvailableCategories(categoriesSet);
       
-      // Update state with the response data
-      setProducts(frontendProducts);
-      setTotalProducts(response.total);
+      // Convert backend products to frontend format
+      const frontendProducts = items.map(adaptProductToFrontend);
+      
+      // Apply client-side category filtering if needed
+      const filteredProducts = selectedCategory && selectedCategory !== ''
+        ? frontendProducts.filter(product => product.category === selectedCategory)
+        : frontendProducts;
+      
+      setProducts(filteredProducts);
+      setTotalProducts(total);
     } catch (error) {
       console.error('Error fetching products:', error);
+      
+      // Show error toast with more specific message
       toast({
-        title: 'Error',
-        description: 'Failed to fetch products. Please try again.',
+        title: 'Error fetching products',
+        description: error instanceof ApiError 
+          ? `API Error (${error.status}): ${error.message}` 
+          : error instanceof Error 
+            ? `Error: ${error.message}` 
+            : 'An unknown error occurred. The server may be unavailable.',
         variant: 'destructive',
       });
+      
+      // Reset products list but keep UI functional
+      setProducts([]);
+      setTotalProducts(0);
     } finally {
       setLoading(false);
     }
@@ -211,13 +211,17 @@ export default function ProductsPage() {
    * Handle page change from DataTable
    */
   const handlePageChange = (page: number) => {
-    setCurrentPage(page + 1); // DataTable uses 0-based index, we use 1-based
+    console.log('Changing to page:', page + 1); // Log the page change for debugging
+    
+    // DataTable uses 0-based index, we use 1-based
+    setCurrentPage(page + 1);
   };
 
   /**
    * Handle page size change from DataTable
    */
   const handlePageSizeChange = (size: number) => {
+    console.log('Changing page size to:', size); // Log the page size change for debugging
     setItemsPerPage(size);
     setCurrentPage(1); // Reset to first page when changing items per page
   };
@@ -260,7 +264,7 @@ export default function ProductsPage() {
         description: `${selectedProductIds.length} products ${
           action === 'delete' ? 'deleted' : action === 'archive' ? 'archived' : 'activated'
         } successfully.`,
-        variant: 'default',
+        variant: 'success',
       });
       
       // Clear selection and refresh products
@@ -381,6 +385,7 @@ export default function ProductsPage() {
               </div>
             </div>
           )}
+          
           <DataTable 
             columns={columns} 
             data={products} 

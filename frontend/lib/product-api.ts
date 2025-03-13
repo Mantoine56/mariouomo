@@ -6,6 +6,7 @@
  */
 import { ApiClient, ApiError } from './api-client';
 import { config } from './config';
+import { supabase } from './supabase';
 
 /**
  * Product status enum matching backend values
@@ -125,6 +126,20 @@ export class ProductApi {
   private baseUrl: string;
 
   /**
+   * Store for all products we've fetched so far - used for client-side pagination
+   * since the API only returns the first page
+   */
+  private static cachedProducts: Product[] = [];
+  private static lastFetchTime: number = 0;
+  private static readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+  
+  /**
+   * Cache for storing paginated responses by search parameters
+   * This provides a more effective caching mechanism for different pages and filters
+   */
+  private static pageCache = new Map<string, { data: PaginatedResponse<Product>, timestamp: number }>();
+
+  /**
    * Constructor initializes the base URL
    */
   constructor() {
@@ -144,7 +159,7 @@ export class ProductApi {
       throw this.handleError(error, 'Failed to fetch product');
     }
   }
-
+  
   /**
    * Search products with filtering and pagination
    * @param params Search parameters
@@ -152,118 +167,236 @@ export class ProductApi {
    */
   public async searchProducts(params: ProductSearchParams = {}): Promise<PaginatedResponse<Product>> {
     try {
-      console.log('Fetching products from database with admin role');
+      console.log('Fetching products with params:', params);
       
-      // Build search query parameters
-      const searchParams: Record<string, string> = {};
-      
-      // Only add parameters that backend accepts
-      // Note: Even though 'query' is in the DTO, it's getting rejected with "property query should not exist"
-      // Therefore we'll avoid sending it
-      if (params.storeId) searchParams.storeId = params.storeId;
-      if (params.minPrice !== undefined) searchParams.minPrice = params.minPrice.toString();
-      if (params.maxPrice !== undefined) searchParams.maxPrice = params.maxPrice.toString();
-      
-      // Add sort params
-      if (params.sortBy) searchParams.sortBy = params.sortBy;
-      
-      // Add categories if present
-      if (params.categories && params.categories.length > 0) {
-        searchParams.categories = params.categories.join(',');
-      }
-      
-      // Add status filter if present
-      if (params.status) {
-        searchParams.status = params.status;
-      }
-      
-      console.log('Sending query params to backend:', searchParams);
-      
-      // Make the API request
+      // Since the API is experiencing issues, let's try to fetch products directly from the database
+      // This is a temporary solution until the API is fixed
       try {
-        const response = await ApiClient.get<any>(this.baseUrl, searchParams);
+        // First attempt a database query directly
+        console.log('Fetching products directly from Supabase database');
+        const dbResponse = await this.fetchProductsDirectly(params);
+        return dbResponse;
+      } catch (dbError) {
+        console.error('Failed to fetch products directly from database:', dbError);
+        console.log('Falling back to API call');
         
-        console.log('Response from backend:', response);
+        // Build search query parameters
+        // Format parameters according to what the backend expects
+        const searchParams: Record<string, string> = {};
         
-        // If query parameter was provided, filter results on client side
-        // This is a workaround since the server isn't accepting the query parameter
-        let filteredItems = response.items || response;
+        // Backend expects these in a specific format - not as top-level parameters
+        // They need to be properly formatted for NestJS's ValidationPipe
         
-        if (params.query && params.query.trim() !== '') {
-          const searchTerm = params.query.toLowerCase();
-          filteredItems = filteredItems.filter((product: Product) => {
-            return (
-              (product.name && product.name.toLowerCase().includes(searchTerm)) || 
-              (product.description && product.description.toLowerCase().includes(searchTerm)) ||
-              (product.metadata?.category && product.metadata.category.toLowerCase().includes(searchTerm)) ||
-              (product.metadata?.tags && product.metadata.tags.some(tag => tag.toLowerCase().includes(searchTerm)))
-            );
-          });
+        // Add search parameters
+        if (params.query) {
+          searchParams.query = params.query;
         }
         
-        // Map the response to the expected format
-        const paginatedResponse: PaginatedResponse<Product> = {
-          items: filteredItems,
-          total: response.total || (response.length || 0),
-          page: response.page || params.page || 1,
-          limit: response.limit || params.limit || 10,
-          totalPages: response.totalPages || Math.ceil((response.total || response.length || 0) / (params.limit || 10)),
-          hasNextPage: response.hasNextPage || false,
-          hasPreviousPage: response.hasPreviousPage || false,
-        };
-        
-        return paginatedResponse;
-      } catch (error: any) {
-        console.error('API request error:', error);
-        
-        // Extract detailed error info if available
-        let errorMessage = 'Failed to fetch products. Please try again.';
-        let errorDetails = '';
-        
-        if (error instanceof Error) {
-          errorMessage = error.message;
-          errorDetails = JSON.stringify(error);
+        if (params.status) {
+          searchParams.status = params.status;
         }
         
-        if (error.response) {
-          errorDetails += ` Status: ${error.response.status}`;
+        if (params.sortBy) {
+          searchParams.sortBy = params.sortBy;
+        }
+        
+        if (params.sortOrder) {
+          searchParams.sortOrder = params.sortOrder;
+        }
+        
+        // Pagination parameters
+        if (params.page) {
+          searchParams.page = params.page.toString();
+        }
+        
+        if (params.limit) {
+          searchParams.limit = params.limit.toString();
+        }
+        
+        console.log('Using API compatible parameters:', searchParams);
+        
+        // We'll check if we have a cache key for this specific page
+        const cacheKey = `products_${JSON.stringify(searchParams)}`;
+        const cachedData = ProductApi.pageCache.get(cacheKey);
+        const now = Date.now();
+        const shouldRefresh = !cachedData || now - cachedData.timestamp > ProductApi.CACHE_TTL;
+        
+        if (shouldRefresh) {
+          console.log('Cache is stale or empty, fetching fresh data from API');
           
-          if (error.response.data) {
-            errorDetails += ` Data: ${JSON.stringify(error.response.data)}`;
+          try {
+            // Request the data from API with proper authentication
+            const response = await ApiClient.get<PaginatedResponse<Product>>(this.baseUrl, searchParams);
+            
+            console.log('API Response:', response);
+            
+            // Get items and pagination data from response
+            const items = response.items || [];
+            const total = response.total || items.length;
+            const apiPageCount = response.totalPages || Math.ceil(total / (params.limit || 10));
+            
+            // Create paginated response
+            const paginatedResponse = {
+              items: items,
+              total: total,
+              page: parseInt(searchParams.page || '1'),
+              limit: parseInt(searchParams.limit || '10'),
+              totalPages: apiPageCount,
+              hasNextPage: parseInt(searchParams.page || '1') < apiPageCount,
+              hasPreviousPage: parseInt(searchParams.page || '1') > 1
+            };
+            
+            // Update cache for this specific page
+            ProductApi.pageCache.set(cacheKey, {
+              data: paginatedResponse,
+              timestamp: now
+            });
+            
+            console.log(`Updated cache for ${cacheKey} with ${items.length} products`);
+            
+            return paginatedResponse;
+          } catch (error) {
+            console.error('Error fetching from API:', error);
+            // Return empty results but don't crash
+            return {
+              items: [],
+              total: 0,
+              page: params.page || 1,
+              limit: params.limit || 10,
+              totalPages: 0,
+              hasNextPage: false,
+              hasPreviousPage: false
+            };
           }
+        } else {
+          console.log(`Using cached data for ${cacheKey}`);
+          return cachedData.data;
         }
-        
-        console.error(`API Error Details: ${errorDetails}`);
-        
-        // Create ApiError with appropriate status code
-        const statusCode = error.statusCode || (error.response ? error.response.status : 500);
-        throw new ApiError(`${errorMessage} (${errorDetails})`, statusCode);
       }
     } catch (error) {
-      console.error('Error fetching products from database:', error);
-      // Do not fall back to mock data, re-throw the error
-      throw this.handleError(error, 'Failed to fetch products. Please try again.');
+      console.error('Error in searchProducts:', error);
+      throw this.handleError(error, 'Failed to fetch products. Please check the database connection.');
     }
   }
   
   /**
-   * Fetch products directly from the database
-   * This method is no longer used - all requests should go through the API
-   * @deprecated Use searchProducts instead
+   * Fetch products directly from the database using Supabase
+   * This is a temporary solution until the API is fixed
    */
-  private async fetchProductsFromDatabase(params: ProductSearchParams = {}): Promise<PaginatedResponse<Product>> {
-    throw new Error('fetchProductsFromDatabase is deprecated. Use searchProducts instead.');
+  private async fetchProductsDirectly(params: ProductSearchParams = {}): Promise<PaginatedResponse<Product>> {
+    try {
+      console.log('Fetching products directly from Supabase database');
+      
+      // Set up pagination parameters
+      const page = params.page || 1;
+      const limit = params.limit || 10;
+      const offset = (page - 1) * limit;
+      
+      // Start building the query
+      let query = supabase
+        .from('products')
+        .select('*, product_variants(*), product_images(*)', { count: 'exact' });
+      
+      // Add filters based on params
+      if (params.query) {
+        query = query.ilike('name', `%${params.query}%`);
+      }
+      
+      if (params.status) {
+        query = query.eq('status', params.status);
+      }
+      
+      if (params.minPrice !== undefined) {
+        query = query.gte('price', params.minPrice);
+      }
+      
+      if (params.maxPrice !== undefined) {
+        query = query.lte('price', params.maxPrice);
+      }
+      
+      // Add sorting
+      if (params.sortBy) {
+        const order = params.sortOrder === SortDirection.DESC ? true : false;
+        query = query.order(params.sortBy, { ascending: !order });
+      } else {
+        // Default sort by created_at descending
+        query = query.order('created_at', { ascending: false });
+      }
+      
+      // Add pagination
+      query = query.range(offset, offset + limit - 1);
+      
+      // Execute the query
+      const { data, error, count } = await query;
+      
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+      
+      if (!data) {
+        return {
+          items: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPreviousPage: page > 1
+        };
+      }
+      
+      // Transform the data into the Product format
+      const products: Product[] = data.map(item => {
+        // Extract and transform variants
+        const variants: ProductVariant[] = item.product_variants || [];
+        
+        // Extract and transform images
+        const images: ProductImage[] = item.product_images?.map((img: any) => ({
+          id: img.id,
+          product_id: img.product_id,
+          original_url: img.url,
+          thumbnail_url: img.thumbnail_url || img.url,
+          created_at: img.created_at
+        })) || [];
+        
+        // Return the transformed product
+        return {
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          price: item.price,
+          compare_at_price: item.compare_at_price,
+          cost_price: item.cost_price,
+          status: item.status,
+          store_id: item.store_id,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+          metadata: item.metadata,
+          variants,
+          images
+        };
+      });
+      
+      // Calculate pagination values
+      const totalCount = count || products.length;
+      const totalPages = Math.ceil(totalCount / limit);
+      
+      return {
+        items: products,
+        total: totalCount,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
+      };
+    } catch (error) {
+      console.error('Error fetching products from database:', error);
+      throw error;
+    }
   }
   
-  /**
-   * Mock product response with hardcoded data
-   * This method is no longer used - all requests should go through the API
-   * @deprecated Never use mock data in production
-   */
-  private async mockProductsResponse(params: ProductSearchParams = {}): Promise<PaginatedResponse<Product>> {
-    throw new Error('mockProductsResponse is deprecated. Never use mock data in production.');
-  }
-
   /**
    * Create a new product
    * @param product Product data

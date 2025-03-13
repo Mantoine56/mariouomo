@@ -22,8 +22,8 @@ import { Role } from '../../auth/enums/role.enum';
 import { ProductService } from '../services/product.service';
 import { CreateProductDto } from '../dtos/create-product.dto';
 import { UpdateProductDto } from '../dtos/update-product.dto';
-import { SearchProductsDto } from '../dtos/search-products.dto';
-import { PaginationQueryDto } from '../../../common/dtos/pagination.dto';
+import { SearchProductsDto, ProductSortField, SortOrder } from '../dtos/search-products.dto';
+import { PaginationQueryDto, SortDirection } from '../../../common/dtos/pagination.dto';
 import { Product } from '../entities/product.entity';
 
 /**
@@ -79,10 +79,10 @@ export class ProductController {
   /**
    * Search products with filtering and pagination
    * @param searchDto Search criteria
-   * @param paginationDto Pagination options
    * @returns Paginated list of products matching criteria
    */
   @Get()
+  @Roles(Role.USER, Role.ADMIN)
   @ApiOperation({ summary: 'Search products' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -91,13 +91,26 @@ export class ProductController {
   })
   async searchProducts(
     @Query() searchDto: SearchProductsDto,
-    @Query() paginationDto: PaginationQueryDto,
   ) {
     try {
-      this.logger.log(`Searching products with criteria: ${JSON.stringify(searchDto)}`);
-      this.logger.log(`Pagination: ${JSON.stringify(paginationDto)}`);
+      // Log incoming request parameters for debugging
+      this.logger.log(`Request parameters: ${JSON.stringify(searchDto)}`);
       
-      const result = await this.productService.searchProducts(searchDto, paginationDto);
+      // Extract pagination parameters from searchDto
+      const { page = 1, limit = 10, ...filterParams } = searchDto;
+      
+      // Create pagination DTO for compatibility with existing service
+      const paginationDto: PaginationQueryDto = {
+        page,
+        limit,
+        sortBy: searchDto.sortBy,
+        sortDirection: searchDto.sortOrder === SortOrder.DESC ? SortDirection.DESC : SortDirection.ASC,
+      };
+      
+      this.logger.log(`Using pagination: ${JSON.stringify(paginationDto)}`);
+      
+      // Call service method with parameters
+      const result = await this.productService.searchProducts(filterParams as SearchProductsDto, paginationDto);
       
       this.logger.log(`Successfully found ${result.total} products`);
       return result;
