@@ -31,6 +31,14 @@ interface RevenueCategoryChartProps {
   chartType?: "donut" | "bar";
 }
 
+// Define the type for chart data items that include percentages
+interface ChartDataItem {
+  category: string;
+  revenue: number;
+  percentage: number;
+  color?: string;
+}
+
 export default function RevenueCategoryChart({
   title = "Revenue by Category",
   description = "Top performing categories",
@@ -60,13 +68,15 @@ export default function RevenueCategoryChart({
   
   // Calculate percentages
   const dataWithPercentages = categoryData.map(item => ({
-    ...item,
+    category: item.category,
+    revenue: item.revenue,
+    color: item.color,
     percentage: (item.revenue / totalRevenue) * 100
-  }));
+  })) as ChartDataItem[];
   
   // Sort by revenue (highest first)
   const sortedData = [...dataWithPercentages].sort((a, b) => b.revenue - a.revenue);
-
+  
   return (
     <Card className="w-full">
       <CardHeader>
@@ -118,7 +128,7 @@ export default function RevenueCategoryChart({
                           className="w-full rounded-t-sm" 
                           style={{ 
                             height: `${Math.max(5, (item.revenue / 30000) * 100)}%`,
-                            backgroundColor: item.color || getCategoryColor(item.category)
+                            backgroundColor: item?.color || getCategoryColor(item.category)
                           }}
                         ></div>
                         <span className="text-xs text-muted-foreground mt-2 truncate text-center">

@@ -169,109 +169,97 @@ export class ProductApi {
     try {
       console.log('Fetching products with params:', params);
       
-      // Since the API is experiencing issues, let's try to fetch products directly from the database
-      // This is a temporary solution until the API is fixed
-      try {
-        // First attempt a database query directly
-        console.log('Fetching products directly from Supabase database');
-        const dbResponse = await this.fetchProductsDirectly(params);
-        return dbResponse;
-      } catch (dbError) {
-        console.error('Failed to fetch products directly from database:', dbError);
-        console.log('Falling back to API call');
+      // Build search query parameters
+      // Format parameters according to what the backend expects
+      const searchParams: Record<string, string> = {};
+      
+      // Backend expects these in a specific format - not as top-level parameters
+      // They need to be properly formatted for NestJS's ValidationPipe
+      
+      // Add search parameters
+      if (params.query) {
+        searchParams.query = params.query;
+      }
+      
+      if (params.status) {
+        searchParams.status = params.status;
+      }
+      
+      if (params.sortBy) {
+        searchParams.sortBy = params.sortBy;
+      }
+      
+      if (params.sortOrder) {
+        searchParams.sortOrder = params.sortOrder;
+      }
+      
+      // Pagination parameters
+      if (params.page) {
+        searchParams.page = params.page.toString();
+      }
+      
+      if (params.limit) {
+        searchParams.limit = params.limit.toString();
+      }
+      
+      console.log('Using API compatible parameters:', searchParams);
+      
+      // We'll check if we have a cache key for this specific page
+      const cacheKey = `products_${JSON.stringify(searchParams)}`;
+      const cachedData = ProductApi.pageCache.get(cacheKey);
+      const now = Date.now();
+      const shouldRefresh = !cachedData || now - cachedData.timestamp > ProductApi.CACHE_TTL;
+      
+      if (shouldRefresh) {
+        console.log('Cache is stale or empty, fetching fresh data from API');
         
-        // Build search query parameters
-        // Format parameters according to what the backend expects
-        const searchParams: Record<string, string> = {};
-        
-        // Backend expects these in a specific format - not as top-level parameters
-        // They need to be properly formatted for NestJS's ValidationPipe
-        
-        // Add search parameters
-        if (params.query) {
-          searchParams.query = params.query;
-        }
-        
-        if (params.status) {
-          searchParams.status = params.status;
-        }
-        
-        if (params.sortBy) {
-          searchParams.sortBy = params.sortBy;
-        }
-        
-        if (params.sortOrder) {
-          searchParams.sortOrder = params.sortOrder;
-        }
-        
-        // Pagination parameters
-        if (params.page) {
-          searchParams.page = params.page.toString();
-        }
-        
-        if (params.limit) {
-          searchParams.limit = params.limit.toString();
-        }
-        
-        console.log('Using API compatible parameters:', searchParams);
-        
-        // We'll check if we have a cache key for this specific page
-        const cacheKey = `products_${JSON.stringify(searchParams)}`;
-        const cachedData = ProductApi.pageCache.get(cacheKey);
-        const now = Date.now();
-        const shouldRefresh = !cachedData || now - cachedData.timestamp > ProductApi.CACHE_TTL;
-        
-        if (shouldRefresh) {
-          console.log('Cache is stale or empty, fetching fresh data from API');
+        try {
+          // Request the data from API with proper authentication
+          const response = await ApiClient.get<PaginatedResponse<Product>>(this.baseUrl, searchParams);
           
-          try {
-            // Request the data from API with proper authentication
-            const response = await ApiClient.get<PaginatedResponse<Product>>(this.baseUrl, searchParams);
-            
-            console.log('API Response:', response);
-            
-            // Get items and pagination data from response
-            const items = response.items || [];
-            const total = response.total || items.length;
-            const apiPageCount = response.totalPages || Math.ceil(total / (params.limit || 10));
-            
-            // Create paginated response
-            const paginatedResponse = {
-              items: items,
-              total: total,
-              page: parseInt(searchParams.page || '1'),
-              limit: parseInt(searchParams.limit || '10'),
-              totalPages: apiPageCount,
-              hasNextPage: parseInt(searchParams.page || '1') < apiPageCount,
-              hasPreviousPage: parseInt(searchParams.page || '1') > 1
-            };
-            
-            // Update cache for this specific page
-            ProductApi.pageCache.set(cacheKey, {
-              data: paginatedResponse,
-              timestamp: now
-            });
-            
-            console.log(`Updated cache for ${cacheKey} with ${items.length} products`);
-            
-            return paginatedResponse;
-          } catch (error) {
-            console.error('Error fetching from API:', error);
-            // Return empty results but don't crash
-            return {
-              items: [],
-              total: 0,
-              page: params.page || 1,
-              limit: params.limit || 10,
-              totalPages: 0,
-              hasNextPage: false,
-              hasPreviousPage: false
-            };
-          }
-        } else {
-          console.log(`Using cached data for ${cacheKey}`);
-          return cachedData.data;
+          console.log('API Response:', response);
+          
+          // Get items and pagination data from response
+          const items = response.items || [];
+          const total = response.total || items.length;
+          const apiPageCount = response.totalPages || Math.ceil(total / (params.limit || 10));
+          
+          // Create paginated response
+          const paginatedResponse = {
+            items: items,
+            total: total,
+            page: parseInt(searchParams.page || '1'),
+            limit: parseInt(searchParams.limit || '10'),
+            totalPages: apiPageCount,
+            hasNextPage: parseInt(searchParams.page || '1') < apiPageCount,
+            hasPreviousPage: parseInt(searchParams.page || '1') > 1
+          };
+          
+          // Update cache for this specific page
+          ProductApi.pageCache.set(cacheKey, {
+            data: paginatedResponse,
+            timestamp: now
+          });
+          
+          console.log(`Updated cache for ${cacheKey} with ${items.length} products`);
+          
+          return paginatedResponse;
+        } catch (error) {
+          console.error('Error fetching from API:', error);
+          // Return empty results but don't crash
+          return {
+            items: [],
+            total: 0,
+            page: params.page || 1,
+            limit: params.limit || 10,
+            totalPages: 0,
+            hasNextPage: false,
+            hasPreviousPage: false
+          };
         }
+      } else {
+        console.log(`Using cached data for ${cacheKey}`);
+        return cachedData.data;
       }
     } catch (error) {
       console.error('Error in searchProducts:', error);
