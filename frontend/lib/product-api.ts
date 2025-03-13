@@ -178,7 +178,9 @@ export class ProductApi {
       
       // Add search parameters
       if (params.query) {
-        searchParams.query = params.query;
+        // Ensure query is properly formatted and trimmed
+        searchParams.query = params.query.trim();
+        console.log(`Searching with query: "${searchParams.query}"`);
       }
       
       if (params.status) {

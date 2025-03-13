@@ -99,25 +99,21 @@ export class ProductController {
       // Extract pagination parameters from searchDto
       const { page = 1, limit = 10, ...filterParams } = searchDto;
       
-      // Create pagination DTO for compatibility with existing service
-      const paginationDto: PaginationQueryDto = {
-        page,
-        limit,
-        sortBy: searchDto.sortBy,
-        sortDirection: searchDto.sortOrder === SortOrder.DESC ? SortDirection.DESC : SortDirection.ASC,
-      };
+      // Log query parameter separately for better debugging
+      if (searchDto.query) {
+        this.logger.log(`Searching products with query: "${searchDto.query}"`);
+      }
       
-      this.logger.log(`Using pagination: ${JSON.stringify(paginationDto)}`);
+      const paginationDto: PaginationQueryDto = { page: +page, limit: +limit };
       
-      // Call service method with parameters
-      const result = await this.productService.searchProducts(filterParams as SearchProductsDto, paginationDto);
-      
-      this.logger.log(`Successfully found ${result.total} products`);
-      return result;
+      // Call service method with properly formatted parameters
+      return await this.productService.searchProducts(
+        { ...filterParams, query: searchDto.query },
+        paginationDto,
+      );
     } catch (error) {
-      this.logger.error(`Failed to search products: ${error.message}`, error.stack);
-      this.logger.error(`Error details: ${JSON.stringify(error)}`);
-      throw new InternalServerErrorException(`Failed to search products: ${error.message}`);
+      this.logger.error(`Error in product search: ${error.message}`, error.stack);
+      throw error;
     }
   }
 

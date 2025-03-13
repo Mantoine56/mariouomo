@@ -108,12 +108,11 @@ export default function ProductsPage() {
       const searchParams: ProductSearchParams = {
         page: currentPage,
         limit: itemsPerPage,
-        // Removed sortBy and sortOrder parameters that could be causing SQL errors
       };
 
       // Add search query for backend filtering
       if (searchQuery) {
-        searchParams.query = searchQuery;
+        searchParams.query = searchQuery.trim();
       }
 
       // Add status filter if selected and supported by backend

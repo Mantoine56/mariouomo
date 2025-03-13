@@ -206,11 +206,27 @@ export class ProductRepository extends BaseRepository<Product> {
       
       // Apply full-text search if query provided
       if (query) {
-        this.logger.debug(`Applying text search for query: ${query}`);
-        qb.andWhere(
-          "to_tsvector('english', product.name || ' ' || product.description) @@ plainto_tsquery('english', :query)",
-          { query }
-        );
+        this.logger.debug(`Applying enhanced text search for query: ${query}`);
+        
+        // Split query into individual words for more comprehensive search
+        const searchTerms = query.trim().split(/\s+/).filter(term => term.length > 0);
+        
+        if (searchTerms.length > 0) {
+          // Create a search expression that matches any of the words in name or description
+          // Using ILIKE with wildcards for partial matches
+          const searchConditions = searchTerms.map((term, index) => {
+            const paramName = `searchTerm${index}`;
+            return `(product.name ILIKE :${paramName} OR product.description ILIKE :${paramName})`;
+          });
+          
+          // Combine all search conditions with OR to match any term
+          qb.andWhere(`(${searchConditions.join(' OR ')})`, 
+            searchTerms.reduce((params: Record<string, string>, term, index) => {
+              params[`searchTerm${index}`] = `%${term}%`;
+              return params;
+            }, {})
+          );
+        }
       }
 
       // Apply category filter - need to use subquery for categories since we're avoiding joins
