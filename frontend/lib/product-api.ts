@@ -104,6 +104,11 @@ export interface ProductSearchParams {
   sortBy?: ProductSortField;
   sortOrder?: SortDirection;
   status?: string;
+  // Metadata filtering for category and other metadata fields
+  metadata?: {
+    category?: string;
+    [key: string]: any;
+  };
 }
 
 /**
@@ -181,6 +186,18 @@ export class ProductApi {
         // Ensure query is properly formatted and trimmed
         searchParams.query = params.query.trim();
         console.log(`Searching with query: "${searchParams.query}"`);
+      }
+      
+      // Handle metadata filtering (like category)
+      if (params.metadata) {
+        // For category filtering using metadata
+        if (params.metadata.category) {
+          searchParams.metadata_category = params.metadata.category;
+          console.log(`Filtering by category: ${params.metadata.category}`);
+        }
+        
+        // Add other metadata filters if needed in the future
+        // Following the same pattern of flattening the structure for API compatibility
       }
       
       if (params.status) {

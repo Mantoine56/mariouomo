@@ -184,7 +184,7 @@ export class ProductRepository extends BaseRepository<Product> {
    * @returns Paginated products matching search criteria
    */
   public async searchProducts(searchDto: SearchProductsDto, paginationDto: PaginationQueryDto) {
-    const { query, categories, minPrice, maxPrice, sortBy, sortOrder, status } = searchDto;
+    const { query, categories, minPrice, maxPrice, sortBy, sortOrder, status, metadata_category } = searchDto;
     const { page = 1, limit = 10 } = paginationDto;
 
     const skip = (page - 1) * limit;
@@ -197,6 +197,12 @@ export class ProductRepository extends BaseRepository<Product> {
         .where('product.deleted_at IS NULL');
       
       this.logger.debug('Base query builder created');
+      
+      // Apply metadata_category filter if provided
+      if (metadata_category) {
+        this.logger.debug(`Filtering by metadata.category: ${metadata_category}`);
+        qb.andWhere(`product.metadata->>'category' = :metadata_category`, { metadata_category });
+      }
       
       // Apply status filter if provided
       if (status) {

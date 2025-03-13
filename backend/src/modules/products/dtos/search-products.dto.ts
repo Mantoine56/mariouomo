@@ -163,4 +163,15 @@ export class SearchProductsDto {
   @Min(1)
   @Max(100)
   limit?: number;
+
+  /**
+   * Filter by category metadata field
+   */
+  @ApiProperty({
+    description: 'Filter products by category name in metadata',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  metadata_category?: string;
 }

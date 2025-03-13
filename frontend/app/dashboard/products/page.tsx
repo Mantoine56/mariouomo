@@ -59,6 +59,7 @@ export default function ProductsPage() {
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [availableCategories, setAvailableCategories] = useState<Set<string>>(new Set());
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState(true);
   const { toast } = useToast();
   
   /**
@@ -115,6 +116,13 @@ export default function ProductsPage() {
         searchParams.query = searchQuery.trim();
       }
 
+      // Add selected category for server-side filtering
+      if (selectedCategory && selectedCategory !== '') {
+        // Since the backend expects an array of category IDs, but we're using category names
+        // We'll use a special metadata filter field for category names
+        searchParams.metadata = { category: selectedCategory };
+      }
+
       // Add status filter if selected and supported by backend
       if (selectedStatus) {
         // Map frontend status to backend status
@@ -128,7 +136,7 @@ export default function ProductsPage() {
 
       console.log('Fetching products with params:', searchParams);
 
-      // Fetch products from API - no fallback data, focus on real database connection
+      // Fetch products from API with all filters applied server-side
       const response = await productApi.searchProducts(searchParams);
       
       // Extract product data
@@ -136,24 +144,20 @@ export default function ProductsPage() {
       
       console.log(`Fetched ${items.length} products out of ${total} total`);
       
-      // Update available categories based on incoming products
-      const categoriesSet = new Set<string>();
+      // Update available categories by adding to existing categories rather than replacing
+      const newCategoriesSet = new Set<string>(availableCategories);
       items.forEach(product => {
         if (product.metadata?.category) {
-          categoriesSet.add(product.metadata.category);
+          newCategoriesSet.add(product.metadata.category);
         }
       });
-      setAvailableCategories(categoriesSet);
+      setAvailableCategories(newCategoriesSet);
       
       // Convert backend products to frontend format
       const frontendProducts = items.map(adaptProductToFrontend);
       
-      // Apply client-side category filtering if needed
-      const filteredProducts = selectedCategory && selectedCategory !== ''
-        ? frontendProducts.filter(product => product.category === selectedCategory)
-        : frontendProducts;
-      
-      setProducts(filteredProducts);
+      // No need to filter client-side anymore as filtering is done on the server
+      setProducts(frontendProducts);
       setTotalProducts(total);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -177,10 +181,70 @@ export default function ProductsPage() {
     }
   };
 
+  /**
+   * Fetch all available categories across all pages
+   */
+  const fetchAllCategories = async () => {
+    setIsCategoriesLoading(true);
+    try {
+      // Create parameters to fetch maximum allowed products per page to minimize API calls
+      const searchParams: ProductSearchParams = {
+        page: 1,
+        limit: 50, // Fetch more products per page to get more categories at once
+      };
+
+      // Keep fetching pages until we've fetched all products or reached a reasonable limit
+      let hasMorePages = true;
+      let currentPageNum = 1;
+      const maxPages = 10; // Limit to avoid excessive API calls
+      const categoriesSet = new Set<string>();
+
+      while (hasMorePages && currentPageNum <= maxPages) {
+        searchParams.page = currentPageNum;
+        
+        const response = await productApi.searchProducts(searchParams);
+        
+        // Process categories from this page
+        response.items.forEach(product => {
+          if (product.metadata?.category) {
+            categoriesSet.add(product.metadata.category);
+          }
+        });
+        
+        // Check if there are more pages
+        hasMorePages = response.hasNextPage;
+        currentPageNum++;
+        
+        // If we've reached the total number of products, stop
+        if (response.items.length === 0 || response.page * response.limit >= response.total) {
+          break;
+        }
+      }
+      
+      // Update state with all found categories
+      setAvailableCategories(categoriesSet);
+      console.log(`Loaded ${categoriesSet.size} unique categories from all pages`);
+    } catch (error) {
+      console.error('Error fetching all categories:', error);
+      toast({
+        title: 'Error loading categories',
+        description: 'Could not load all product categories.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCategoriesLoading(false);
+    }
+  };
+
   // Fetch products when filters change
   useEffect(() => {
     fetchProducts();
   }, [searchQuery, selectedCategory, selectedStatus, currentPage, itemsPerPage]);
+
+  // Fetch all categories when component mounts
+  useEffect(() => {
+    fetchAllCategories();
+  }, []);
 
   /**
    * Handle search input change
@@ -349,28 +413,59 @@ export default function ProductsPage() {
             />
           </div>
         </div>
-        <select 
-          className="block w-full p-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500"
-          value={selectedCategory}
-          onChange={handleCategoryChange}
-        >
-          <option value="">All Categories</option>
-          {Array.from(availableCategories).map(category => (
-            <option key={category} value={category}>
-              {category}
+        <div className="relative">
+          <select 
+            className="block w-full p-2 pr-12 text-sm border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500"
+            value={selectedCategory}
+            onChange={handleCategoryChange}
+            disabled={isCategoriesLoading}
+          >
+            <option value="">
+              {isCategoriesLoading 
+                ? "Loading categories..." 
+                : availableCategories.size === 0 
+                  ? "No categories available" 
+                  : "All Categories"}
             </option>
-          ))}
-        </select>
-        <select 
-          className="block w-full p-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500"
-          value={selectedStatus}
-          onChange={handleStatusChange}
-        >
-          <option value="">All Status</option>
-          <option value="Active">Active</option>
-          <option value="Low Stock">Low Stock</option>
-          <option value="Out of Stock">Out of Stock</option>
-        </select>
+            {Array.from(availableCategories)
+              .sort((a, b) => a.localeCompare(b)) // Sort alphabetically
+              .map(category => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))
+            }
+          </select>
+          <button
+            className="absolute inset-y-0 right-0 flex items-center px-2 text-gray-500 hover:text-gray-700"
+            onClick={(e) => {
+              e.preventDefault();
+              fetchAllCategories();
+            }}
+            disabled={isCategoriesLoading}
+            title="Refresh categories"
+          >
+            {isCategoriesLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            )}
+          </button>
+        </div>
+        <div className="relative">
+          <select 
+            className="block w-full p-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500"
+            value={selectedStatus}
+            onChange={handleStatusChange}
+          >
+            <option value="">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Low Stock">Low Stock</option>
+            <option value="Out of Stock">Out of Stock</option>
+          </select>
+        </div>
       </div>
       
       {/* Products DataTable */}
