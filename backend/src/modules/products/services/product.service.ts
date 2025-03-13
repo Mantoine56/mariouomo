@@ -169,13 +169,13 @@ export class ProductService {
     const image = new ProductImage();
     image.originalUrl = imageData.originalUrl;
     image.thumbnailUrl = imageData.thumbnailUrl;
-    image.product = product;
-
+    image.product_id = productId;
+    
     // Save image
     await this.productImageRepository.save(image);
 
     // Clear cache
-    await this.cacheService.del(`product:${productId}`);
+    await this.invalidateCache(productId);
   }
 
   /**
@@ -222,35 +222,62 @@ export class ProductService {
    * @param product The product to load relations for
    */
   private async loadProductRelations(product: Product): Promise<void> {
+    if (!product) {
+      this.logger.warn(`Cannot load relations for null product`);
+      return;
+    }
+    
+    this.logger.debug(`Loading relations for product ${product.id}`);
+    
     try {
-      // Load variants 
-      product.variants = await this.variantRepository.find({
-        where: { product_id: product.id }
-      });
-      
-      // Load images
-      product.images = await this.productImageRepository.find({
-        where: { product_id: product.id }
-      });
-      
-      // Load categories
-      if (!product.categories) {
-        // Use the entity manager from variantRepository since it's from TypeORM core
-        product.categories = await this.variantRepository.manager
-          .createQueryBuilder()
-          .select('c.*')
-          .from('categories', 'c')
-          .innerJoin('product_categories', 'pc', 'pc.category_id = c.id')
-          .where('pc.product_id = :productId', { productId: product.id })
-          .getRawMany();
+      // Load variants with safe handling
+      try {
+        product.variants = await this.variantRepository.find({
+          where: { product_id: product.id }
+        });
+        this.logger.debug(`Loaded ${product.variants.length} variants for product ${product.id}`);
+      } catch (variantError) {
+        this.logger.error(`Failed to load variants for product ${product.id}: ${variantError.message}`);
+        // Graceful degradation - set empty array instead of failing
+        product.variants = [];
       }
       
-      this.logger.debug(`Loaded relations for product ${product.id}: ` +
-        `${product.variants?.length || 0} variants, ` +
-        `${product.images?.length || 0} images, ` +
-        `${product.categories?.length || 0} categories`);
+      // Load images with safe handling
+      try {
+        product.images = await this.productImageRepository.find({
+          where: { product_id: product.id }
+        });
+        this.logger.debug(`Loaded ${product.images.length} images for product ${product.id}`);
+      } catch (imageError) {
+        this.logger.error(`Failed to load images for product ${product.id}: ${imageError.message}`);
+        // Graceful degradation - set empty array instead of failing
+        product.images = [];
+      }
+      
+      // Load categories with safe handling
+      try {
+        if (!product.categories || product.categories.length === 0) {
+          // Simpler query to reduce complexity and avoid RLS issues
+          const categoriesQuery = this.variantRepository.manager
+            .createQueryBuilder()
+            .select('c.id, c.name')
+            .from('categories', 'c')
+            .innerJoin('product_categories', 'pc', 'pc.category_id = c.id')
+            .where('pc.product_id = :productId', { productId: product.id });
+            
+          product.categories = await categoriesQuery.getRawMany();
+          this.logger.debug(`Loaded ${product.categories.length} categories for product ${product.id}`);
+        }
+      } catch (categoryError) {
+        this.logger.error(`Failed to load categories for product ${product.id}: ${categoryError.message}`);
+        // Graceful degradation - set empty array instead of failing
+        product.categories = [];
+      }
+      
+      this.logger.debug(`Successfully loaded all relations for product ${product.id}`);
     } catch (error) {
-      this.logger.error(`Failed to load relations for product ${product.id}: ${error.message}`);
+      // Log but don't throw - this allows the product to be returned even with incomplete relations
+      this.logger.error(`Error in loadProductRelations for ${product.id}: ${error.message}`);
     }
   }
   

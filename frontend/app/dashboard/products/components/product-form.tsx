@@ -34,7 +34,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Product } from "@/lib/mock-api";
+import { Product, ProductImage } from "@/lib/product-api";
 import { ImageUpload, UploadedImage } from "@/components/ui/image-upload";
 
 /**
@@ -43,11 +43,11 @@ import { ImageUpload, UploadedImage } from "@/components/ui/image-upload";
 const productFormSchema = z.object({
   name: z.string().min(1, "Product name is required"),
   price: z.string().min(1, "Price is required"),
-  cost: z.string().optional(),
-  inventory: z.coerce.number().min(0, "Inventory must be 0 or greater"),
-  category: z.string().min(1, "Category is required"),
+  cost_price: z.string().optional(),
+  // inventory handling via metadata using record type for flexibility
+  metadata: z.record(z.string(), z.any()).optional(),
   description: z.string().optional(),
-  status: z.enum(["Active", "Draft", "Out of Stock", "Low Stock"]),
+  status: z.string().min(1, "Status is required"),
   images: z.array(z.object({
     id: z.string(),
     url: z.string(),
@@ -58,6 +58,31 @@ const productFormSchema = z.object({
 
 // Type for form values
 type ProductFormValues = z.infer<typeof productFormSchema>;
+
+/**
+ * Convert uploaded images to ProductImage format
+ */
+const formatImagesToApi = (images: UploadedImage[]): Partial<ProductImage>[] => {
+  return images.map(img => ({
+    id: img.id,
+    original_url: img.url,
+    thumbnail_url: img.url,
+  }));
+};
+
+/**
+ * Convert API ProductImage to UploadedImage format
+ */
+const formatImagesFromApi = (images?: ProductImage[]): UploadedImage[] => {
+  if (!images || images.length === 0) return [];
+  
+  return images.map(img => ({
+    id: img.id,
+    url: img.original_url || img.thumbnail_url,
+    name: 'Product Image',
+    size: 0
+  }));
+};
 
 /**
  * Props for the ProductForm component
@@ -72,7 +97,7 @@ interface ProductFormProps {
    * Callback function called when form is submitted successfully
    * @param data The form data
    */
-  onSubmit: (data: ProductFormValues) => Promise<void>;
+  onSubmit: (data: any) => Promise<void>;
 }
 
 /**
@@ -86,17 +111,10 @@ export function ProductForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
   
-  // Convert initialData images if they exist
-  const initialImages: UploadedImage[] = initialData?.images 
-    ? initialData.images 
-    : initialData?.photo_url 
-      ? [{ 
-          id: 'legacy-image', 
-          url: initialData.photo_url, 
-          name: 'Product Image', 
-          size: 0 
-        }] 
-      : [];
+  // Convert API product images to the format expected by the ImageUpload component
+  const initialImages = initialData?.images 
+    ? formatImagesFromApi(initialData.images)
+    : [];
   
   // Initialize form with React Hook Form and Zod resolver
   const form = useForm<ProductFormValues>({
@@ -104,27 +122,31 @@ export function ProductForm({
     defaultValues: initialData ? {
       name: initialData.name,
       price: String(initialData.price),
-      cost: initialData.cost ? String(initialData.cost) : '',
-      inventory: initialData.inventory,
-      category: initialData.category,
+      cost_price: initialData.cost_price ? String(initialData.cost_price) : '',
+      metadata: {
+        ...initialData.metadata,
+        category: initialData.metadata?.category || '',
+      },
       description: initialData.description || '',
       status: initialData.status,
       images: initialImages
     } : {
       name: "",
       price: "",
-      cost: "",
-      inventory: 0,
-      category: "",
+      cost_price: "",
+      metadata: {
+        category: "",
+        inventory: 0,
+      },
       description: "",
-      status: "Draft",
+      status: "draft",
       images: []
     }
   });
 
   // Calculate profit and profit margin when price or cost changes
   const price = parseFloat(form.watch("price") || "0");
-  const cost = parseFloat(form.watch("cost") || "0");
+  const cost = parseFloat(form.watch("cost_price") || "0");
   const profit = isNaN(price) || isNaN(cost) ? 0 : price - cost;
   const profitMargin = price <= 0 ? 0 : (profit / price) * 100;
 
@@ -133,14 +155,16 @@ export function ProductForm({
     try {
       setIsSubmitting(true);
       
-      // Convert string price and cost to numbers for the API
+      // Format the data for the API
       const formattedData = {
         ...data,
         price: parseFloat(data.price),
-        cost: data.cost ? parseFloat(data.cost) : undefined
+        cost_price: data.cost_price ? parseFloat(data.cost_price) : undefined,
+        // Convert images to the format expected by the API
+        images: data.images ? formatImagesToApi(data.images) : undefined,
       };
       
-      await onSubmitProp(formattedData as any);
+      await onSubmitProp(formattedData);
       toast.success(initialData ? "Product updated successfully" : "Product created successfully");
     } catch (error) {
       console.error("Error submitting form:", error);
@@ -193,7 +217,7 @@ export function ProductForm({
           {/* Cost */}
           <FormField
             control={form.control}
-            name="cost"
+            name="cost_price"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Cost per item</FormLabel>
@@ -225,7 +249,7 @@ export function ProductForm({
           {/* Inventory */}
           <FormField
             control={form.control}
-            name="inventory"
+            name="metadata.inventory"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Inventory</FormLabel>
@@ -243,7 +267,7 @@ export function ProductForm({
           {/* Category */}
           <FormField
             control={form.control}
-            name="category"
+            name="metadata.category"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Category</FormLabel>
@@ -254,15 +278,15 @@ export function ProductForm({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="Shirts">Shirts</SelectItem>
-                    <SelectItem value="Pants">Pants</SelectItem>
-                    <SelectItem value="Shoes">Shoes</SelectItem>
+                    <SelectItem value="Apparel">Apparel</SelectItem>
+                    <SelectItem value="Footwear">Footwear</SelectItem>
                     <SelectItem value="Accessories">Accessories</SelectItem>
-                    <SelectItem value="Outerwear">Outerwear</SelectItem>
+                    <SelectItem value="Equipment">Equipment</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormDescription>
-                  The category this product belongs to.
+                  The product category helps organize your inventory.
                 </FormDescription>
                 <FormMessage />
               </FormItem>

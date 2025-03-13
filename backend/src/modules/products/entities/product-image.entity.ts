@@ -14,11 +14,11 @@ export class ProductImage extends BaseEntity {
   product_id: string;
 
   @ApiProperty({ description: 'Original image URL (S3/CDN)' })
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ type: 'varchar', length: 255, name: 'original_url' })
   originalUrl: string;
 
   @ApiProperty({ description: 'Thumbnail image URL (S3/CDN)' })
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ type: 'varchar', length: 255, name: 'thumbnail_url' })
   thumbnailUrl: string;
 
   @ApiProperty({ description: 'Image alt text' })

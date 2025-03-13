@@ -13,6 +13,7 @@ import {
   HttpCode,
   Logger,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -73,7 +74,29 @@ export class ProductController {
     description: 'Product not found',
   })
   async getProduct(@Param('id', ParseUUIDPipe) id: string): Promise<Product> {
-    return this.productService.getProduct(id);
+    try {
+      this.logger.log(`Fetching product with ID: ${id}`);
+      const product = await this.productService.getProduct(id);
+      
+      if (!product) {
+        this.logger.warn(`Product with ID ${id} not found`);
+        throw new NotFoundException(`Product with ID "${id}" not found`);
+      }
+      
+      this.logger.log(`Successfully retrieved product: ${product.name} (${id})`);
+      return product;
+    } catch (error) {
+      // Log detailed error information
+      this.logger.error(`Error fetching product ${id}: ${error.message}`, error.stack);
+      
+      // Re-throw specific errors like NotFoundException
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      
+      // For other errors, throw a more generic error with less sensitive information
+      throw new InternalServerErrorException('An error occurred while fetching the product. Please try again later.');
+    }
   }
 
   /**

@@ -164,8 +164,8 @@ export class ProductRepository extends BaseRepository<Product> {
       .addSelect('categories.id')
       .addSelect('categories.name')
       .addSelect('images.id')
-      .addSelect('images.original_url')
-      .addSelect('images.thumbnail_url')
+      .addSelect('images.originalUrl')
+      .addSelect('images.thumbnailUrl')
       .where('product.id = :id', { id })
       .andWhere('product.deleted_at IS NULL')
       .getOne();
@@ -367,8 +367,8 @@ export class ProductRepository extends BaseRepository<Product> {
       .addSelect('categories.id')
       .addSelect('categories.name')
       .addSelect('images.id')
-      .addSelect('images.original_url')
-      .addSelect('images.thumbnail_url')
+      .addSelect('images.originalUrl')
+      .addSelect('images.thumbnailUrl')
       .where('product.store_id = :storeId', { storeId })
       .andWhere('product.deleted_at IS NULL');
 
