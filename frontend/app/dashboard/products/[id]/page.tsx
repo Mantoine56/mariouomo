@@ -20,6 +20,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import ImageWithFallback from "@/components/ui/image-with-fallback";
 
 // Create ProductApi instance
 const productApi = new ProductApi();
@@ -185,8 +186,8 @@ export default function ProductDetailPage() {
 
   // Get the primary image or use a placeholder
   const mainImage = product.images && product.images.length > 0 
-    ? (product.images[0].original_url || product.images[0].thumbnail_url || '/images/placeholder-product.png')
-    : '/images/placeholder-product.png';
+    ? (product.images[0].original_url || product.images[0].thumbnail_url || '/images/product-placeholder.svg')
+    : '/images/product-placeholder.svg';
   
   // Format product status with graceful fallback
   const statusDisplay = product.status 
@@ -262,11 +263,12 @@ export default function ProductDetailPage() {
             <DashboardCard className="col-span-1">
               <div className="flex flex-col items-center justify-center p-4">
                 <div className="relative h-48 w-48 overflow-hidden rounded-md">
-                  <Image 
+                  <ImageWithFallback 
                     src={mainImage} 
                     alt={product.name}
                     fill
                     style={{ objectFit: 'contain' }}
+                    fallbackSrc="/images/product-placeholder.svg"
                   />
                 </div>
                 <span className="mt-4 text-sm text-muted-foreground">
@@ -493,12 +495,13 @@ export default function ProductDetailPage() {
                       key={image.id} 
                       className="group relative aspect-square overflow-hidden rounded-md border"
                     >
-                      <Image 
+                      <ImageWithFallback 
                         src={image.original_url} 
                         alt={`Product image of ${product.name}`}
                         fill
                         style={{ objectFit: 'cover' }}
                         className="transition-transform group-hover:scale-105"
+                        fallbackSrc="/images/product-placeholder.svg"
                       />
                     </div>
                   ))}

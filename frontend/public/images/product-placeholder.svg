@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="300" height="300" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="300" height="300" fill="#f5f5f5"/>
+  <path d="M150 130C138.954 130 130 138.954 130 150C130 161.046 138.954 170 150 170C161.046 170 170 161.046 170 150C170 138.954 161.046 130 150 130ZM98 150C98 121.281 121.281 98 150 98C178.719 98 202 121.281 202 150C202 178.719 178.719 202 150 202C121.281 202 98 178.719 98 150Z" fill="#cccccc"/>
+  <path d="M77 80C77 78.3431 78.3431 77 80 77H220C221.657 77 223 78.3431 223 80V220C223 221.657 221.657 223 220 223H80C78.3431 223 77 221.657 77 220V80Z" stroke="#cccccc" stroke-width="4"/>
+  <path d="M100 190L120 165L130 175L170 135L200 175" stroke="#cccccc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="150" y="240" font-family="Arial" font-size="14" text-anchor="middle" fill="#999999">Product Image</text>
+</svg> 
