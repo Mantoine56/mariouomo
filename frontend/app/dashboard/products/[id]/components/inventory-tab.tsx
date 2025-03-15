@@ -24,11 +24,10 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/use-toast";
 import { AlertCircle, CheckCircle, AlertTriangle, Package, Edit, RefreshCw } from "lucide-react";
 import { ProductApi, ProductVariantWithInventory, Product } from "@/lib/product-api";
 import { formatCurrency } from "@/lib/utils";
-import { useToast } from "@/components/ui/use-toast";
 
 interface InventoryTabProps {
   productId: string;
@@ -144,9 +143,9 @@ export function InventoryTab({ productId }: InventoryTabProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
+            <div className="h-8 w-full animate-pulse rounded-md bg-muted"></div>
+            <div className="h-24 w-full animate-pulse rounded-md bg-muted"></div>
+            <div className="h-24 w-full animate-pulse rounded-md bg-muted"></div>
           </div>
         </CardContent>
       </Card>
@@ -222,12 +221,12 @@ export function InventoryTab({ productId }: InventoryTabProps) {
             </TableBody>
           </Table>
           
-          <div className="mt-8 rounded-md border p-4 bg-muted/20">
-            <h3 className="text-lg font-medium mb-2">Inventory Management</h3>
+          <div className="mt-8 rounded-md border p-4 bg-amber-50 border-amber-200">
+            <h3 className="text-lg font-medium mb-2">Legacy Inventory System</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              This product is using a simplified inventory management approach. 
-              To use advanced inventory features like multiple locations and reorder points, 
-              add product variants.
+              This product is using a simplified inventory approach that stores inventory in metadata. 
+              For a more robust inventory system with support for proper ordering, stock reservations, 
+              and multiple locations, consider adding product variants.
             </p>
             <Button 
               variant="outline"

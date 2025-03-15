@@ -274,7 +274,9 @@ export function ProductForm({
                   <Input type="number" min="0" {...field} />
                 </FormControl>
                 <FormDescription>
-                  Number of items in stock.
+                  Number of items in stock. This uses a simplified inventory tracking approach.
+                  For advanced inventory management with multiple locations and stock reservations,
+                  consider setting up product variants.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
