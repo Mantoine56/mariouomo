@@ -28,7 +28,6 @@ export class ApiClient {
    */
   static async getAuthToken(): Promise<string | null> {
     try {
-      console.log('Getting authentication token from Supabase...');
       const { data, error } = await supabase.auth.getSession();
       
       if (error) {
@@ -37,25 +36,8 @@ export class ApiClient {
       }
       
       if (data?.session) {
-        // Only log token length for security
-        console.log('Retrieved token successfully', {
-          hasToken: !!data.session.access_token,
-          tokenLength: data.session.access_token?.length,
-          expiresAt: data.session.expires_at,
-          // Log more details for debugging
-          sessionType: typeof data.session,
-          tokenType: typeof data.session.access_token
-        });
-        
-        // Check if token is valid before returning
-        if (!data.session.access_token) {
-          console.error('Access token is missing from session');
-          return null;
-        }
-        
         return data.session.access_token;
       } else {
-        console.log('No active Supabase session found');
         return null;
       }
     } catch (e) {
@@ -79,9 +61,6 @@ export class ApiClient {
     }
   ): Promise<T> {
     try {
-      console.log(`[API CLIENT] Starting API request to ${endpoint}`);
-      const startTime = Date.now();
-
       // Ensure endpoint starts with a slash if not already
       const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
       
@@ -101,14 +80,8 @@ export class ApiClient {
         url += `?${queryString}`;
       }
       
-      // Add custom tag for logging if using non-standard auth header
-      const customTag = options?.customAuthHeader ? ' (with custom auth header)' : '';
-      console.log(`[API CLIENT] Making GET request to: ${url}${customTag}`);
-      
       // Get auth token
-      console.log('[API CLIENT] Getting authentication token...');
       const token = await ApiClient.getAuthToken();
-      console.log(`[API CLIENT] Authentication token present: ${!!token}`);
       
       // Prepare headers
       const headers: Record<string, string> = {
@@ -120,31 +93,41 @@ export class ApiClient {
         if (options?.customAuthHeader) {
           // Used for APIs that expect the raw token
           headers['Authorization'] = token;
-          console.log(`[API CLIENT] Added Authorization header with raw token (length: ${token.length})`);
         } else {
           // Standard Bearer token format
           headers['Authorization'] = `Bearer ${token}`;
-          console.log(`[API CLIENT] Added Authorization header with Bearer token (length: ${token.length})`);
         }
       }
       
-      console.log('[API CLIENT] Request headers:', headers);
-      
       // Make the request
-      console.log(`[API CLIENT] Sending request to ${url}...`);
       const response = await fetch(url, {
         method: 'GET',
         headers,
         credentials: 'include'  // Include cookies for session management
       });
       
-      const requestTime = Date.now() - startTime;
-      console.log(`[API CLIENT] Response received in ${requestTime}ms - status: ${response.status} ${response.statusText}`);
-      
       // Handle authentication errors
       if (response.status === 401) {
-        console.error('[API CLIENT] Authentication error - token might be invalid or expired');
+        console.error('Authentication error - token might be invalid or expired');
         throw new ApiError('Unauthorized', response.status);
+      }
+      
+      // Handle 500 Internal Server Errors
+      if (response.status === 500) {
+        let errorMessage = 'Internal server error';
+        let errorDetails = null;
+        
+        try {
+          // Try to parse error details from response
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          errorDetails = errorData;
+          console.error(`500 Internal Server Error at ${url}:`, errorData);
+        } catch (e) {
+          console.error(`500 Internal Server Error at ${url}, could not parse details`);
+        }
+        
+        throw new ApiError(errorMessage, response.status);
       }
       
       // Handle bad request errors
@@ -155,9 +138,9 @@ export class ApiClient {
           // Try to parse error details from response
           const errorData = await response.json();
           errorMessage = errorData.message || errorMessage;
-          console.error('[API CLIENT] API error details:', errorData);
+          console.error('API error details:', errorData);
         } catch (e) {
-          console.error('[API CLIENT] Could not parse error response');
+          console.error('Could not parse error response');
         }
         
         throw new ApiError(errorMessage, response.status);
@@ -171,28 +154,26 @@ export class ApiClient {
           // Try to parse error details from response
           const errorData = await response.json();
           errorMessage = errorData.message || errorMessage;
-          console.error('[API CLIENT] API error details:', errorData);
+          console.error('API error details:', errorData);
         } catch (e) {
-          console.error('[API CLIENT] Could not parse error response');
+          console.error('Could not parse error response');
         }
         
         throw new ApiError(errorMessage, response.status);
       }
       
       // Parse successful response
-      console.log('[API CLIENT] Parsing response data...');
       const data = await response.json();
-      console.log(`[API CLIENT] Successfully processed API response in ${Date.now() - startTime}ms`);
       return data as T;
     } catch (error) {
       // Rethrow ApiErrors
       if (error instanceof ApiError) {
-        console.error(`[API CLIENT] API error: ${error.message} (status: ${error.status})`);
+        console.error(`API error: ${error.message} (status: ${error.status})`);
         throw error;
       }
       
       // Convert other errors to ApiError with generic message
-      console.error('[API CLIENT] Request failed:', error);
+      console.error('Request failed:', error);
       throw new ApiError(
         error instanceof Error ? error.message : 'An unknown error occurred', 
         0

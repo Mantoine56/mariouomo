@@ -95,7 +95,7 @@ const navItems: NavItem[] = [
     items: [
       { title: 'All Products', url: '/dashboard/products' },
       { title: 'Add New', url: '/dashboard/products/new' },
-      { title: 'Categories', url: '/dashboard/products/categories' },
+      { title: 'Categories', url: '/dashboard/categories' },
     ]
   },
   {
