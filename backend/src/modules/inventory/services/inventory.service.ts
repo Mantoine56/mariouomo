@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, LessThan } from 'typeorm';
+import { Repository, DataSource, LessThan, In } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InventoryItem } from '../entities/inventory-item.entity';
 import { ProductVariant } from '../../products/entities/product-variant.entity';
@@ -396,6 +396,43 @@ export class InventoryService {
       });
     } catch (error) {
       this.logger.error(`Failed to find all inventory items: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Finds all inventory items for a specific product
+   * @param productId Product UUID
+   * @returns Array of inventory items for all variants of the product
+   */
+  async findByProductId(productId: string): Promise<InventoryItem[]> {
+    try {
+      this.logger.log(`Finding inventory items for product ${productId}`);
+      
+      // First, find all variants for this product
+      const variants = await this.variantRepository.find({
+        where: { product_id: productId },
+        select: ['id'], // Only need the IDs
+      });
+      
+      if (!variants || variants.length === 0) {
+        this.logger.log(`No variants found for product ${productId}`);
+        return [];
+      }
+      
+      const variantIds = variants.map(variant => variant.id);
+      this.logger.log(`Found ${variantIds.length} variants for product ${productId}`);
+      
+      // Then find all inventory items for these variants
+      const inventoryItems = await this.inventoryRepository.find({
+        where: { variant_id: In(variantIds) },
+        order: { location: 'ASC' },
+      });
+      
+      this.logger.log(`Found ${inventoryItems.length} inventory items for product ${productId}`);
+      return inventoryItems;
+    } catch (error) {
+      this.logger.error(`Error finding inventory items for product ${productId}: ${error.message}`, error.stack);
       throw error;
     }
   }

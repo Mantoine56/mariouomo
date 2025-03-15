@@ -55,6 +55,7 @@ export interface Product {
     tags?: string[];
     weight?: number;
     featured?: boolean;
+    inventory?: string | number;
     dimensions?: {
       unit: string;
       width: number;
@@ -125,6 +126,45 @@ export interface PaginatedResponse<T> {
   totalPages: number;
   hasNextPage: boolean;
   hasPreviousPage: boolean;
+}
+
+/**
+ * Inventory item interface
+ */
+export interface InventoryItem {
+  id: string;
+  variant_id: string;
+  quantity: number;
+  reserved_quantity: number;
+  reorder_point: number;
+  reorder_quantity: number;
+  location: string;
+  last_counted_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Extended product variant interface with inventory data
+ */
+export interface ProductVariantWithInventory {
+  // Include all properties from ProductVariant
+  id: string;
+  product_id: string;
+  sku: string;
+  barcode?: string;
+  price: number;
+  compare_at_price?: number;
+  position?: number;
+  option_values?: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+  
+  // Additional inventory properties
+  inventory?: InventoryItem[];
+  total_quantity?: number;
+  available_quantity?: number;
+  stock_status?: 'in_stock' | 'low_stock' | 'out_of_stock';
 }
 
 /**
@@ -771,6 +811,164 @@ export class ProductApi {
     } catch (error) {
       console.error('[PRODUCT API] Error finding similar products:', error);
       return [];
+    }
+  }
+
+  /**
+   * Get inventory data for a product
+   * @param productId Product UUID
+   * @returns Promise resolving to inventory data for all variants
+   */
+  public async getProductInventory(productId: string): Promise<ProductVariantWithInventory[]> {
+    try {
+      console.log(`[ProductApi] Fetching inventory data for product ${productId}`);
+      
+      // First get the product with variants
+      const product = await this.getProduct(productId);
+      
+      if (!product.variants || product.variants.length === 0) {
+        console.log(`[ProductApi] No variants found for product ${productId}`);
+        return [];
+      }
+      
+      // Fetch inventory data for all variants of this product using our new endpoint
+      let inventoryItems: InventoryItem[] = [];
+      try {
+        inventoryItems = await ApiClient.get<InventoryItem[]>(`/inventory/product/${productId}`);
+        console.log(`[ProductApi] Fetched ${inventoryItems.length} inventory items for product ${productId}`);
+      } catch (err) {
+        console.error(`[ProductApi] Error fetching inventory from API, using fallback:`, err);
+        
+        // If the API call fails, try to get inventory data directly from the database
+        const variantIds = product.variants.map(variant => variant.id);
+        const inventoryByVariant = await this.getInventoryFromDatabase(variantIds);
+        
+        // Flatten the inventory items
+        inventoryItems = Object.values(inventoryByVariant).flat();
+      }
+      
+      // Group inventory items by variant_id
+      const inventoryByVariantId: Record<string, InventoryItem[]> = {};
+      inventoryItems.forEach(item => {
+        if (!inventoryByVariantId[item.variant_id]) {
+          inventoryByVariantId[item.variant_id] = [];
+        }
+        inventoryByVariantId[item.variant_id].push(item);
+      });
+      
+      // For each variant, map to ProductVariantWithInventory
+      const variantsWithInventory: ProductVariantWithInventory[] = product.variants.map(variant => {
+        // Get inventory items for this variant
+        const variantInventory = inventoryByVariantId[variant.id] || [];
+        
+        // Calculate total and available quantity
+        const totalQuantity = variantInventory.reduce((sum, item) => sum + item.quantity, 0);
+        const reservedQuantity = variantInventory.reduce((sum, item) => sum + (item.reserved_quantity || 0), 0);
+        const availableQuantity = Math.max(0, totalQuantity - reservedQuantity);
+        
+        // Determine stock status
+        let stockStatus: 'in_stock' | 'low_stock' | 'out_of_stock' = 'in_stock';
+        
+        // If any inventory item has a reorder point, use it to determine low stock
+        const hasReorderPoint = variantInventory.some(item => item.reorder_point > 0);
+        
+        if (availableQuantity <= 0) {
+          stockStatus = 'out_of_stock';
+        } else if (hasReorderPoint) {
+          // Check if any location is below reorder point
+          const isLowStock = variantInventory.some(item => 
+            item.quantity < item.reorder_point && item.reorder_point > 0
+          );
+          
+          if (isLowStock) {
+            stockStatus = 'low_stock';
+          }
+        } else if (availableQuantity < 5) { // Default low stock threshold
+          stockStatus = 'low_stock';
+        }
+        
+        // Map ProductVariant to ProductVariantWithInventory
+        return {
+          // Original ProductVariant properties
+          id: variant.id,
+          product_id: variant.product_id,
+          sku: variant.sku,
+          
+          // Additional properties needed for ProductVariantWithInventory
+          barcode: '',
+          price: product.price + (variant.price_adjustment || 0),
+          compare_at_price: product.compare_at_price,
+          position: 0,
+          option_values: {}, // Default empty object
+          created_at: product.created_at,
+          updated_at: product.updated_at,
+          
+          // Inventory data
+          inventory: variantInventory,
+          total_quantity: totalQuantity,
+          available_quantity: availableQuantity,
+          stock_status: stockStatus,
+          
+          // Include original variant properties for reference
+          name: variant.name,
+          price_adjustment: variant.price_adjustment,
+          weight: variant.weight,
+          current_stock: variant.current_stock
+        };
+      });
+      
+      return variantsWithInventory;
+    } catch (error) {
+      console.error(`[ProductApi] Error fetching product inventory:`, error);
+      throw this.handleError(error, 'Failed to fetch product inventory');
+    }
+  }
+  
+  /**
+   * Fallback method to get inventory data directly from the database
+   * This is used when the API endpoint fails
+   */
+  private async getInventoryFromDatabase(variantIds: string[]): Promise<Record<string, InventoryItem[]>> {
+    try {
+      console.log(`[ProductApi] Fetching inventory data directly from database for ${variantIds.length} variants`);
+      
+      const { data, error } = await supabase
+        .from('inventory_items')
+        .select('*')
+        .in('variant_id', variantIds)
+        .is('deleted_at', null);
+      
+      if (error) {
+        console.error('[ProductApi] Error fetching inventory from database:', error);
+        return {};
+      }
+      
+      // Group inventory items by variant_id
+      const inventoryByVariant: Record<string, InventoryItem[]> = {};
+      
+      data.forEach((item: any) => {
+        if (!inventoryByVariant[item.variant_id]) {
+          inventoryByVariant[item.variant_id] = [];
+        }
+        
+        inventoryByVariant[item.variant_id].push({
+          id: item.id,
+          variant_id: item.variant_id,
+          quantity: item.quantity || 0,
+          reserved_quantity: item.reserved_quantity || 0,
+          reorder_point: item.reorder_point || 0,
+          reorder_quantity: item.reorder_quantity || 0,
+          location: item.location || 'Default',
+          last_counted_at: item.last_counted_at,
+          created_at: item.created_at,
+          updated_at: item.updated_at
+        });
+      });
+      
+      return inventoryByVariant;
+    } catch (error) {
+      console.error('[ProductApi] Error in database fallback for inventory:', error);
+      return {};
     }
   }
 }

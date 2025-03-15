@@ -188,4 +188,22 @@ export class InventoryController {
   ): Promise<InventoryItem[]> {
     return this.inventoryService.findInventoryByLocation(location);
   }
+
+  /**
+   * Gets inventory items for a specific product
+   * Requires ADMIN or MERCHANT role
+   */
+  @Get('product/:productId')
+  @Roles(Role.ADMIN, Role.MERCHANT)
+  @ApiOperation({ summary: 'Get inventory items for a product' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Inventory items retrieved successfully',
+    type: [InventoryItem],
+  })
+  async getInventoryByProduct(
+    @Param('productId', ParseUUIDPipe) productId: string,
+  ): Promise<InventoryItem[]> {
+    return this.inventoryService.findByProductId(productId);
+  }
 }

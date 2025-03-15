@@ -26,6 +26,7 @@ import ImageWithFallback from "@/components/ui/image-with-fallback";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { InventoryTab } from "./components/inventory-tab";
 
 // Create ProductApi instance
 const productApi = new ProductApi();
@@ -1238,59 +1239,7 @@ export default function ProductDetailPage() {
         
         {/* Inventory Tab */}
         <TabsContent value="inventory" className="space-y-4">
-          <DashboardCard>
-            <div className="p-6">
-              <h3 className="mb-4 text-lg font-semibold">Inventory & Variants</h3>
-              
-              {(!product.variants || product.variants.length === 0) ? (
-                <div className="rounded-md border p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium">Standard Product</h4>
-                      <p className="text-sm text-muted-foreground">This product doesn't have any variants</p>
-                    </div>
-                    <Badge variant={getStatusBadgeVariant(product.status)}>
-                      {statusDisplay}
-                    </Badge>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="rounded-md border">
-                    <div className="bg-muted/50 p-3">
-                      <h4 className="font-medium">Product Variants ({product.variants.length})</h4>
-                    </div>
-                    <div className="divide-y">
-                      {product.variants.map((variant) => (
-                        <div key={variant.id} className="flex items-center justify-between p-4">
-                          <div>
-                            <h5 className="font-medium">{variant.name}</h5>
-                            <p className="text-sm text-muted-foreground">SKU: {variant.sku}</p>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-medium">
-                              {formatCurrency(product.price + variant.price_adjustment)}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              Stock: {variant.current_stock}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <Button 
-                    variant="outline"
-                    onClick={() => setIsEditMode(true)}
-                  >
-                    <Edit className="mr-2 h-4 w-4" />
-                    Manage Variants
-                  </Button>
-                </div>
-              )}
-            </div>
-          </DashboardCard>
+          <InventoryTab productId={productId} />
         </TabsContent>
       </Tabs>
 
