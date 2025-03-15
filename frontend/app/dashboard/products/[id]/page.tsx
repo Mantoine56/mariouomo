@@ -7,11 +7,12 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Package, Edit, Trash, Share2, Clock, DollarSign, ShoppingCart, Tag, LayoutGrid, X, ChevronLeft, ChevronRight, Info, Maximize2 } from "lucide-react";
+import { ArrowLeft, Loader2, Package, Edit, Trash, Share2, Clock, DollarSign, ShoppingCart, Tag, LayoutGrid, X, ChevronLeft, ChevronRight, Info, Maximize2, GripVertical, Check, Pencil, ImagePlus } from "lucide-react";
 import Link from "next/link";
 import { toast } from "react-hot-toast";
 import Image from "next/image";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 
 import { DashboardCard } from "@/components/ui/dashboard-card";
 import { ProductForm } from "../components/product-form";
@@ -22,6 +23,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import ImageWithFallback from "@/components/ui/image-with-fallback";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 // Create ProductApi instance
 const productApi = new ProductApi();
@@ -53,8 +57,38 @@ export default function ProductDetailPage() {
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+  // State for image management
+  const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
+  const [isReordering, setIsReordering] = useState(false);
+  const [isEditingAltText, setIsEditingAltText] = useState<string | null>(null);
+  const [altText, setAltText] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
+  const [isAltTextModalOpen, setIsAltTextModalOpen] = useState(false);
+  const [currentEditingImage, setCurrentEditingImage] = useState<ProductImage | null>(null);
+
   // Get product ID from URL params
   const productId = params.id as string;
+
+  // Get valid images only once for use in multiple places
+  const validImages = React.useMemo(() => {
+    return (product?.images
+      ?.filter(img => !!img.original_url || !!img.thumbnail_url || !!img.url)
+      ?.sort((a, b) => (a.position ?? 0) - (b.position ?? 0)) || []);
+  }, [product?.images]);
+  
+  // Log valid images for debugging
+  React.useEffect(() => {
+    if (product?.images) {
+      console.log(`[DEBUG] Found ${validImages.length} valid images sorted by position:`, validImages.map(img => ({
+        id: img.id,
+        position: img.position,
+        url: img.url,
+        original_url: img.original_url,
+        thumbnail_url: img.thumbnail_url
+      })));
+    }
+  }, [validImages, product?.images]);
 
   // Add function to redirect to similar product ID if needed
   const checkAndRedirectToSimilarProduct = async (id: string) => {
@@ -106,6 +140,217 @@ export default function ProductDetailPage() {
     if (!product?.images) return;
     const validImages = product.images.filter(img => !!img.original_url || !!img.thumbnail_url || !!img.url);
     setCurrentImageIndex((prevIndex) => (prevIndex - 1 + validImages.length) % validImages.length);
+  };
+
+  // Function to toggle image selection
+  const toggleImageSelection = (imageId: string) => {
+    setSelectedImages(prev => {
+      const newSelection = new Set(prev);
+      if (newSelection.has(imageId)) {
+        newSelection.delete(imageId);
+      } else {
+        newSelection.add(imageId);
+      }
+      return newSelection;
+    });
+  };
+
+  // Function to delete selected images
+  const deleteSelectedImages = async () => {
+    if (selectedImages.size === 0) return;
+    
+    if (!confirm(`Are you sure you want to delete ${selectedImages.size} selected image${selectedImages.size > 1 ? 's' : ''}?`)) {
+      return;
+    }
+    
+    try {
+      setIsSaving(true);
+      await productApi.removeMultipleProductImages(productId, Array.from(selectedImages));
+      toast.success(`${selectedImages.size} image${selectedImages.size > 1 ? 's' : ''} deleted successfully`);
+      
+      // Add a small delay to ensure the backend has processed the deletion
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Refresh product data with cache busting
+      const timestamp = Date.now(); // Add timestamp to force a fresh fetch
+      const data = await productApi.getProduct(`${productId}?t=${timestamp}`);
+      
+      // Sort the images by position to ensure they're displayed in the correct order
+      if (data.images) {
+        data.images = data.images.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+      }
+      
+      setProduct(data);
+      
+      // Clear selection
+      setSelectedImages(new Set());
+    } catch (err) {
+      console.error('Error deleting images:', err);
+      toast.error('Failed to delete images');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Function to save image order
+  const saveImageOrder = async (reorderedImages: ProductImage[]) => {
+    try {
+      setIsSaving(true);
+      
+      // Extract image IDs in the correct order
+      const imageIds = reorderedImages.map(img => img.id);
+      
+      // Update the product state immediately to reflect the new order
+      // This ensures the UI shows the correct order even before the API call completes
+      if (product) {
+        const updatedImages = product.images?.map(img => {
+          const newIndex = imageIds.indexOf(img.id);
+          if (newIndex !== -1) {
+            return {
+              ...img,
+              position: newIndex
+            };
+          }
+          return img;
+        }).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+        
+        setProduct({
+          ...product,
+          images: updatedImages
+        });
+      }
+      
+      // Call the API to update the positions
+      await productApi.updateImagePositions(productId, imageIds);
+      toast.success('Image order updated successfully');
+      
+      // Add a small delay to ensure the backend has processed the update
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Refresh product data with cache busting
+      const timestamp = Date.now(); // Add timestamp to force a fresh fetch
+      const data = await productApi.getProduct(`${productId}?t=${timestamp}`);
+      
+      // Sort the images by position to ensure they're displayed in the correct order
+      if (data.images) {
+        data.images = data.images.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+      }
+      
+      setProduct(data);
+      
+      // Exit reordering mode
+      setIsReordering(false);
+    } catch (err) {
+      console.error('Error updating image order:', err);
+      toast.error('Failed to update image order');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Function to save alt text
+  const saveAltText = async () => {
+    if (!currentEditingImage) return;
+    
+    try {
+      setIsSaving(true);
+      await productApi.updateImageAltText(productId, currentEditingImage.id, altText);
+      toast.success('Alt text updated successfully');
+      
+      // Refresh product data with cache busting
+      const timestamp = Date.now(); // Add timestamp to force a fresh fetch
+      const data = await productApi.getProduct(`${productId}?t=${timestamp}`);
+      
+      // Sort the images by position to ensure they're displayed in the correct order
+      if (data.images) {
+        data.images = data.images.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+      }
+      
+      setProduct(data);
+      
+      // Close the modal
+      setIsAltTextModalOpen(false);
+      setCurrentEditingImage(null);
+    } catch (err) {
+      console.error('Error updating alt text:', err);
+      toast.error('Failed to update alt text');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Function to open alt text editing modal
+  const openAltTextModal = (image: ProductImage) => {
+    setCurrentEditingImage(image);
+    setAltText(image.alt || '');
+    setIsAltTextModalOpen(true);
+  };
+
+  // Function to handle drag end
+  const handleDragEnd = (result: any) => {
+    // Dropped outside the list
+    if (!result.destination || !product) {
+      return;
+    }
+
+    // Reorder the images
+    const reorderedImages = Array.from(validImages);
+    const [removed] = reorderedImages.splice(result.source.index, 1);
+    reorderedImages.splice(result.destination.index, 0, removed);
+
+    // Update the product with reordered images
+    setProduct({
+      ...product,
+      images: product.images?.map(img => {
+        // Find the corresponding reordered image
+        const reorderedImage = reorderedImages.find(ri => ri.id === img.id);
+        if (reorderedImage) {
+          // Update the position based on the new index in the reorderedImages array
+          return {
+            ...img,
+            position: reorderedImages.findIndex(ri => ri.id === img.id)
+          };
+        }
+        return img;
+      })
+    });
+    
+    // If we're in reordering mode, save the changes immediately
+    if (isReordering) {
+      saveImageOrder(reorderedImages);
+    }
+  };
+
+  // Function to delete a single image
+  const deleteImage = async (imageId: string) => {
+    if (!confirm('Are you sure you want to delete this image?')) {
+      return;
+    }
+    
+    try {
+      setDeletingImageId(imageId);
+      await productApi.removeProductImage(productId, imageId);
+      toast.success('Image deleted successfully');
+      
+      // Add a small delay to ensure the backend has processed the deletion
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Refresh product data with cache busting
+      const timestamp = Date.now(); // Add timestamp to force a fresh fetch
+      const data = await productApi.getProduct(`${productId}?t=${timestamp}`);
+      
+      // Sort the images by position to ensure they're displayed in the correct order
+      if (data.images) {
+        data.images = data.images.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+      }
+      
+      setProduct(data);
+    } catch (err) {
+      console.error('Error deleting image:', err);
+      toast.error('Failed to delete image');
+    } finally {
+      setDeletingImageId(null);
+    }
   };
 
   // Fetch product data on component mount
@@ -185,12 +430,37 @@ export default function ProductDetailPage() {
     if (!confirm('Are you sure you want to delete this product?')) return;
     
     try {
+      setIsSaving(true);
+      
+      // If the product has images, delete them first
+      if (product?.images && product.images.length > 0) {
+        const imageIds = product.images.map(img => img.id);
+        try {
+          // Try to delete all images in a batch
+          await productApi.removeMultipleProductImages(productId, imageIds);
+        } catch (err) {
+          console.error('Error deleting product images:', err);
+          // If batch delete fails, try deleting images one by one
+          for (const imageId of imageIds) {
+            try {
+              await productApi.removeProductImage(productId, imageId);
+            } catch (imgErr) {
+              console.error(`Error deleting image ${imageId}:`, imgErr);
+              // Continue with other images even if one fails
+            }
+          }
+        }
+      }
+      
+      // Now delete the product
       await productApi.deleteProduct(productId);
       toast.success('Product deleted successfully');
       router.push('/dashboard/products');
     } catch (err) {
       console.error('Error deleting product:', err);
       toast.error('Failed to delete product');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -329,17 +599,6 @@ export default function ProductDetailPage() {
   const profit = product.price - costPrice;
   const profitMargin = product.price > 0 ? (profit / product.price) * 100 : 0;
 
-  // Get valid images only once for use in multiple places
-  const validImages = product?.images?.filter(img => !!img.original_url || !!img.thumbnail_url || !!img.url) || [];
-  
-  // Log valid images for debugging
-  console.log(`[DEBUG] Found ${validImages.length} valid images:`, validImages.map(img => ({
-    id: img.id,
-    url: img.url,
-    original_url: img.original_url,
-    thumbnail_url: img.thumbnail_url
-  })));
-
   return (
     <div className="flex flex-col space-y-6 p-8">
       {/* Header with navigation and actions */}
@@ -370,9 +629,19 @@ export default function ProductDetailPage() {
             variant="outline" 
             size="sm"
             onClick={handleDelete}
+            disabled={isSaving}
           >
-            <Trash className="mr-2 h-4 w-4" />
-            Delete
+            {isSaving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              <>
+                <Trash className="mr-2 h-4 w-4" />
+                Delete
+              </>
+            )}
           </Button>
           <Button 
             variant="default" 
@@ -689,7 +958,73 @@ export default function ProductDetailPage() {
         <TabsContent value="images" className="space-y-4">
           <DashboardCard>
             <div className="p-6">
-              <h3 className="mb-4 text-lg font-semibold">Product Images</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Product Images</h3>
+                
+                {validImages.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    {selectedImages.size > 0 ? (
+                      <Button 
+                        variant="destructive" 
+                        size="sm"
+                        onClick={deleteSelectedImages}
+                        disabled={isSaving}
+                      >
+                        <Trash className="mr-2 h-4 w-4" />
+                        Delete {selectedImages.size} selected
+                      </Button>
+                    ) : isReordering ? (
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setIsReordering(false)}
+                          disabled={isSaving}
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          variant="default" 
+                          size="sm"
+                          onClick={() => saveImageOrder(validImages)}
+                          disabled={isSaving}
+                        >
+                          {isSaving ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Check className="mr-2 h-4 w-4" />
+                              Save Order
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setIsReordering(true)}
+                        >
+                          <GripVertical className="mr-2 h-4 w-4" />
+                          Reorder
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setIsEditMode(true)}
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          Add Images
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
               
               {validImages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8">
@@ -726,36 +1061,164 @@ export default function ProductDetailPage() {
                             <p>- url: {img.url || 'N/A'}</p>
                             <p>- original_url: {img.original_url || 'N/A'}</p>
                             <p>- thumbnail_url: {img.thumbnail_url || 'N/A'}</p>
+                            <p>- alt_text: {img.alt || 'N/A'}</p>
                           </div>
                         ))}
                       </div>
                     </CollapsibleContent>
                   </Collapsible>
                 
-                  {/* Image Gallery - Direct copy from Overview tab */}
-                  <div className="flex flex-wrap gap-4 justify-start">
-                    {validImages.map((image, index) => (
-                      <div 
-                        key={image.id || index}
-                        className="relative w-32 h-32 overflow-hidden rounded-md border cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 dark:bg-gray-800"
-                        onClick={() => openImageModal(index)}
-                      >
-                        <ImageWithFallback
-                          src={image?.original_url ?? image?.thumbnail_url ?? image?.url ?? undefined}
-                          alt={`Product image ${index + 1}`}
-                          fill
-                          style={{ objectFit: 'contain' }}
-                          className="p-1"
-                          fallbackSrc="/images/product-placeholder.svg"
-                        />
-                        
-                        {/* Small image number indicator */}
-                        <div className="absolute bottom-1 right-1 bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
-                          {index + 1}
+                  {/* Image Gallery with management features */}
+                  {isReordering ? (
+                    <DragDropContext onDragEnd={handleDragEnd}>
+                      <Droppable droppableId="product-images" direction="horizontal">
+                        {(provided) => (
+                          <div 
+                            className="flex flex-wrap gap-4 justify-start" 
+                            {...provided.droppableProps}
+                            ref={provided.innerRef}
+                          >
+                            {validImages.map((image, index) => (
+                              <Draggable key={image.id} draggableId={image.id} index={index}>
+                                {(provided, snapshot) => (
+                                  <div
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    {...provided.dragHandleProps}
+                                    className={`
+                                      relative w-40 h-40 overflow-hidden rounded-md border 
+                                      ${snapshot.isDragging ? 'ring-2 ring-primary shadow-lg' : ''} 
+                                      cursor-move hover:opacity-95 transition-all duration-200 
+                                      bg-gray-100 dark:bg-gray-800
+                                    `}
+                                  >
+                                    {/* Image container */}
+                                    <div className="absolute inset-0 flex items-center justify-center p-2">
+                                      <ImageWithFallback
+                                        src={image?.original_url ?? image?.thumbnail_url ?? image?.url ?? undefined}
+                                        alt={image.alt || `Product image ${index + 1}`}
+                                        fill
+                                        style={{ objectFit: 'contain' }}
+                                        className="p-1"
+                                        fallbackSrc="/images/product-placeholder.svg"
+                                      />
+                                    </div>
+                                    
+                                    {/* Reorder handle */}
+                                    <div className="absolute top-2 left-2 z-10 text-white bg-black/50 rounded-full p-1">
+                                      <GripVertical className="h-4 w-4" />
+                                    </div>
+                                    
+                                    {/* Image number indicator */}
+                                    <div className="absolute bottom-1 right-1 bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                                      {index + 1}
+                                    </div>
+                                    
+                                    {/* Alt text indicator */}
+                                    {image.alt && (
+                                      <div className="absolute bottom-1 left-1 bg-black/70 text-white rounded-md px-1 text-xs max-w-[80%] truncate">
+                                        {image.alt}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
+                    </DragDropContext>
+                  ) : (
+                    <div className="flex flex-wrap gap-4 justify-start">
+                      {validImages.map((image, index) => (
+                        <div 
+                          key={image.id || index}
+                          className={`
+                            relative w-40 h-40 overflow-hidden rounded-md border 
+                            ${selectedImages.has(image.id) ? 'ring-2 ring-primary' : ''} 
+                            cursor-pointer hover:opacity-95 transition-all duration-200 
+                            bg-gray-100 dark:bg-gray-800 group
+                            hover:shadow-md hover:border-primary/50
+                          `}
+                          onClick={() => {
+                            if (isEditingAltText === image.id) return;
+                            if (selectedImages.size > 0) {
+                              toggleImageSelection(image.id);
+                            } else {
+                              openImageModal(index);
+                            }
+                          }}
+                        >
+                          {/* Image container */}
+                          <div className="absolute inset-0 flex items-center justify-center p-2">
+                            <ImageWithFallback
+                              src={image?.original_url ?? image?.thumbnail_url ?? image?.url ?? undefined}
+                              alt={image.alt || `Product image ${index + 1}`}
+                              fill
+                              style={{ objectFit: 'contain' }}
+                              className="p-1"
+                              fallbackSrc="/images/product-placeholder.svg"
+                            />
+                          </div>
+                          
+                          {/* Selection checkbox */}
+                          <div 
+                            className="absolute top-2 left-2 z-10"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleImageSelection(image.id);
+                            }}
+                          >
+                            <div className={`
+                              w-5 h-5 rounded border flex items-center justify-center
+                              ${selectedImages.has(image.id) 
+                                ? 'bg-primary border-primary text-white' 
+                                : 'bg-white/80 border-gray-300 hover:bg-gray-100'}
+                            `}>
+                              {selectedImages.has(image.id) && <Check className="h-3 w-3" />}
+                            </div>
+                          </div>
+                          
+                          {/* Image actions */}
+                          <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 transform group-hover:translate-y-0 translate-y-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-full bg-black/60 text-white hover:bg-black/80"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openAltTextModal(image);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-full bg-red-500/60 text-white hover:bg-red-500/80"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteImage(image.id);
+                              }}
+                              disabled={deletingImageId === image.id}
+                            >
+                              {deletingImageId === image.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                          
+                          {/* Image number indicator */}
+                          <div className="absolute bottom-1 right-1 bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                            {index + 1}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               }
             </div>
@@ -880,6 +1343,79 @@ export default function ProductDetailPage() {
             {/* Image counter */}
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
               {currentImageIndex + 1} / {validImages.length}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alt Text Editing Modal */}
+      {isAltTextModalOpen && currentEditingImage && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="relative w-full max-w-md bg-white dark:bg-gray-900 rounded-lg overflow-hidden p-6">
+            {/* Close button */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="absolute top-2 right-2 z-10"
+              onClick={() => setIsAltTextModalOpen(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            
+            <h3 className="text-lg font-semibold mb-4">Edit Image Alt Text</h3>
+            
+            {/* Image preview */}
+            <div className="relative h-40 w-full mb-4 bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden">
+              <ImageWithFallback
+                src={currentEditingImage?.original_url ?? 
+                     currentEditingImage?.thumbnail_url ?? 
+                     currentEditingImage?.url ?? 
+                     undefined}
+                alt={currentEditingImage.alt || 'Product image'}
+                fill
+                style={{ objectFit: 'contain' }}
+                className="p-2"
+                fallbackSrc="/images/product-placeholder.svg"
+              />
+            </div>
+            
+            {/* Alt text input */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="alt-text">Alt Text</Label>
+                <Textarea
+                  id="alt-text"
+                  value={altText}
+                  onChange={(e) => setAltText(e.target.value)}
+                  placeholder="Describe the image for accessibility"
+                  className="w-full"
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Alt text helps visually impaired users understand the content of images.
+                </p>
+              </div>
+              
+              <div className="flex justify-end gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsAltTextModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="default"
+                  onClick={saveAltText}
+                  disabled={isSaving}
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : 'Save Changes'}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

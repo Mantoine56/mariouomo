@@ -226,45 +226,121 @@ export class ProductService {
    */
   async removeProductImage(productId: string, imageId: string): Promise<void> {
     try {
-      // Check if product exists first
+      // Check if product exists
       const product = await this.productRepository.findOne({
         where: { id: productId }
       });
       
       if (!product) {
-        throw new NotFoundException(`Product with ID "${productId}" not found`);
+        this.logger.error(`Product not found with ID: ${productId}`);
+        throw new NotFoundException('Product not found');
       }
-
-      // Check if image exists and belongs to this product
+      
+      // Check if image exists and belongs to the product
       const image = await this.productImageRepository.findOne({
         where: { id: imageId, product_id: productId }
       });
-
-      if (!image) {
-        throw new NotFoundException(`Image with ID "${imageId}" not found for product "${productId}"`);
-      }
-
-      this.logger.debug(`Deleting image ${imageId} from product ${productId}`);
       
-      // Use entityManager to delete the image
-      try {
-        const result = await this.entityManager.delete('product_images', imageId);
-        
-        if (result.affected === 0) {
-          throw new NotFoundException(`Failed to delete image ${imageId}`);
-        }
-        
-        this.logger.debug(`Successfully deleted image ${imageId} from product ${productId}`);
-      } catch (error) {
-        this.logger.error(`Error deleting image from database: ${error.message}`);
-        throw new InternalServerErrorException(`Failed to delete product image: ${error.message}`);
+      if (!image) {
+        this.logger.error(`Image not found with ID: ${imageId} for product ${productId}`);
+        throw new NotFoundException(`Image not found with ID: ${imageId}`);
       }
-
-      // Clear cache
+      
+      // Remove the image
+      await this.productImageRepository.createQueryBuilder()
+        .delete()
+        .where('id = :id', { id: imageId })
+        .execute();
+      
+      // Invalidate cache to ensure frontend gets updated data
       await this.invalidateCache(productId);
+      
+      this.logger.log(`Removed image ${imageId} from product ${productId}`);
     } catch (error) {
-      this.logger.error(`Error removing product image: ${error.message}`);
-      this.logger.error(`Stack trace: ${error.stack}`);
+      this.logger.error(`Error removing image ${imageId} from product ${productId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update image positions for a product
+   * @param productId Product ID
+   * @param imageIds Ordered array of image IDs
+   */
+  async updateImagePositions(productId: string, imageIds: string[]): Promise<void> {
+    try {
+      // Check if product exists
+      const product = await this.productRepository.findOne({
+        where: { id: productId }
+      });
+      
+      if (!product) {
+        this.logger.error(`Product not found with ID: ${productId}`);
+        throw new NotFoundException('Product not found');
+      }
+      
+      // Verify all images exist and belong to the product
+      const images = await this.productImageRepository.find({
+        where: { product_id: productId }
+      });
+      
+      const imageMap = new Map(images.map(img => [img.id, img]));
+      
+      // Check if all provided image IDs belong to the product
+      for (const imageId of imageIds) {
+        if (!imageMap.has(imageId)) {
+          this.logger.error(`Image ${imageId} not found for product ${productId}`);
+          throw new NotFoundException(`Image ${imageId} not found for product ${productId}`);
+        }
+      }
+      
+      // Update positions using the repository method
+      await Promise.all(
+        imageIds.map((id, index) =>
+          this.productImageRepository.update(id, {
+            position: index,
+          }),
+        ),
+      );
+      
+      // Invalidate cache to ensure frontend gets updated data
+      await this.invalidateCache(productId);
+      
+      this.logger.log(`Updated positions for ${imageIds.length} images of product ${productId}`);
+    } catch (error) {
+      this.logger.error(`Error updating image positions for product ${productId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update image alt text
+   * @param imageId Image ID
+   * @param altText New alt text
+   */
+  async updateProductImageAltText(imageId: string, altText: string): Promise<void> {
+    try {
+      // Find the image to get its product_id
+      const image = await this.productImageRepository.findOne({
+        where: { id: imageId }
+      });
+      
+      if (!image) {
+        this.logger.error(`Image not found with ID: ${imageId}`);
+        throw new NotFoundException(`Image not found with ID: ${imageId}`);
+      }
+      
+      // Update the alt text using the correct property name
+      await this.productImageRepository.update(imageId, {
+        alt: altText, // Use 'alt' which maps to 'alt_text' in the database
+      });
+      
+      // Invalidate cache to ensure frontend gets updated data
+      await this.invalidateCache(image.product_id);
+      
+      this.logger.log(`Updated alt text for image ${imageId} of product ${image.product_id}`);
+    } catch (error) {
+      this.logger.error(`Error updating alt text for image ${imageId}:`, error);
       throw error;
     }
   }

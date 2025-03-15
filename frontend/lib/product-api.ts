@@ -88,6 +88,8 @@ export interface ProductImage {
   url?: string;           // The actual database field
   original_url: string;   // For frontend compatibility
   thumbnail_url: string;  // For frontend compatibility
+  alt?: string;           // Alt text for the image
+  position?: number;      // Position for ordering
   created_at: string;
 }
 
@@ -160,34 +162,40 @@ export class ProductApi {
 
   /**
    * Get a single product by ID
-   * @param id Product UUID
+   * @param id Product UUID (can include query parameters for cache busting)
    * @returns Promise resolving to a Product
    */
   public async getProduct(id: string): Promise<Product> {
     try {
-      console.log(`[FETCH STRATEGY] Starting fetch for product ${id}`);
+      // Extract the base ID without any query parameters
+      const baseId = id.split('?')[0];
+      console.log(`[FETCH STRATEGY] Starting fetch for product ${baseId}`);
       
       // Check for cached product first - increase performance by using cache more aggressively
-      const cacheKey = `product_${id}`;
+      const cacheKey = `product_${baseId}`;
       const cachedData = ProductApi.productCache.get(cacheKey);
       
-      // Use cached data if available and not too old
-      if (cachedData && Date.now() - cachedData.timestamp < ProductApi.CACHE_TTL) {
-        console.log(`[FETCH STRATEGY] Using cached data for product ${id}`);
+      // If the ID contains a query parameter, it's a cache-busting request
+      const isCacheBusting = id.includes('?');
+      
+      // Use cached data if available, not too old, and not a cache-busting request
+      if (cachedData && Date.now() - cachedData.timestamp < ProductApi.CACHE_TTL && !isCacheBusting) {
+        console.log(`[FETCH STRATEGY] Using cached data for product ${baseId}`);
         return cachedData.data;
       }
       
-      console.log(`[FETCH STRATEGY] Cache miss - attempting API fetch for product ${id}`);
+      console.log(`[FETCH STRATEGY] Cache miss or cache busting - attempting API fetch for product ${baseId}`);
       let retryCount = 0;
       const maxRetries = 1; // Reduce retries for faster fallback
       
       while (retryCount <= maxRetries) {
         try {
           // Attempt to get product from API
-          console.log(`[FETCH STRATEGY] API attempt ${retryCount + 1}/${maxRetries + 1} for product ${id}`);
+          console.log(`[FETCH STRATEGY] API attempt ${retryCount + 1}/${maxRetries + 1} for product ${baseId}`);
+          // Use the original ID with query parameters to ensure cache busting on the server side
           const response = await ApiClient.get<Product>(`${this.baseUrl}/${id}`);
           
-          console.log(`[FETCH STRATEGY] API fetch succeeded for product ${id}`);
+          console.log(`[FETCH STRATEGY] API fetch succeeded for product ${baseId}`);
           // Cache successful response
           ProductApi.productCache.set(cacheKey, {
             data: response,
@@ -200,11 +208,11 @@ export class ProductApi {
           
           if (retryCount === maxRetries) {
             // Try fallback to direct database query on last attempt - fail fast
-            console.log(`[FETCH STRATEGY] All API attempts failed, attempting direct database fallback for product ${id}`);
+            console.log(`[FETCH STRATEGY] All API attempts failed, attempting direct database fallback for product ${baseId}`);
             try {
-              const fallbackProduct = await this.fetchProductDirectlyById(id);
+              const fallbackProduct = await this.fetchProductDirectlyById(baseId);
               if (fallbackProduct) {
-                console.log(`[FETCH STRATEGY] Successfully retrieved product ${id} via database fallback`);
+                console.log(`[FETCH STRATEGY] Successfully retrieved product ${baseId} via database fallback`);
                 ProductApi.productCache.set(cacheKey, {
                   data: fallbackProduct,
                   timestamp: Date.now()
@@ -212,7 +220,7 @@ export class ProductApi {
                 return fallbackProduct;
               }
             } catch (fallbackError) {
-              console.error(`[FETCH STRATEGY] Database fallback failed for product ${id}:`, fallbackError);
+              console.error(`[FETCH STRATEGY] Database fallback failed for product ${baseId}:`, fallbackError);
             }
             throw error;
           }
@@ -634,6 +642,57 @@ export class ProductApi {
       await ApiClient.delete(`${this.baseUrl}/${productId}/images/${imageId}`);
     } catch (error) {
       throw this.handleError(error, 'Failed to remove product image');
+    }
+  }
+
+  /**
+   * Update image positions for a product
+   * @param productId Product UUID
+   * @param imageIds Ordered array of image IDs
+   * @returns Promise that resolves when the positions are updated
+   */
+  public async updateImagePositions(productId: string, imageIds: string[]): Promise<void> {
+    try {
+      await ApiClient.put<void>(`${this.baseUrl}/${productId}/images/positions`, { imageIds });
+      
+      // Clear the cache for this product to ensure fresh data on next fetch
+      const cacheKey = `product_${productId}`;
+      ProductApi.productCache.delete(cacheKey);
+    } catch (error) {
+      throw this.handleError(error, 'Failed to update image positions');
+    }
+  }
+
+  /**
+   * Update image alt text
+   * @param productId Product UUID
+   * @param imageId Image UUID
+   * @param altText New alt text
+   * @returns Promise that resolves when the alt text is updated
+   */
+  public async updateImageAltText(productId: string, imageId: string, altText: string): Promise<void> {
+    try {
+      await ApiClient.put<void>(`${this.baseUrl}/${productId}/images/${imageId}`, { altText });
+      
+      // Clear the cache for this product to ensure fresh data on next fetch
+      const cacheKey = `product_${productId}`;
+      ProductApi.productCache.delete(cacheKey);
+    } catch (error) {
+      throw this.handleError(error, 'Failed to update image alt text');
+    }
+  }
+
+  /**
+   * Delete multiple product images
+   * @param productId Product UUID
+   * @param imageIds Array of image UUIDs to delete
+   * @returns Promise that resolves when all images are deleted
+   */
+  public async removeMultipleProductImages(productId: string, imageIds: string[]): Promise<void> {
+    try {
+      await ApiClient.post<void>(`${this.baseUrl}/${productId}/images/batch-delete`, { imageIds });
+    } catch (error) {
+      throw this.handleError(error, 'Failed to delete multiple images');
     }
   }
 

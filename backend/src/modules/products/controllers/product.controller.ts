@@ -219,4 +219,24 @@ export class ProductController {
   ): Promise<void> {
     return this.productService.removeProductImage(productId, imageId);
   }
+
+  /**
+   * Update image positions for a product
+   * @param productId Product UUID
+   * @param data Object containing ordered array of image IDs
+   */
+  @Put(':productId/images/positions')
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update image positions for a product (Admin only)' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Image positions updated successfully',
+  })
+  async updateImagePositions(
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Body() data: { imageIds: string[] },
+  ): Promise<void> {
+    return this.productService.updateImagePositions(productId, data.imageIds);
+  }
 }

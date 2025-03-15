@@ -8,9 +8,13 @@ import {
   ParseUUIDPipe,
   UseGuards,
   BadRequestException,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Put,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiConsumes, ApiBody, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiConsumes, ApiBody, ApiParam, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ImageService } from '../services/image.service';
 import { ProductService } from '../services/product.service';
 import { FileValidationPipe } from '../../../common/pipes/file-validation.pipe';
@@ -135,5 +139,147 @@ export class ProductImageController {
     return {
       message: 'Image deleted successfully',
     };
+  }
+
+  /**
+   * Delete multiple product images in a batch operation
+   * @param productId Product ID
+   * @param data Object containing array of image IDs to delete
+   */
+  @Post(':productId/images/batch-delete')
+  @Roles(Role.ADMIN, Role.MERCHANT)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete multiple product images (Admin/Merchant only)' })
+  @ApiParam({ name: 'productId', type: 'string', format: 'uuid' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        imageIds: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'uuid',
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Images deleted successfully',
+  })
+  async batchDeleteImages(
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Body() data: { imageIds: string[] },
+  ) {
+    try {
+      // Check if product exists
+      const product = await this.productService.getProductById(productId);
+      if (!product) {
+        throw new BadRequestException('Product not found');
+      }
+
+      // Validate that all image IDs belong to the product
+      const validImageIds = product.images
+        .map((img: ProductImage) => img.id)
+        .filter(id => data.imageIds.includes(id));
+
+      if (validImageIds.length !== data.imageIds.length) {
+        throw new BadRequestException('One or more image IDs are invalid or do not belong to this product');
+      }
+
+      // Delete each image from storage and database
+      const results = await Promise.all(
+        validImageIds.map(async (imageId) => {
+          try {
+            // Find the image in the product's images array
+            const image = product.images.find((img: ProductImage) => img.id === imageId);
+            
+            if (image && image.originalUrl) {
+              // Delete image from storage
+              await this.imageService.deleteImage(image.originalUrl);
+            }
+            
+            // Remove image from database
+            await this.productService.removeProductImage(productId, imageId);
+            
+            return { id: imageId, success: true };
+          } catch (error) {
+            console.error(`Error deleting image ${imageId}:`, error);
+            return { id: imageId, success: false, error: error.message };
+          }
+        })
+      );
+
+      // The ProductService.removeProductImage method should handle cache invalidation internally
+
+      return {
+        message: 'Batch image deletion completed',
+        results,
+        success: results.every(r => r.success),
+      };
+    } catch (error) {
+      console.error(`Error in batch delete operation for product ${productId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update image alt text
+   * @param productId Product ID
+   * @param imageId Image ID
+   * @param data Object containing alt text
+   */
+  @Put(':productId/images/:imageId')
+  @Roles(Role.ADMIN, Role.MERCHANT)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update image alt text (Admin/Merchant only)' })
+  @ApiParam({ name: 'productId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'imageId', type: 'string', format: 'uuid' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        altText: {
+          type: 'string',
+          description: 'New alt text for the image',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Alt text updated successfully',
+  })
+  async updateImageAltText(
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+    @Body() data: { altText: string },
+  ) {
+    try {
+      // Check if product exists
+      const product = await this.productService.getProductById(productId);
+      if (!product) {
+        throw new BadRequestException('Product not found');
+      }
+
+      // Check if image exists and belongs to the product
+      const image = product.images.find((img: ProductImage) => img.id === imageId);
+      if (!image) {
+        throw new BadRequestException('Image not found');
+      }
+
+      // Update the alt text using the service method
+      await this.productService.updateProductImageAltText(imageId, data.altText);
+
+      return {
+        success: true,
+        message: 'Alt text updated successfully',
+      };
+    } catch (error) {
+      console.error(`Error updating alt text for image ${imageId}:`, error);
+      throw error;
+    }
   }
 }
