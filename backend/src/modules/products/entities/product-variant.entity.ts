@@ -1,15 +1,18 @@
 import { Entity, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
-import { BaseEntity } from '../../../common/entities/base.entity';
+import { BaseEntityNoSoftDelete } from '../../../common/entities/base.entity';
 import { Product } from './product.entity';
 import { InventoryItem } from '../../inventory/entities/inventory-item.entity';
 
 /**
  * ProductVariant entity representing different versions of a product
  * (e.g., different sizes, colors, etc.)
+ * 
+ * Note: This entity extends BaseEntityNoSoftDelete because the product_variants
+ * table doesn't have a deleted_at column for soft delete functionality
  */
 @Entity('product_variants')
-export class ProductVariant extends BaseEntity {
+export class ProductVariant extends BaseEntityNoSoftDelete {
   @ApiProperty({ description: 'Reference to the parent product' })
   @Column({ type: 'uuid' })
   product_id: string;

@@ -48,12 +48,11 @@ export class InventoryService {
         }
 
         // Check for existing inventory in the same location
-        // Handle the case where location column might not exist yet
         let existingQuery: any = {
           variant_id: dto.variant_id,
         };
         
-        // Only add location to query if it's provided and the column exists
+        // Only add location to query if it's provided
         if (dto.location) {
           existingQuery.location = dto.location;
         }
@@ -70,32 +69,32 @@ export class InventoryService {
         }
 
         // Create inventory item with appropriate field names
-        // Handle the case where DB uses 'reserved' instead of 'reserved_quantity'
         const itemData: any = {
-          ...dto,
-          // Set both fields to ensure compatibility during transition
-          reserved_quantity: 0,
-          reserved: 0,
-          // Set default values for other potentially missing columns
+          variant_id: dto.variant_id,
+          location: dto.location || 'Default',
+          quantity: dto.quantity || 0,
+          reserved_quantity: 0, // Only use the field that exists in the database
           reorder_point: dto.reorder_point || 0,
           reorder_quantity: dto.reorder_quantity || 0,
           version: 1,
           metadata: dto.metadata || {},
         };
 
+        this.logger.log(`Creating inventory item: ${JSON.stringify(itemData)}`);
+        
         const item = manager.create(InventoryItem, itemData);
         const savedItem = await manager.save(InventoryItem, item);
-
-        // Emit inventory created event
+        
+        // Emit inventory creation event
         this.eventEmitter.emit('inventory.created', {
           inventory_id: savedItem.id,
           variant_id: savedItem.variant_id,
-          quantity: savedItem.quantity,
+          quantity: savedItem.quantity
         });
-
+        
         return savedItem;
       } catch (error) {
-        this.logger.error(`Failed to create inventory item: ${error.message}`, error.stack);
+        this.logger.error(`Error creating inventory item: ${error.message}`, error.stack);
         throw error;
       }
     });
@@ -235,26 +234,14 @@ export class InventoryService {
       if (!item) {
         throw new NotFoundException('Inventory item not found');
       }
-
-      // Handle potential column name differences between DB and entity
-      // The entity uses reserved_quantity but DB might have reserved
-      const reservedQuantity = typeof item.reserved_quantity !== 'undefined' ? 
-        item.reserved_quantity : (item['reserved'] || 0);
       
-      const availableQuantity = item.quantity - reservedQuantity;
+      const availableQuantity = item.quantity - item.reserved_quantity;
       if (availableQuantity < quantity) {
         throw new ConflictException('Insufficient available inventory');
       }
 
-      // Update the appropriate field based on what exists
-      if (typeof item.reserved_quantity !== 'undefined') {
-        item.reserved_quantity += quantity;
-      } else if (typeof item['reserved'] !== 'undefined') {
-        item['reserved'] += quantity;
-      } else {
-        // If neither field exists, default to the expected field name
-        item.reserved_quantity = quantity;
-      }
+      // Update the reserved quantity
+      item.reserved_quantity += quantity;
 
       const savedItem = await manager.save(InventoryItem, item);
 
@@ -292,22 +279,13 @@ export class InventoryService {
       if (!item) {
         throw new NotFoundException('Inventory item not found');
       }
-
-      // Handle potential column name differences between DB and entity
-      // The entity uses reserved_quantity but DB might have reserved
-      const reservedQuantity = typeof item.reserved_quantity !== 'undefined' ? 
-        item.reserved_quantity : (item['reserved'] || 0);
       
-      if (reservedQuantity < quantity) {
+      if (item.reserved_quantity < quantity) {
         throw new ConflictException('Cannot release more than reserved quantity');
       }
 
-      // Update the appropriate field based on what exists
-      if (typeof item.reserved_quantity !== 'undefined') {
-        item.reserved_quantity -= quantity;
-      } else if (typeof item['reserved'] !== 'undefined') {
-        item['reserved'] -= quantity;
-      }
+      // Update the reserved quantity
+      item.reserved_quantity -= quantity;
 
       return manager.save(InventoryItem, item);
     });

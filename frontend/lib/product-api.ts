@@ -887,6 +887,24 @@ export class ProductApi {
           stockStatus = 'low_stock';
         }
         
+        // Convert price and price_adjustment to numbers before adding
+        const basePrice = typeof product.price === 'string' ? 
+          parseFloat(product.price) : (product.price || 0);
+        
+        const priceAdjustment = typeof variant.price_adjustment === 'string' ? 
+          parseFloat(variant.price_adjustment) : (variant.price_adjustment || 0);
+        
+        const finalPrice = basePrice + priceAdjustment;
+        
+        // Convert compare_at_price to number if it exists
+        const compareAtPrice = product.compare_at_price ? 
+          (typeof product.compare_at_price === 'string' ? 
+            parseFloat(product.compare_at_price) : product.compare_at_price) : 
+          undefined;
+        
+        // Safely extract option_values from variant
+        const optionValues = (variant as any).option_values || {};
+        
         // Map ProductVariant to ProductVariantWithInventory
         return {
           // Original ProductVariant properties
@@ -896,10 +914,10 @@ export class ProductApi {
           
           // Additional properties needed for ProductVariantWithInventory
           barcode: '',
-          price: product.price + (variant.price_adjustment || 0),
-          compare_at_price: product.compare_at_price,
+          price: finalPrice,
+          compare_at_price: compareAtPrice,
           position: 0,
-          option_values: {}, // Default empty object
+          option_values: optionValues,
           created_at: product.created_at,
           updated_at: product.updated_at,
           
@@ -910,10 +928,10 @@ export class ProductApi {
           stock_status: stockStatus,
           
           // Include original variant properties for reference
-          name: variant.name,
-          price_adjustment: variant.price_adjustment,
-          weight: variant.weight,
-          current_stock: variant.current_stock
+          name: (variant as any).name,
+          price_adjustment: priceAdjustment,
+          weight: (variant as any).weight,
+          current_stock: (variant as any).current_stock
         };
       });
       
@@ -969,6 +987,221 @@ export class ProductApi {
     } catch (error) {
       console.error('[ProductApi] Error in database fallback for inventory:', error);
       return {};
+    }
+  }
+
+  /**
+   * ProductVariant management methods
+   */
+
+  /**
+   * Create a new product variant
+   * @param productId Product UUID
+   * @param variant Variant data
+   * @returns Promise resolving to the created variant
+   */
+  public async createVariant(productId: string, variant: {
+    name: string;
+    sku?: string;
+    barcode?: string;
+    price_adjustment?: number;
+    option_values?: Record<string, any>;
+  }): Promise<ProductVariant> {
+    try {
+      console.log(`[ProductApi] Creating variant for product ${productId}`, variant);
+      
+      // Extract options from option_values to structure them properly
+      const options: Record<string, string> = {};
+      if (variant.option_values) {
+        Object.entries(variant.option_values).forEach(([key, value]) => {
+          options[key.toLowerCase()] = value; // Normalize keys to lowercase
+        });
+      }
+      
+      // Create the variant DTO according to backend CreateVariantDto
+      const variantData: any = {
+        productId, 
+        sku: variant.sku || "",
+        barcode: variant.barcode || "",
+        price_adjustment: parseFloat(String(variant.price_adjustment || 0)),
+        option_values: {
+          // Properly structured option values with descriptive keys
+          ...options,
+          // Make sure name is included in option_values
+          name: variant.name
+        }
+      };
+      
+      console.log(`[ProductApi] Sending variant data to backend:`, variantData);
+      
+      // Make API call
+      const response = await ApiClient.post<ProductVariant>(`/variants`, variantData);
+      
+      // Clear product cache to ensure fresh data on next fetch
+      const cacheKey = `product_${productId}`;
+      ProductApi.productCache.delete(cacheKey);
+      
+      return response;
+    } catch (error: any) {
+      console.error('[ProductApi] Error creating variant:', error);
+      
+      // Provide more detailed error information
+      if (error.status === 500) {
+        console.error('[ProductApi] Server error details:', error.message);
+        throw new ApiError('Server error occurred while creating variant. Please check logs.', 500);
+      } else if (error.status === 400) {
+        // Handle validation errors
+        console.error('[ProductApi] Validation error:', error.message);
+        throw new ApiError(`Validation error: ${error.message}`, 400);
+      }
+      
+      throw this.handleError(error, 'Failed to create product variant');
+    }
+  }
+
+  /**
+   * Update an existing product variant
+   * @param variantId Variant UUID
+   * @param variant Updated variant data
+   * @returns Promise resolving to the updated variant
+   */
+  public async updateVariant(variantId: string, variant: {
+    name?: string;
+    sku?: string;
+    barcode?: string;
+    price_adjustment?: number;
+    option_values?: Record<string, any>;
+  }): Promise<ProductVariant> {
+    try {
+      console.log(`[ProductApi] Updating variant ${variantId}`, variant);
+      
+      // Make API call
+      const response = await ApiClient.put<ProductVariant>(`/variants/${variantId}`, variant);
+      
+      // Clear all relevant caches
+      // This is a bit aggressive but ensures consistency
+      ProductApi.pageCache.clear();
+      
+      return response;
+    } catch (error) {
+      console.error('[ProductApi] Error updating variant:', error);
+      throw this.handleError(error, 'Failed to update product variant');
+    }
+  }
+
+  /**
+   * Delete a product variant
+   * @param variantId Variant UUID
+   * @returns Promise that resolves when the variant is deleted
+   */
+  public async deleteVariant(variantId: string): Promise<void> {
+    try {
+      console.log(`[ProductApi] Deleting variant ${variantId}`);
+      
+      // Make API call
+      await ApiClient.delete(`/variants/${variantId}`);
+      
+      // Clear all relevant caches
+      ProductApi.pageCache.clear();
+    } catch (error) {
+      console.error('[ProductApi] Error deleting variant:', error);
+      throw this.handleError(error, 'Failed to delete product variant');
+    }
+  }
+
+  /**
+   * Get variants for a product
+   * @param productId Product UUID
+   * @returns Promise resolving to an array of variants
+   */
+  public async getProductVariants(productId: string): Promise<ProductVariant[]> {
+    try {
+      console.log(`[ProductApi] Fetching variants for product ${productId}`);
+      
+      try {
+        // First try to get variants from the dedicated endpoint
+        const response = await ApiClient.get<ProductVariant[]>(`/variants/product/${productId}`);
+        console.log(`[ProductApi] Successfully fetched ${response.length} variants from API`);
+        return response;
+      } catch (apiError) {
+        console.warn(`[ProductApi] Error fetching variants from API, falling back to product data:`, apiError);
+        
+        // Fallback: Get the product and use its variants
+        const product = await this.getProduct(productId);
+        
+        if (product.variants && product.variants.length > 0) {
+          console.log(`[ProductApi] Using ${product.variants.length} variants from product data as fallback`);
+          return product.variants;
+        } else {
+          console.log(`[ProductApi] No variants found in product data`);
+          return [];
+        }
+      }
+    } catch (error) {
+      console.error('[ProductApi] Error fetching product variants:', error);
+      // Don't throw, just return empty array
+      return [];
+    }
+  }
+
+  /**
+   * Create inventory item for a variant
+   * @param variantId Variant UUID
+   * @param inventoryData Inventory data
+   * @returns Promise resolving to the created inventory item
+   */
+  public async createInventoryItem(
+    variantId: string, 
+    inventoryData: {
+      quantity: number;
+      location?: string;
+      reorder_point?: number;
+      reorder_quantity?: number;
+    }
+  ): Promise<InventoryItem> {
+    try {
+      console.log(`[ProductApi] Creating inventory item for variant ${variantId}`, inventoryData);
+      
+      // Set default values
+      const location = inventoryData.location || 'Default';
+      const reorder_point = inventoryData.reorder_point || 5;
+      const reorder_quantity = inventoryData.reorder_quantity || 10;
+      
+      // Create payload for inventory service
+      const payload = {
+        variant_id: variantId,
+        location,
+        quantity: inventoryData.quantity,
+        reserved_quantity: 0,
+        reorder_point,
+        reorder_quantity
+      };
+      
+      // Make API call to inventory service
+      const response = await ApiClient.post<InventoryItem>('/inventory', payload);
+      
+      return response;
+    } catch (error) {
+      console.error('[ProductApi] Error creating inventory item:', error);
+      throw this.handleError(error, 'Failed to create inventory item');
+    }
+  }
+
+  /**
+   * Get all inventory items for a product
+   * @param productId Product UUID
+   * @returns Promise resolving to an array of inventory items
+   */
+  public async getInventoryItems(productId: string): Promise<InventoryItem[]> {
+    try {
+      console.log(`[ProductApi] Fetching inventory items for product ${productId}`);
+      
+      const response = await ApiClient.get<InventoryItem[]>(`/inventory/product/${productId}`);
+      return response;
+    } catch (error) {
+      console.error('[ProductApi] Error fetching inventory items:', error);
+      // Return empty array instead of throwing
+      return [];
     }
   }
 }
