@@ -1204,6 +1204,57 @@ export class ProductApi {
       return [];
     }
   }
+
+  /**
+   * Clears product cache to ensure fresh data on next fetch
+   * @param productId - The product ID to clear cache for
+   */
+  async clearProductCache(productId?: string): Promise<void> {
+    if (productId) {
+      // Clear specific product cache
+      console.log(`Clearing cache for product ${productId}`);
+      const cacheKey = `product_${productId}`;
+      ProductApi.productCache.delete(cacheKey);
+    } else {
+      // Clear all product caches
+      console.log('Clearing all product caches');
+      ProductApi.productCache.clear();
+    }
+  }
+
+  /**
+   * Creates an inventory record for a new product
+   * This is used when a basic product is created before variants
+   * @param productId - The product ID
+   * @param variantId - The variant ID (default variant)
+   * @param quantity - Initial quantity
+   * @returns Created inventory item
+   */
+  async createInitialInventory(productId: string, variantId: string, quantity: number): Promise<any> {
+    try {
+      console.log(`Creating initial inventory record for product ${productId}, variant ${variantId} with quantity ${quantity}`);
+      
+      const inventoryData = {
+        variant_id: variantId,
+        location: 'Default',
+        quantity: quantity,
+        reserved_quantity: 0,
+        reorder_point: 5, // Default reorder point
+        reorder_quantity: 10 // Default reorder quantity
+      };
+      
+      const response = await ApiClient.post<any>(`/inventory`, inventoryData);
+      console.log('Inventory record created:', response.data);
+      
+      // Clear the product cache to ensure fresh data
+      await this.clearProductCache(productId);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error creating inventory record:', error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance

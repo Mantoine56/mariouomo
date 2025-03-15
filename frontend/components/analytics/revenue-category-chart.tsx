@@ -67,15 +67,14 @@ export default function RevenueCategoryChart({
   const totalRevenue = categoryData.reduce((sum, item) => sum + item.revenue, 0);
   
   // Calculate percentages
-  const dataWithPercentages = categoryData.map(item => ({
+  const formattedData = categoryData.map(item => ({
     category: item.category,
     revenue: item.revenue,
-    color: item.color,
     percentage: (item.revenue / totalRevenue) * 100
   })) as ChartDataItem[];
   
   // Sort by revenue (highest first)
-  const sortedData = [...dataWithPercentages].sort((a, b) => b.revenue - a.revenue);
+  const sortedData = [...formattedData].sort((a, b) => b.revenue - a.revenue);
   
   return (
     <Card className="w-full">

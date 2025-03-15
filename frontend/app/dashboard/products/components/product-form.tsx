@@ -55,8 +55,14 @@ import {
  */
 const productFormSchema = z.object({
   name: z.string().min(1, "Product name is required"),
-  price: z.string().min(1, "Price is required"),
-  cost_price: z.string().optional(),
+  price: z.string().min(1, "Price is required")
+    .refine(val => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, {
+      message: "Price must be a valid number greater than or equal to 0"
+    }),
+  cost_price: z.string().optional()
+    .refine(val => !val || (!isNaN(parseFloat(val)) && parseFloat(val) >= 0), {
+      message: "Cost price must be a valid number greater than or equal to 0"
+    }),
   // inventory handling via metadata using record type for flexibility
   metadata: z.record(z.string(), z.any()).optional(),
   description: z.string().optional(),
@@ -149,13 +155,20 @@ export function ProductForm({
     price: initialData.price.toString(),
     cost_price: initialData.cost_price ? initialData.cost_price.toString() : "",
     status: normalizeStatus(initialData.status),
-    metadata: initialData.metadata || {},
+    metadata: {
+      ...initialData.metadata,
+      inventory: initialData.metadata?.inventory || "0",
+      category: initialData.metadata?.category || "General"
+    },
     images: formatImagesFromApi(initialData.images),
   } : {
     name: "",
     price: "",
     cost_price: "",
-    metadata: { category: "General" },
+    metadata: { 
+      inventory: "0",
+      category: "General" 
+    },
     description: "",
     status: "draft" as const,
     images: []
@@ -168,8 +181,14 @@ export function ProductForm({
   });
 
   // Calculate profit and profit margin when price or cost changes
-  const price = parseFloat(form.watch("price") || "0");
-  const cost = parseFloat(form.watch("cost_price") || "0");
+  const watchPrice = form.watch("price");
+  const watchCost = form.watch("cost_price");
+
+  // Ensure price and cost are properly converted to numbers
+  const price = parseFloat(watchPrice || "0");
+  const cost = parseFloat(watchCost || "0");
+
+  // Calculate profit and margin with safety checks
   const profit = isNaN(price) || isNaN(cost) ? 0 : price - cost;
   const profitMargin = price <= 0 ? 0 : (profit / price) * 100;
 
@@ -258,25 +277,34 @@ export function ProductForm({
 
   // Handle form submission
   const onSubmit = async (data: ProductFormValues) => {
+    setIsSubmitting(true);
+    
     try {
-      setIsSubmitting(true);
+      // Extract images to handle them separately in the parent component
+      const { images, ...dataWithoutImages } = data;
       
-      // Format the data for the API - DON'T include images directly in update
-      const formattedData = {
-        ...data,
-        price: parseFloat(data.price),
+      // Ensure proper number conversion for price fields
+      const formattedData: Record<string, any> = {
+        ...dataWithoutImages,
+        // Convert price strings to numbers
+        price: parseFloat(data.price) || 0,
         cost_price: data.cost_price ? parseFloat(data.cost_price) : undefined,
-        // Remove images from the API request - they're handled separately
-        images: undefined
+        // Include inventory metadata for backward compatibility
+        metadata: {
+          ...data.metadata,
+          category: data.metadata?.category || "General",
+        },
+        // Pass images separately so parent component can handle them properly
+        _images: images // Use underscore to indicate this is not for direct API submission
       };
       
+      // Call the provided onSubmit callback
       await onSubmitProp(formattedData);
-      toast.success(initialData ? "Product updated successfully" : "Product created successfully");
-    } catch (error) {
-      console.error("Error submitting form:", error);
-      toast.error("Failed to save product. Please try again.");
-    } finally {
       setIsSubmitting(false);
+    } catch (error) {
+      console.error('Error submitting product form:', error);
+      setIsSubmitting(false);
+      // Let the parent component handle the error
     }
   };
 
@@ -380,14 +408,25 @@ export function ProductForm({
               name="metadata.inventory"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Inventory</FormLabel>
+                  <FormLabel>Initial Inventory</FormLabel>
                   <FormControl>
-                    <Input type="number" min="0" {...field} />
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      {...field}
+                      value={field.value || "0"}
+                      onChange={(e) => {
+                        // Convert empty string to "0"
+                        const value = e.target.value || "0";
+                        field.onChange(value);
+                      }}
+                    />
                   </FormControl>
                   <FormDescription>
-                    Number of items in stock. This uses a simplified inventory tracking approach.
-                    For advanced inventory management with multiple locations and stock reservations,
-                    consider setting up product variants.
+                    This is a simplified inventory count for this product. For advanced inventory management with 
+                    multiple variants and locations, you can add variants after creating the product.
+                    Each variant can have its own inventory tracking across different locations.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
