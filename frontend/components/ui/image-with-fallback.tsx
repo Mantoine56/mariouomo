@@ -66,6 +66,18 @@ export default function ImageWithFallback({
     // Check if it's a Supabase URL and ensure it has the correct format
     if (url.includes('supabase.co/storage')) {
       console.log(`[ImageWithFallback] Loading Supabase image: ${url}`);
+      
+      // Ensure the URL has the correct format for Supabase storage
+      // Sometimes URLs might be missing the /object/public/ part
+      if (!url.includes('/object/public/')) {
+        const parts = url.split('/storage/v1');
+        if (parts.length === 2) {
+          const newUrl = `${parts[0]}/storage/v1/object/public${parts[1]}`;
+          console.log(`[ImageWithFallback] Reformatted Supabase URL: ${newUrl}`);
+          return newUrl;
+        }
+      }
+      
       return url;
     }
     

@@ -574,7 +574,18 @@ export default function ProductDetailPage() {
     // Find the first image with any valid URL
     const imageWithValidUrl = images.find(img => !!img.original_url || !!img.thumbnail_url || !!img.url);
     if (imageWithValidUrl) {
-      const imageUrl = imageWithValidUrl.original_url || imageWithValidUrl.thumbnail_url || imageWithValidUrl.url;
+      // Try to get any valid URL, prioritizing original_url
+      let imageUrl = imageWithValidUrl.original_url || imageWithValidUrl.thumbnail_url || imageWithValidUrl.url;
+      
+      // Process Supabase URLs to ensure they have the correct format
+      if (imageUrl && imageUrl.includes('supabase.co/storage') && !imageUrl.includes('/object/public/')) {
+        const parts = imageUrl.split('/storage/v1');
+        if (parts.length === 2) {
+          imageUrl = `${parts[0]}/storage/v1/object/public${parts[1]}`;
+          console.log(`Reformatted Supabase URL: ${imageUrl}`);
+        }
+      }
+      
       console.log(`Using image with URL: ${imageUrl}`);
       return imageUrl || '/images/product-placeholder.svg';
     }

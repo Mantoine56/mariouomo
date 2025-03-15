@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { uploadFile, getStorageUrl, deleteFile } from "@/lib/supabase";
 import { productApi } from "@/lib/product-api";
 import { ProductImage } from "@/lib/product-api";
+import ImageWithFallback from "@/components/ui/image-with-fallback";
 
 /**
  * Type definition for an uploaded image
@@ -50,19 +51,53 @@ interface ImageUploadProps {
 }
 
 /**
+ * Process Supabase URL to ensure it has the correct format
+ * This helps with Supabase storage URLs that might need special handling
+ */
+export const processSupabaseUrl = (url: string): string => {
+  if (!url) return '';
+  
+  // If it's already a data URL or relative URL, return as is
+  if (url.startsWith('data:') || url.startsWith('/')) {
+    return url;
+  }
+  
+  // Check if it's a Supabase URL and ensure it has the correct format
+  if (url.includes('supabase.co/storage') && !url.includes('/object/public/')) {
+    const parts = url.split('/storage/v1');
+    if (parts.length === 2) {
+      const newUrl = `${parts[0]}/storage/v1/object/public${parts[1]}`;
+      console.log(`[ImageUpload] Reformatted Supabase URL: ${newUrl}`);
+      return newUrl;
+    }
+  }
+  
+  // Return the original URL if no special processing is needed
+  return url;
+};
+
+/**
  * Convert API ProductImage to UploadedImage format with validation
  */
 export const formatImagesFromApi = (images?: ProductImage[]): UploadedImage[] => {
   if (!images || images.length === 0) return [];
   
   return images
-    .filter(img => (img.original_url || img.thumbnail_url)) // Filter out images without URLs
-    .map(img => ({
-      id: img.id,
-      url: img.original_url || img.thumbnail_url || '',
-      name: 'Product Image',
-      size: 0
-    }));
+    .filter(img => (img.original_url || img.thumbnail_url || img.url)) // Filter out images without any URLs
+    .map(img => {
+      // Get the best available URL, prioritizing original_url
+      const imageUrl = img.original_url || img.thumbnail_url || img.url || '';
+      
+      // Process the URL to ensure it has the correct format
+      const processedUrl = processSupabaseUrl(imageUrl);
+      
+      return {
+        id: img.id,
+        url: processedUrl,
+        name: 'Product Image',
+        size: 0
+      };
+    });
 };
 
 /**
@@ -79,11 +114,18 @@ export function ImageUpload({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   
+  // Debug log the images we're receiving
+  useEffect(() => {
+    if (value.length > 0) {
+      console.log(`[ImageUpload] Received ${value.length} images:`, value);
+    }
+  }, [value]);
+  
   // Validate image URLs in the value prop to ensure no missing src attributes
   useEffect(() => {
     const validImages = value.filter(img => !!img.url);
     if (validImages.length !== value.length) {
-      console.log('Filtering out images with invalid URLs');
+      console.log('[ImageUpload] Filtering out images with invalid URLs');
       onChange(validImages);
     }
   }, [value, onChange]);
@@ -100,9 +142,9 @@ export function ImageUpload({
         originalUrl: url,
         thumbnailUrl: url
       });
-      console.log(`Image associated with product ${productId} in database`);
+      console.log(`[ImageUpload] Image associated with product ${productId} in database`);
     } catch (error) {
-      console.error("Error saving image to database:", error);
+      console.error("[ImageUpload] Error saving image to database:", error);
       // We don't throw here because the upload was successful, just not the database association
     }
   };
@@ -221,11 +263,12 @@ export function ImageUpload({
               key={image.id} 
               className="group relative aspect-square rounded-md overflow-hidden border border-border"
             >
-              <Image
+              <ImageWithFallback
                 fill
                 src={image.url}
                 alt={image.name}
                 className="object-cover"
+                fallbackSrc="/images/product-placeholder.svg"
               />
               <div className="absolute inset-0 flex items-center justify-center opacity-0 bg-black/40 transition group-hover:opacity-100">
                 <Button

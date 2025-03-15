@@ -37,6 +37,7 @@ import {
 import { Product, ProductImage } from "@/lib/product-api";
 import { ImageUpload, UploadedImage } from "@/components/ui/image-upload";
 import { formatImagesFromApi } from "@/components/ui/image-upload";
+import { ProductImageGallery } from "@/components/ui/product-image-gallery";
 
 /**
  * Form schema for product validation
@@ -343,6 +344,20 @@ export function ProductForm({
             render={({ field }) => (
               <FormItem className="col-span-full">
                 <FormLabel>Product Images</FormLabel>
+                
+                {/* Display current images in a gallery if they exist */}
+                {initialData?.images && initialData.images.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium mb-2">Current Images</h4>
+                    <ProductImageGallery 
+                      images={initialData.images}
+                      productName={initialData.name}
+                      mainImageClassName="h-48"
+                      thumbnailClassName="w-14 h-14"
+                    />
+                  </div>
+                )}
+                
                 <FormControl>
                   <ImageUpload
                     value={field.value}
