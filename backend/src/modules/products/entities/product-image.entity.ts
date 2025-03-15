@@ -1,14 +1,15 @@
 import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
-import { BaseEntity } from '../../../common/entities/base.entity';
+import { BaseEntityNoSoftDelete } from '../../../common/entities/base.entity';
 import { Product } from './product.entity';
 
 /**
  * ProductImage entity for storing product images
- * Supports both original and thumbnail images via S3/CDN
+ * Mapped to match the exact database schema in Supabase
+ * Uses BaseEntityNoSoftDelete since the table doesn't have a deleted_at column
  */
 @Entity('product_images')
-export class ProductImage extends BaseEntity {
+export class ProductImage extends BaseEntityNoSoftDelete {
   @ApiProperty({ description: 'Reference to the product' })
   @Column({ type: 'uuid' })
   product_id: string;
@@ -35,6 +36,14 @@ export class ProductImage extends BaseEntity {
   }
 
   /**
+   * Snake case version of originalUrl for frontend compatibility
+   */
+  @ApiProperty({ description: 'Original image URL - snake_case for frontend compatibility' })
+  get original_url(): string {
+    return this.url;
+  }
+
+  /**
    * Thumbnail URL - virtual property for frontend compatibility
    * In our current schema, we use the same URL for both
    */
@@ -50,6 +59,14 @@ export class ProductImage extends BaseEntity {
     }
   }
 
+  /**
+   * Snake case version of thumbnailUrl for frontend compatibility
+   */
+  @ApiProperty({ description: 'Thumbnail image URL - snake_case for frontend compatibility' })
+  get thumbnail_url(): string {
+    return this.url;
+  }
+
   @ApiProperty({ description: 'Image alt text' })
   @Column({ type: 'varchar', length: 255, nullable: true, name: 'alt_text' })
   alt: string;
@@ -58,24 +75,27 @@ export class ProductImage extends BaseEntity {
   @Column({ type: 'integer', default: 0 })
   position: number;
 
-  @ApiProperty({ description: 'Is this the primary product image?' })
-  @Column({ type: 'boolean', default: false })
-  is_primary: boolean;
-
-  @ApiProperty({ description: 'Image metadata in JSON format' })
-  @Column({ type: 'jsonb', nullable: true })
-  metadata?: {
-    width: number;
-    height: number;
-    format: string;
-    size: number;
-    contentType: string;
-  };
-
   // Relationships
   @ManyToOne(() => Product, product => product.images, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'product_id' })
   product: Product;
+  
+  /**
+   * Custom toJSON implementation to ensure correct serialization
+   * This explicitly sets the original_url and thumbnail_url properties
+   * to match what the frontend expects
+   */
+  toJSON() {
+    const { product, ...baseProps } = this as any;
+    
+    // Create a plain object with mapped properties
+    return {
+      ...baseProps,
+      // Explicitly set these fields to override getter behavior during serialization
+      original_url: this.url,
+      thumbnail_url: this.url
+    };
+  }
 }

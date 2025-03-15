@@ -59,28 +59,47 @@ export class ProductImageController {
     @Param('productId', ParseUUIDPipe) productId: string,
     @UploadedFile(FileValidationPipe) file: Express.Multer.File,
   ) {
-    // Check if product exists
-    const product = await this.productService.getProductById(productId);
-    if (!product) {
-      throw new BadRequestException('Product not found');
+    try {
+      // Check if product exists
+      const product = await this.productService.getProductById(productId);
+      if (!product) {
+        throw new BadRequestException('Product not found');
+      }
+
+      // Upload and process image
+      const { originalUrl, thumbnailUrl } = await this.imageService.uploadProductImage(
+        file.buffer,
+        productId,
+      );
+
+      // Update product with new image URLs
+      await this.productService.addProductImage(productId, {
+        originalUrl,
+        thumbnailUrl,
+      });
+
+      // Return with status code for explicit response
+      // Include both camelCase and snake_case versions for compatibility
+      return {
+        success: true,
+        originalUrl,
+        thumbnailUrl,
+        original_url: originalUrl, // Snake case alias for frontend compatibility
+        thumbnail_url: thumbnailUrl, // Snake case alias for frontend compatibility
+        message: 'Image uploaded successfully'
+      };
+    } catch (error) {
+      // Log detailed error information
+      console.error(`Error uploading image for product ${productId}:`, error);
+      
+      // Re-throw specific error types without modification
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      // Otherwise, wrap in a more user-friendly error message
+      throw new BadRequestException(`Failed to upload image: ${error.message}`);
     }
-
-    // Upload and process image
-    const { originalUrl, thumbnailUrl } = await this.imageService.uploadProductImage(
-      file.buffer,
-      productId,
-    );
-
-    // Update product with new image URLs
-    await this.productService.addProductImage(productId, {
-      originalUrl,
-      thumbnailUrl,
-    });
-
-    return {
-      originalUrl,
-      thumbnailUrl,
-    };
   }
 
   /**

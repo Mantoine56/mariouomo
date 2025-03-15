@@ -6,7 +6,7 @@
  */
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { Product, ProductImage } from "@/lib/product-api";
 import { ImageUpload, UploadedImage } from "@/components/ui/image-upload";
+import { formatImagesFromApi } from "@/components/ui/image-upload";
 
 /**
  * Form schema for product validation
@@ -47,7 +48,8 @@ const productFormSchema = z.object({
   // inventory handling via metadata using record type for flexibility
   metadata: z.record(z.string(), z.any()).optional(),
   description: z.string().optional(),
-  status: z.string().min(1, "Status is required"),
+  // Updated status options to match backend enum values
+  status: z.enum(["active", "draft", "archived"]),
   images: z.array(z.object({
     id: z.string(),
     url: z.string(),
@@ -61,26 +63,13 @@ type ProductFormValues = z.infer<typeof productFormSchema>;
 
 /**
  * Convert uploaded images to ProductImage format
+ * This is just for UI representation - images should be managed separately from product updates
  */
 const formatImagesToApi = (images: UploadedImage[]): Partial<ProductImage>[] => {
   return images.map(img => ({
     id: img.id,
     original_url: img.url,
     thumbnail_url: img.url,
-  }));
-};
-
-/**
- * Convert API ProductImage to UploadedImage format
- */
-const formatImagesFromApi = (images?: ProductImage[]): UploadedImage[] => {
-  if (!images || images.length === 0) return [];
-  
-  return images.map(img => ({
-    id: img.id,
-    url: img.original_url || img.thumbnail_url,
-    name: 'Product Image',
-    size: 0
   }));
 };
 
@@ -116,32 +105,38 @@ export function ProductForm({
     ? formatImagesFromApi(initialData.images)
     : [];
   
-  // Initialize form with React Hook Form and Zod resolver
+  // Create a function to transform product status values
+  const normalizeStatus = (status: string): "active" | "draft" | "archived" => {
+    const statusLower = status.toLowerCase();
+    if (statusLower === "active" || statusLower === "draft" || statusLower === "archived") {
+      return statusLower as "active" | "draft" | "archived";
+    }
+    return "draft";
+  };
+
+  // Update the default values
+  const defaultValues = initialData ? {
+    name: initialData.name,
+    description: initialData.description || "",
+    price: initialData.price.toString(),
+    cost_price: initialData.cost_price ? initialData.cost_price.toString() : "",
+    status: normalizeStatus(initialData.status),
+    metadata: initialData.metadata || {},
+    images: formatImagesFromApi(initialData.images),
+  } : {
+    name: "",
+    price: "",
+    cost_price: "",
+    metadata: { category: "General" },
+    description: "",
+    status: "draft" as const,
+    images: []
+  };
+
+  // Replace the existing form initialization with:
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
-    defaultValues: initialData ? {
-      name: initialData.name,
-      price: String(initialData.price),
-      cost_price: initialData.cost_price ? String(initialData.cost_price) : '',
-      metadata: {
-        ...initialData.metadata,
-        category: initialData.metadata?.category || '',
-      },
-      description: initialData.description || '',
-      status: initialData.status,
-      images: initialImages
-    } : {
-      name: "",
-      price: "",
-      cost_price: "",
-      metadata: {
-        category: "",
-        inventory: 0,
-      },
-      description: "",
-      status: "draft",
-      images: []
-    }
+    defaultValues
   });
 
   // Calculate profit and profit margin when price or cost changes
@@ -155,13 +150,13 @@ export function ProductForm({
     try {
       setIsSubmitting(true);
       
-      // Format the data for the API
+      // Format the data for the API - DON'T include images directly in update
       const formattedData = {
         ...data,
         price: parseFloat(data.price),
         cost_price: data.cost_price ? parseFloat(data.cost_price) : undefined,
-        // Convert images to the format expected by the API
-        images: data.images ? formatImagesToApi(data.images) : undefined,
+        // Remove images from the API request - they're handled separately
+        images: undefined
       };
       
       await onSubmitProp(formattedData);
@@ -173,6 +168,27 @@ export function ProductForm({
       setIsSubmitting(false);
     }
   };
+
+  // Update the form's default values with correct status value
+  useEffect(() => {
+    if (initialData) {
+      // Convert status to lowercase to match backend enum
+      const statusValue = initialData.status.toLowerCase();
+      const validStatus = (statusValue === "active" || statusValue === "draft" || statusValue === "archived")
+        ? statusValue as "active" | "draft" | "archived"
+        : "draft";
+        
+      form.reset({
+        name: initialData.name,
+        description: initialData.description || "",
+        price: initialData.price.toString(),
+        cost_price: initialData.cost_price ? initialData.cost_price.toString() : "",
+        status: validStatus,
+        metadata: initialData.metadata || {},
+        images: formatImagesFromApi(initialData.images),
+      });
+    }
+  }, [form, initialData]);
 
   return (
     <Form {...form}>
@@ -307,10 +323,9 @@ export function ProductForm({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Draft">Draft</SelectItem>
-                    <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-                    <SelectItem value="Low Stock">Low Stock</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="archived">Archived</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormDescription>
@@ -335,6 +350,7 @@ export function ProductForm({
                     disabled={isSubmitting}
                     maxImages={5}
                     bucket="product-images"
+                    productId={initialData?.id}
                   />
                 </FormControl>
                 <FormDescription>

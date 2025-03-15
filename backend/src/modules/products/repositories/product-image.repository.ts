@@ -44,6 +44,7 @@ export class ProductImageRepository extends BaseRepository<ProductImage> {
 
   /**
    * Set primary image for a product
+   * Note: We use position = 0 for the primary image instead of a separate is_primary field
    * @param productId Product ID
    * @param imageId Image ID to set as primary
    */
@@ -51,13 +52,29 @@ export class ProductImageRepository extends BaseRepository<ProductImage> {
     productId: string,
     imageId: string,
   ): Promise<void> {
-    // Reset all images to non-primary
-    await this.update(
-      { product_id: productId },
-      { is_primary: false },
-    );
-
-    // Set new primary image
-    await this.update(imageId, { is_primary: true });
+    // Get all images for this product
+    const images = await this.findByProductId(productId);
+    
+    // Skip if no images or image not found
+    if (!images.length || !images.some(img => img.id === imageId)) {
+      return;
+    }
+    
+    // Get the current position of the primary image
+    const primaryImagePosition = images.find(img => img.id === imageId)?.position || 0;
+    
+    // If the image is already at position 0, no need to do anything
+    if (primaryImagePosition === 0) {
+      return;
+    }
+    
+    // Set the current position 0 image to the position of the selected image
+    const currentPrimaryImage = images.find(img => img.position === 0);
+    if (currentPrimaryImage) {
+      await this.update(currentPrimaryImage.id, { position: primaryImagePosition });
+    }
+    
+    // Set the selected image as position 0 (primary)
+    await this.update(imageId, { position: 0 });
   }
 }

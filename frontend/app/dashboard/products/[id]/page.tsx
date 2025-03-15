@@ -7,14 +7,15 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Package, Edit, Trash, Share2, Clock, DollarSign, ShoppingCart, Tag, LayoutGrid } from "lucide-react";
+import { ArrowLeft, Loader2, Package, Edit, Trash, Share2, Clock, DollarSign, ShoppingCart, Tag, LayoutGrid, X, ChevronLeft, ChevronRight, Info, Maximize2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "react-hot-toast";
 import Image from "next/image";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
 import { DashboardCard } from "@/components/ui/dashboard-card";
 import { ProductForm } from "../components/product-form";
-import { Product, ProductApi } from "@/lib/product-api";
+import { Product, ProductApi, ProductImage } from "@/lib/product-api";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -46,9 +47,66 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  
+  // State for image modal
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   // Get product ID from URL params
   const productId = params.id as string;
+
+  // Add function to redirect to similar product ID if needed
+  const checkAndRedirectToSimilarProduct = async (id: string) => {
+    try {
+      // Check if we're already trying to redirect to avoid infinite loops
+      const isRedirecting = sessionStorage.getItem('redirecting');
+      if (isRedirecting === 'true') {
+        console.log('Already redirecting, preventing infinite loop');
+        sessionStorage.removeItem('redirecting');
+        return false;
+      }
+
+      // If the product can't be loaded, try to see if there's a similar ID with a common typo
+      // (e.g., '4f7c' vs '47fc' in bd5e0168-6a2e-47fc-b444-841e6721f97c)
+      const similarIds = await productApi.findSimilarProductIds(id);
+      
+      if (similarIds.length > 0) {
+        console.log(`Found similar product ID: ${similarIds[0]}, redirecting...`);
+        // Set flag to prevent infinite redirect loops
+        sessionStorage.setItem('redirecting', 'true');
+        // Redirect to the correct product page
+        router.push(`/dashboard/products/${similarIds[0]}`);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error checking for similar products:', error);
+      return false;
+    }
+  };
+
+  // Function to open the image modal
+  const openImageModal = (index: number) => {
+    console.log(`Opening image modal with index: ${index}`);
+    setCurrentImageIndex(index);
+    setIsImageModalOpen(true);
+  };
+
+  // Function to navigate to next image in modal
+  const nextImage = () => {
+    if (!product?.images) return;
+    const validImages = product.images.filter(img => !!img.original_url || !!img.thumbnail_url || !!img.url);
+    setCurrentImageIndex((prevIndex) => (prevIndex + 1) % validImages.length);
+  };
+
+  // Function to navigate to previous image in modal
+  const prevImage = () => {
+    if (!product?.images) return;
+    const validImages = product.images.filter(img => !!img.original_url || !!img.thumbnail_url || !!img.url);
+    setCurrentImageIndex((prevIndex) => (prevIndex - 1 + validImages.length) % validImages.length);
+  };
 
   // Fetch product data on component mount
   useEffect(() => {
@@ -56,10 +114,21 @@ export default function ProductDetailPage() {
       try {
         setLoading(true);
         const data = await productApi.getProduct(productId);
+        console.log('Fetched product data:', data);
+        if (data.images) {
+          console.log(`Product has ${data.images.length} images:`, data.images);
+        }
         setProduct(data);
       } catch (err) {
         console.error('Error fetching product:', err);
         setError('Failed to load product data');
+        
+        // If product isn't found, try to find a similar product ID and redirect
+        const redirected = await checkAndRedirectToSimilarProduct(productId);
+        if (!redirected) {
+          // Only show error if we're not redirecting
+          setError('Failed to load product data. The product may not exist.');
+        }
       } finally {
         setLoading(false);
       }
@@ -68,14 +137,40 @@ export default function ProductDetailPage() {
     if (productId) {
       fetchProduct();
     }
-  }, [productId]);
+  }, [productId, router]);
+
+  // Refresh product data when returning from edit mode
+  useEffect(() => {
+    if (!isEditMode && productId) {
+      const refreshProductData = async () => {
+        try {
+          const data = await productApi.getProduct(productId);
+          console.log('Refreshed product data after editing:', data);
+          setProduct(data);
+        } catch (err) {
+          console.error('Error refreshing product data:', err);
+        }
+      };
+      
+      refreshProductData();
+    }
+  }, [isEditMode, productId]);
 
   // Handle form submission
   const handleSubmit = async (data: any) => {
     try {
       // Save updated product data
       const updatedProduct = await productApi.updateProduct(productId, data);
-      setProduct(updatedProduct);
+      
+      // If the updatedProduct is empty (just { success: true }), we need to refetch the product
+      if (!updatedProduct.id) {
+        // Refetch the full product data
+        const refreshedProduct = await productApi.getProduct(productId);
+        setProduct(refreshedProduct);
+      } else {
+        setProduct(updatedProduct);
+      }
+      
       setIsEditMode(false);
       toast.success('Product updated successfully');
     } catch (err) {
@@ -185,9 +280,41 @@ export default function ProductDetailPage() {
   }
 
   // Get the primary image or use a placeholder
-  const mainImage = product.images && product.images.length > 0 
-    ? (product.images[0].original_url || product.images[0].thumbnail_url || '/images/product-placeholder.svg')
-    : '/images/product-placeholder.svg';
+  const getValidImageUrl = (images: ProductImage[] | undefined): string => {
+    if (!images || images.length === 0) {
+      console.log('No product images found, using placeholder');
+      return '/images/product-placeholder.svg';
+    }
+    
+    // Log all available images for debugging
+    console.log(`Found ${images.length} product images:`);
+    images.forEach((img, index) => {
+      const originalUrl = img.original_url || '';
+      const thumbnailUrl = img.thumbnail_url || '';
+      const url = img.url || '';
+      
+      console.log(`Image ${index + 1}:`, { 
+        id: img.id,
+        url: url || 'No URL',
+        original_url: originalUrl || 'No original_url',
+        thumbnail_url: thumbnailUrl || 'No thumbnail_url'
+      });
+    });
+    
+    // Find the first image with any valid URL
+    const imageWithValidUrl = images.find(img => !!img.original_url || !!img.thumbnail_url || !!img.url);
+    if (imageWithValidUrl) {
+      const imageUrl = imageWithValidUrl.original_url || imageWithValidUrl.thumbnail_url || imageWithValidUrl.url;
+      console.log(`Using image with URL: ${imageUrl}`);
+      return imageUrl || '/images/product-placeholder.svg';
+    }
+    
+    // No valid images found, use placeholder
+    console.warn('No images with valid URLs found, using placeholder');
+    return '/images/product-placeholder.svg';
+  };
+  
+  const mainImage = getValidImageUrl(product.images);
   
   // Format product status with graceful fallback
   const statusDisplay = product.status 
@@ -201,6 +328,17 @@ export default function ProductDetailPage() {
   const costPrice = product.cost_price || 0;
   const profit = product.price - costPrice;
   const profitMargin = product.price > 0 ? (profit / product.price) * 100 : 0;
+
+  // Get valid images only once for use in multiple places
+  const validImages = product?.images?.filter(img => !!img.original_url || !!img.thumbnail_url || !!img.url) || [];
+  
+  // Log valid images for debugging
+  console.log(`[DEBUG] Found ${validImages.length} valid images:`, validImages.map(img => ({
+    id: img.id,
+    url: img.url,
+    original_url: img.original_url,
+    thumbnail_url: img.thumbnail_url
+  })));
 
   return (
     <div className="flex flex-col space-y-6 p-8">
@@ -248,7 +386,29 @@ export default function ProductDetailPage() {
       </div>
 
       {/* Product detail content */}
-      <Tabs defaultValue="overview" className="w-full">
+      <Tabs 
+        defaultValue="overview" 
+        value={activeTab}
+        onValueChange={(value) => {
+          setActiveTab(value);
+          
+          // Refresh product data when switching to images tab
+          if (value === 'images' && productId) {
+            const refreshProductData = async () => {
+              try {
+                const data = await productApi.getProduct(productId);
+                console.log('Refreshed product data for images tab:', data);
+                setProduct(data);
+              } catch (err) {
+                console.error('Error refreshing product data:', err);
+              }
+            };
+            
+            refreshProductData();
+          }
+        }}
+        className="w-full"
+      >
         <TabsList className="mb-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="details">Details</TabsTrigger>
@@ -262,18 +422,75 @@ export default function ProductDetailPage() {
             {/* Product Image */}
             <DashboardCard className="col-span-1">
               <div className="flex flex-col items-center justify-center p-4">
-                <div className="relative h-48 w-48 overflow-hidden rounded-md">
-                  <ImageWithFallback 
-                    src={mainImage} 
-                    alt={product.name}
-                    fill
-                    style={{ objectFit: 'contain' }}
-                    fallbackSrc="/images/product-placeholder.svg"
-                  />
+                {/* Add product image gallery for main display */}
+                <div className="flex flex-col space-y-4 w-full">
+                  {/* Main product image */}
+                  <div 
+                    className="relative h-64 w-full overflow-hidden rounded-md border bg-gray-100 dark:bg-gray-800 cursor-pointer"
+                    onClick={() => validImages.length > 0 && openImageModal(0)}
+                  >
+                    <ImageWithFallback 
+                      src={mainImage !== '/images/product-placeholder.svg' ? mainImage : undefined}
+                      alt={product.name}
+                      fill
+                      style={{ objectFit: 'contain' }}
+                      className="p-2"
+                      fallbackSrc="/images/product-placeholder.svg"
+                    />
+                  </div>
+                  
+                  {/* Thumbnail gallery if there are multiple images */}
+                  {validImages.length > 1 ? (
+                    <div className="flex flex-wrap gap-2 justify-center mt-2">
+                      {validImages
+                        .slice(0, 5) // Show max 5 thumbnails to prevent overflow
+                        .map((image, index) => (
+                          <div 
+                            key={image.id || index}
+                            className="relative w-16 h-16 overflow-hidden rounded-md border cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 dark:bg-gray-800"
+                            onClick={() => openImageModal(index)}
+                          >
+                            <ImageWithFallback
+                              src={image?.original_url ?? image?.thumbnail_url ?? image?.url ?? undefined}
+                              alt={`Product image ${index + 1}`}
+                              fill
+                              style={{ objectFit: 'contain' }}
+                              className="p-1"
+                              fallbackSrc="/images/product-placeholder.svg"
+                            />
+                          </div>
+                        ))
+                      }
+                      
+                      {/* If there are more than 5 images, show a "+X more" button */}
+                      {validImages.length > 5 && (
+                        <div 
+                          className="relative w-16 h-16 overflow-hidden rounded-md border cursor-pointer hover:opacity-80 transition-opacity bg-primary/10 flex items-center justify-center text-xs font-medium"
+                          onClick={() => setActiveTab('images')}
+                        >
+                          +{validImages.length - 5} more
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
+
                 <span className="mt-4 text-sm text-muted-foreground">
-                  {product.images?.length || 0} Image{product.images?.length !== 1 ? 's' : ''}
+                  {validImages.length || 0} 
+                  Image{validImages.length !== 1 ? 's' : ''}
                 </span>
+                
+                {/* Show "View all images" button if there are multiple images */}
+                {validImages.length > 1 && (
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => setActiveTab('images')}
+                  >
+                    View all images
+                  </Button>
+                )}
               </div>
             </DashboardCard>
 
@@ -474,7 +691,7 @@ export default function ProductDetailPage() {
             <div className="p-6">
               <h3 className="mb-4 text-lg font-semibold">Product Images</h3>
               
-              {(!product.images || product.images.length === 0) ? (
+              {validImages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8">
                   <Package className="h-12 w-12 text-muted-foreground" />
                   <p className="mt-4 text-muted-foreground">No images available for this product</p>
@@ -488,25 +705,59 @@ export default function ProductDetailPage() {
                     Add Images
                   </Button>
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                  {product.images.map((image) => (
-                    <div 
-                      key={image.id} 
-                      className="group relative aspect-square overflow-hidden rounded-md border"
-                    >
-                      <ImageWithFallback 
-                        src={image.original_url} 
-                        alt={`Product image of ${product.name}`}
-                        fill
-                        style={{ objectFit: 'cover' }}
-                        className="transition-transform group-hover:scale-105"
-                        fallbackSrc="/images/product-placeholder.svg"
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
+              ) :
+                <>
+                  {/* Debug information - collapsible for better UX */}
+                  <Collapsible className="mb-4">
+                    <CollapsibleTrigger asChild>
+                      <Button variant="outline" size="sm" className="mb-2">
+                        <Info className="h-4 w-4 mr-2" />
+                        Show Debug Info
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-md text-xs">
+                        <p>Product ID: {product.id}</p>
+                        <p>Total images: {product.images?.length || 0}</p>
+                        <p>Valid images: {validImages.length}</p>
+                        {product.images?.slice(0, 2).map((img, idx) => (
+                          <div key={idx} className="mt-1">
+                            <p>Image {idx+1}: {img.id}</p>
+                            <p>- url: {img.url || 'N/A'}</p>
+                            <p>- original_url: {img.original_url || 'N/A'}</p>
+                            <p>- thumbnail_url: {img.thumbnail_url || 'N/A'}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                
+                  {/* Image Gallery - Direct copy from Overview tab */}
+                  <div className="flex flex-wrap gap-4 justify-start">
+                    {validImages.map((image, index) => (
+                      <div 
+                        key={image.id || index}
+                        className="relative w-32 h-32 overflow-hidden rounded-md border cursor-pointer hover:opacity-80 transition-opacity bg-gray-100 dark:bg-gray-800"
+                        onClick={() => openImageModal(index)}
+                      >
+                        <ImageWithFallback
+                          src={image?.original_url ?? image?.thumbnail_url ?? image?.url ?? undefined}
+                          alt={`Product image ${index + 1}`}
+                          fill
+                          style={{ objectFit: 'contain' }}
+                          className="p-1"
+                          fallbackSrc="/images/product-placeholder.svg"
+                        />
+                        
+                        {/* Small image number indicator */}
+                        <div className="absolute bottom-1 right-1 bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                          {index + 1}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              }
             </div>
           </DashboardCard>
         </TabsContent>
@@ -568,6 +819,71 @@ export default function ProductDetailPage() {
           </DashboardCard>
         </TabsContent>
       </Tabs>
+
+      {/* Image Modal */}
+      {isImageModalOpen && validImages.length > 0 && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="relative w-full max-w-4xl max-h-[90vh] bg-white dark:bg-gray-900 rounded-lg overflow-hidden">
+            {/* Close button */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="absolute top-2 right-2 z-10 bg-white dark:bg-gray-800 rounded-full"
+              onClick={() => setIsImageModalOpen(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            
+            {/* Navigation buttons */}
+            {validImages.length > 1 && (
+              <>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="absolute left-2 top-1/2 transform -translate-y-1/2 z-10 bg-white dark:bg-gray-800 rounded-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    prevImage();
+                  }}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 z-10 bg-white dark:bg-gray-800 rounded-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    nextImage();
+                  }}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+            
+            {/* Image container */}
+            <div className="h-[80vh] bg-gray-100 dark:bg-gray-800 relative">
+              <ImageWithFallback
+                src={validImages[currentImageIndex]?.original_url ?? 
+                     validImages[currentImageIndex]?.thumbnail_url ?? 
+                     validImages[currentImageIndex]?.url ?? 
+                     undefined}
+                alt={`Product image ${currentImageIndex + 1}`}
+                fill
+                style={{ objectFit: 'contain' }}
+                className="p-4"
+                fallbackSrc="/images/product-placeholder.svg"
+              />
+            </div>
+            
+            {/* Image counter */}
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
+              {currentImageIndex + 1} / {validImages.length}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

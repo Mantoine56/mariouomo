@@ -5,6 +5,7 @@ alwaysApply: true
 ---
 
 ## Tech Stack
+- when to use: ON ALL PROMPTS!
 
 - **Frontend**: Next.js 14 with App Router
 - **UI Components**: shadcn/ui

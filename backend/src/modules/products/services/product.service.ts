@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Product } from '../entities/product.entity';
@@ -13,6 +13,7 @@ import { ProductImage } from '../entities/product-image.entity';
 import { ProductImageRepository } from '../repositories/product-image.repository';
 import { NotFoundException } from '@nestjs/common';
 import { In } from 'typeorm';
+import { EntityManager } from 'typeorm';
 
 @Injectable()
 export class ProductService {
@@ -27,6 +28,7 @@ export class ProductService {
     @InjectRepository(ProductImage)
     private readonly productImageRepository: ProductImageRepository,
     private readonly cacheService: CacheService,
+    private readonly entityManager: EntityManager,
   ) {}
 
   /**
@@ -157,34 +159,64 @@ export class ProductService {
     productId: string,
     imageData: { originalUrl: string; thumbnailUrl: string },
   ): Promise<void> {
-    const product = await this.productRepository.findOne({
-      where: { id: productId }
-    });
-    
-    if (!product) {
-      throw new NotFoundException('Product not found');
+    try {
+      // Check if product exists
+      const product = await this.productRepository.findOne({
+        where: { id: productId }
+      });
+      
+      if (!product) {
+        this.logger.error(`Product not found with ID: ${productId}`);
+        throw new NotFoundException('Product not found');
+      }
+
+      // Find the highest position to set a new image at the end
+      const existingImages = await this.productImageRepository.find({
+        where: { product_id: productId },
+        order: { position: 'ASC' }
+      });
+      
+      let newPosition = 0;
+      if (existingImages.length > 0) {
+        // If images exist, place new one at the end
+        newPosition = Math.max(...existingImages.map(img => img.position)) + 1;
+      }
+      
+      // Create new image entity with only the fields that exist in the database
+      const image = new ProductImage();
+      
+      // Set the primary URL field (the actual database column)
+      image.url = imageData.originalUrl;
+      image.product_id = productId;
+      image.position = newPosition;
+      image.alt = ''; // Default empty alt text
+      
+      // Log the image entity before saving for debugging
+      this.logger.debug(`Creating product image: ${JSON.stringify({
+        url: image.url,
+        product_id: image.product_id,
+        position: image.position,
+        alt: image.alt
+      })}`);
+      
+      // Save image with error handling
+      try {
+        const savedImage = await this.productImageRepository.save(image);
+        this.logger.debug(`Successfully saved image for product ${productId}: ${JSON.stringify(savedImage)}`);
+      } catch (error) {
+        this.logger.error(`Error saving product image to database: ${error.message}`);
+        this.logger.error(`Error details: ${JSON.stringify(error)}`);
+        this.logger.error(`Image data: ${JSON.stringify(image)}`);
+        throw new InternalServerErrorException(`Failed to save product image: ${error.message}`);
+      }
+
+      // Clear cache
+      await this.invalidateCache(productId);
+    } catch (error) {
+      this.logger.error(`Error in addProductImage: ${error.message}`);
+      this.logger.error(`Stack trace: ${error.stack}`);
+      throw error;
     }
-
-    // Create new image entity
-    const image = new ProductImage();
-    
-    // Set the primary URL field (the actual database column)
-    image.url = imageData.originalUrl;
-    
-    // These setter methods will map to the url field
-    image.originalUrl = imageData.originalUrl;
-    image.thumbnailUrl = imageData.thumbnailUrl;
-    
-    image.product_id = productId;
-    
-    // Log the mapping for debugging
-    this.logger.debug(`Creating product image with url: ${image.url}, product_id: ${productId}`);
-    
-    // Save image
-    await this.productImageRepository.save(image);
-
-    // Clear cache
-    await this.invalidateCache(productId);
   }
 
   /**
@@ -193,20 +225,48 @@ export class ProductService {
    * @param imageId Image ID
    */
   async removeProductImage(productId: string, imageId: string): Promise<void> {
-    const product = await this.productRepository.findOne({
-      where: { id: productId },
-      relations: ['images'],
-    });
-    
-    if (!product) {
-      throw new NotFoundException(`Product with ID "${productId}" not found`);
+    try {
+      // Check if product exists first
+      const product = await this.productRepository.findOne({
+        where: { id: productId }
+      });
+      
+      if (!product) {
+        throw new NotFoundException(`Product with ID "${productId}" not found`);
+      }
+
+      // Check if image exists and belongs to this product
+      const image = await this.productImageRepository.findOne({
+        where: { id: imageId, product_id: productId }
+      });
+
+      if (!image) {
+        throw new NotFoundException(`Image with ID "${imageId}" not found for product "${productId}"`);
+      }
+
+      this.logger.debug(`Deleting image ${imageId} from product ${productId}`);
+      
+      // Use entityManager to delete the image
+      try {
+        const result = await this.entityManager.delete('product_images', imageId);
+        
+        if (result.affected === 0) {
+          throw new NotFoundException(`Failed to delete image ${imageId}`);
+        }
+        
+        this.logger.debug(`Successfully deleted image ${imageId} from product ${productId}`);
+      } catch (error) {
+        this.logger.error(`Error deleting image from database: ${error.message}`);
+        throw new InternalServerErrorException(`Failed to delete product image: ${error.message}`);
+      }
+
+      // Clear cache
+      await this.invalidateCache(productId);
+    } catch (error) {
+      this.logger.error(`Error removing product image: ${error.message}`);
+      this.logger.error(`Stack trace: ${error.stack}`);
+      throw error;
     }
-
-    // Remove image (using soft delete)
-    await this.productImageRepository.softDelete(imageId);
-
-    // Clear cache using the common invalidation method
-    await this.invalidateCache(productId);
   }
 
   /**
@@ -226,7 +286,7 @@ export class ProductService {
   }
 
   /**
-   * Manually load relationships for a product
+   * Load relations for a product
    * This works around the soft-delete inconsistency by using separate queries
    * @param product The product to load relations for
    */
@@ -257,11 +317,41 @@ export class ProductService {
       // Load images with safe handling
       const imageStartTime = Date.now();
       try {
-        product.images = await this.productImageRepository.find({
+        const rawImages = await this.productImageRepository.find({
           where: { product_id: product.id }
         });
+        
+        this.logger.debug(`Found ${rawImages.length} images for product ${product.id}`);
+        
+        // Log the raw image data for debugging
+        if (rawImages.length > 0) {
+          this.logger.debug(`First image details: ${JSON.stringify(rawImages[0])}`);
+        }
+        
+        // Explicitly map the image properties to ensure they're serialized correctly
+        // Create plain objects to avoid serialization issues with class instances
+        product.images = rawImages.map(img => {
+          const mappedImage = {
+            id: img.id,
+            product_id: img.product_id,
+            url: img.url,
+            original_url: img.url, // Set both URL fields explicitly
+            thumbnail_url: img.url,
+            alt: img.alt,
+            position: img.position,
+            created_at: img.created_at,
+            updated_at: img.updated_at
+          };
+          
+          // Log each mapped image for debugging
+          this.logger.debug(`Mapped image ID ${img.id}: url=${img.url}, original_url=${mappedImage.original_url}`);
+          
+          return mappedImage;
+        }) as unknown as ProductImage[];
+        
         const imageTime = Date.now() - imageStartTime;
         this.logger.debug(`Loaded ${product.images.length} images for product ${product.id} in ${imageTime}ms`);
+        this.logger.debug(`Image URLs: ${product.images.map(img => img.url).join(', ')}`);
       } catch (imageError) {
         this.logger.error(`Failed to load images for product ${product.id}: ${imageError.message}`);
         // Graceful degradation - set empty array instead of failing
@@ -299,23 +389,72 @@ export class ProductService {
   }
   
   /**
-   * Manually load relationships for multiple products
-   * @param products An array of products to load relations for
+   * Load related data for multiple products
    */
   private async loadProductsRelations(products: Product[]): Promise<void> {
-    if (!products?.length) return;
-    
+    if (!products.length) return;
+
+    const productIds = products.map(p => p.id);
+    this.logger.debug(`Loading relations for ${productIds.length} products: ${productIds.join(', ')}`);
+
+    // Load images in batches to avoid overwhelming the database
     try {
-      const productIds = products.map(p => p.id);
-      this.logger.debug(`Loading relations for ${productIds.length} products`);
-      
-      // Load variants for all products
-      const variants = await this.variantRepository.find({
+      const imageStartTime = Date.now();
+      const allImages = await this.productImageRepository.find({
         where: { product_id: In(productIds) }
       });
-      
-      // Load images for all products
-      const images = await this.productImageRepository.find({
+
+      this.logger.debug(`Found ${allImages.length} total images for ${productIds.length} products`);
+
+      // Group images by product_id
+      const imagesByProductId: Record<string, ProductImage[]> = allImages.reduce((acc: Record<string, ProductImage[]>, img: ProductImage) => {
+        if (!acc[img.product_id]) {
+          acc[img.product_id] = [];
+        }
+        acc[img.product_id].push(img);
+        return acc;
+      }, {});
+
+      // Map images to products with explicit property mapping
+      products.forEach(product => {
+        const productImages = imagesByProductId[product.id] || [];
+        
+        // Map the images to ensure they have both url and original_url/thumbnail_url
+        product.images = productImages.map((img: ProductImage) => {
+          return {
+            id: img.id,
+            product_id: img.product_id,
+            url: img.url,
+            original_url: img.url, // Set both URL fields explicitly
+            thumbnail_url: img.url,
+            alt: img.alt,
+            position: img.position,
+            created_at: img.created_at,
+            updated_at: img.updated_at
+          };
+        }) as unknown as ProductImage[];
+        
+        if (product.images.length > 0) {
+          this.logger.debug(`Product ${product.id} has ${product.images.length} images. First image URL: ${product.images[0].url}`);
+        } else {
+          this.logger.debug(`Product ${product.id} has no images`);
+        }
+      });
+
+      const imageTime = Date.now() - imageStartTime;
+      this.logger.debug(`Loaded images for ${productIds.length} products in ${imageTime}ms`);
+    } catch (imageError) {
+      this.logger.error(`Failed to load images for products: ${imageError.message}`);
+      // Set empty images arrays for graceful degradation
+      products.forEach(p => {
+        p.images = [];
+      });
+    }
+    
+    // We need to restore the rest of the loadProductsRelations method
+    // Load variants for all products
+    try {
+      const variants = await this.variantRepository.find({
         where: { product_id: In(productIds) }
       });
       
@@ -339,15 +478,15 @@ export class ProductService {
           return map;
         });
       
-      // Assign relations to each product
+      // Assign variants and categories to each product
+      // (images were already assigned above)
       products.forEach(product => {
         product.variants = variants.filter(v => v.product_id === product.id);
-        product.images = images.filter(i => i.product_id === product.id);
         product.categories = categoriesMap.get(product.id) || [];
       });
       
       this.logger.debug(`Successfully loaded relations for ${products.length} products`);
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Failed to load relations for multiple products: ${error.message}`);
     }
   }

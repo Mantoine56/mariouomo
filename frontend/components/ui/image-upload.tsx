@@ -6,7 +6,7 @@
  */
 "use client";
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import { Check, Loader2, Upload, X } from "lucide-react";
 import Image from "next/image";
 import { useDropzone } from "react-dropzone";
@@ -14,6 +14,8 @@ import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
 import { uploadFile, getStorageUrl, deleteFile } from "@/lib/supabase";
+import { productApi } from "@/lib/product-api";
+import { ProductImage } from "@/lib/product-api";
 
 /**
  * Type definition for an uploaded image
@@ -43,7 +45,25 @@ interface ImageUploadProps {
   maxImages?: number;
   /** The storage bucket to use for uploads */
   bucket?: string;
+  /** The product ID for associating images with a product */
+  productId?: string;
 }
+
+/**
+ * Convert API ProductImage to UploadedImage format with validation
+ */
+export const formatImagesFromApi = (images?: ProductImage[]): UploadedImage[] => {
+  if (!images || images.length === 0) return [];
+  
+  return images
+    .filter(img => (img.original_url || img.thumbnail_url)) // Filter out images without URLs
+    .map(img => ({
+      id: img.id,
+      url: img.original_url || img.thumbnail_url || '',
+      name: 'Product Image',
+      size: 0
+    }));
+};
 
 /**
  * ImageUpload component for handling image uploads with preview
@@ -53,9 +73,39 @@ export function ImageUpload({
   disabled = false,
   onChange,
   maxImages = 5,
-  bucket = "product-images"
+  bucket = "product-images",
+  productId
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  
+  // Validate image URLs in the value prop to ensure no missing src attributes
+  useEffect(() => {
+    const validImages = value.filter(img => !!img.url);
+    if (validImages.length !== value.length) {
+      console.log('Filtering out images with invalid URLs');
+      onChange(validImages);
+    }
+  }, [value, onChange]);
+
+  /**
+   * Save the image to the database
+   */
+  const saveImageToDatabase = async (url: string, productId?: string) => {
+    if (!productId) return;
+    
+    try {
+      // Call the API to associate the image with the product
+      await productApi.addProductImage(productId, {
+        originalUrl: url,
+        thumbnailUrl: url
+      });
+      console.log(`Image associated with product ${productId} in database`);
+    } catch (error) {
+      console.error("Error saving image to database:", error);
+      // We don't throw here because the upload was successful, just not the database association
+    }
+  };
 
   /**
    * Handle file drop from drag and drop
@@ -69,6 +119,7 @@ export function ImageUpload({
       }
 
       setIsUploading(true);
+      setUploadStatus("Preparing to upload files...");
 
       try {
         const newImages: UploadedImage[] = [];
@@ -79,17 +130,27 @@ export function ImageUpload({
           const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_").toLowerCase();
           const path = `${timestamp}_${cleanFileName}`;
 
+          setUploadStatus(`Uploading ${file.name}...`);
+          console.log(`Uploading file to ${bucket}/${path}`);
+
           // Upload to Supabase
           const { data, error } = await uploadFile(bucket, path, file);
 
           if (error) {
             console.error("Error uploading file:", error);
-            toast.error(`Error uploading ${file.name}`);
+            toast.error(`Error uploading ${file.name}: ${error.message}`);
+            continue;
+          }
+
+          if (!data) {
+            console.error("No data returned from upload");
+            toast.error(`Failed to upload ${file.name}`);
             continue;
           }
 
           // Get the public URL
           const url = getStorageUrl(bucket, path);
+          console.log(`File uploaded successfully. Public URL: ${url}`);
 
           // Add to our list of images
           newImages.push({
@@ -98,6 +159,12 @@ export function ImageUpload({
             name: file.name,
             size: file.size
           });
+
+          // If a productId is provided, save the image to the database
+          if (productId) {
+            setUploadStatus(`Saving ${file.name} to database...`);
+            await saveImageToDatabase(url, productId);
+          }
         }
 
         // Update the state with all old and new images
@@ -111,9 +178,10 @@ export function ImageUpload({
         toast.error("Failed to upload images. Please try again.");
       } finally {
         setIsUploading(false);
+        setUploadStatus(null);
       }
     },
-    [value, onChange, maxImages, bucket]
+    [value, onChange, maxImages, bucket, productId]
   );
 
   /**
@@ -192,7 +260,7 @@ export function ImageUpload({
         {isUploading ? (
           <div className="flex flex-col items-center">
             <Loader2 className="h-10 w-10 text-primary animate-spin mb-2" />
-            <p className="text-sm text-muted-foreground">Uploading images...</p>
+            <p className="text-sm text-muted-foreground">{uploadStatus || "Uploading images..."}</p>
           </div>
         ) : value.length >= maxImages ? (
           <div className="flex flex-col items-center">

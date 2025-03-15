@@ -4,6 +4,7 @@ globs:
 alwaysApply: true
 ---
 # Coding Workflow Preferences
+- when to use: ON ALL PROMPTS!
 
 - Focus on the areas of code relevant to the task.
 - Do not touch code that is unrelated to the task.

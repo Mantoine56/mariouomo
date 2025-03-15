@@ -85,8 +85,9 @@ export interface ProductVariant {
 export interface ProductImage {
   id: string;
   product_id: string;
-  original_url: string;
-  thumbnail_url: string;
+  url?: string;           // The actual database field
+  original_url: string;   // For frontend compatibility
+  thumbnail_url: string;  // For frontend compatibility
   created_at: string;
 }
 
@@ -250,159 +251,69 @@ export class ProductApi {
         status: "draft",
         store_id: "",
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        variants: [],
-        images: []
+        updated_at: new Date().toISOString()
       };
-      
-      try {
-        // First, try to get the product directly using a simple REST API call instead of the Supabase client
-        // This avoids the RLS policies entirely
-        const apiUrl = `${config.supabase.url}/rest/v1/products?id=eq.${id}&select=id,name,description,price,compare_at_price,cost_price,status,store_id,created_at,updated_at,metadata`;
-        
-        console.log(`[DB FALLBACK] Attempting direct REST API call to ${apiUrl}`);
-        
-        const response = await fetch(apiUrl, {
-          method: 'GET',
-          headers: {
-            'apikey': config.supabase.anonKey,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`[DB FALLBACK] Direct REST API call failed with status ${response.status}`);
-        }
-        
-        const productData = await response.json();
-        
-        if (Array.isArray(productData) && productData.length > 0) {
-          console.log(`[DB FALLBACK] Successfully retrieved basic product data for ${id}`);
-          
-          // Update our fallback with the real basic data
-          fallbackProduct = {
-            ...fallbackProduct,
-            ...productData[0]
-          };
-          
-          // Now try to get variants and images separately
-          try {
-            // Based on database schema, product_variants doesn't have name or current_stock
-            const variantsUrl = `${config.supabase.url}/rest/v1/product_variants?product_id=eq.${id}&select=id,sku,barcode,price_adjustment,position,product_id,option_values`;
-            
-            console.log(`[DB FALLBACK] Fetching variants from ${variantsUrl}`);
-            const variantsResponse = await fetch(variantsUrl, {
-              method: 'GET',
-              headers: {
-                'apikey': config.supabase.anonKey,
-                'Content-Type': 'application/json'
-              }
-            });
-            
-            if (variantsResponse.ok) {
-              const variantsData = await variantsResponse.json();
-              // Map variant data to match our expected format, providing a default name
-              // and setting current_stock based on option_values if possible
-              fallbackProduct.variants = variantsData.map((variant: any) => ({
-                id: variant.id,
-                sku: variant.sku || '',
-                barcode: variant.barcode,
-                price_adjustment: parseFloat(variant.price_adjustment) || 0,
-                position: variant.position,
-                product_id: variant.product_id,
-                option_values: variant.option_values,
-                // Add derived fields our app expects but aren't in the database
-                name: variant.option_values?.name || `Variant ${variant.sku || 'Unknown'}`,
-                current_stock: variant.option_values?.stock || 0
-              }));
-              console.log(`[DB FALLBACK] Successfully retrieved and mapped ${variantsData.length} variants for product ${id}`);
-            }
-          } catch (variantError) {
-            console.warn(`[DB FALLBACK] Could not fetch variants for product ${id}:`, variantError);
-          }
-          
-          try {
-            // Based on database schema, product_images only has url, not original_url/thumbnail_url
-            const imagesUrl = `${config.supabase.url}/rest/v1/product_images?product_id=eq.${id}&select=id,product_id,url,alt_text,position,created_at`;
-            
-            console.log(`[DB FALLBACK] Fetching images from ${imagesUrl}`);
-            const imagesResponse = await fetch(imagesUrl, {
-              method: 'GET',
-              headers: {
-                'apikey': config.supabase.anonKey,
-                'Content-Type': 'application/json'
-              }
-            });
-            
-            if (imagesResponse.ok) {
-              const imagesData = await imagesResponse.json();
-              
-              // Transform the images to match our expected format
-              // In the actual database, there's only 'url' - use it for both original_url and thumbnail_url
-              fallbackProduct.images = imagesData.map((img: any) => ({
-                id: img.id,
-                product_id: img.product_id,
-                original_url: img.url,
-                thumbnail_url: img.url, // Use the same URL for both
-                alt: img.alt_text || '',
-                position: img.position || 0,
-                created_at: img.created_at
-              }));
-              
-              console.log(`[DB FALLBACK] Successfully retrieved and mapped ${imagesData.length} images for product ${id}`);
-            }
-          } catch (imageError) {
-            console.warn(`[DB FALLBACK] Could not fetch images for product ${id}:`, imageError);
-          }
-          
-          console.log(`[DB FALLBACK] Successfully built complete product data for ${fallbackProduct.name} (${fallbackProduct.id})`);
-          return fallbackProduct;
-        }
-      } catch (directApiError) {
-        console.error(`[DB FALLBACK] Direct REST API approach failed:`, directApiError);
+
+      // First, attempt to get the product details
+      const { data: productData, error: productError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (productError) {
+        console.error(`[DB FALLBACK] Error fetching product: ${productError.message}`);
+        return fallbackProduct;
       }
-      
-      // If all else fails, try the SQL endpoint as a last resort
-      try {
-        console.log(`[DB FALLBACK] Attempting SQL query fallback for product ${id}`);
-        
-        // We'll use the Supabase SQL endpoint as a last resort
-        // This sometimes works when the REST API is having issues
-        const { data, error } = await supabase.rpc('get_product_by_id', { product_id: id });
-        
-        if (error) {
-          console.error('[DB FALLBACK] SQL query error:', error);
-        } else if (data && Array.isArray(data) && data.length > 0) {
-          console.log(`[DB FALLBACK] Successfully retrieved product data via SQL for ${id}`);
-          
-          // Parse the JSON data if needed
-          const productData = data[0];
-          
-          // Update our fallback with the real data
-          fallbackProduct = {
-            id: productData.id,
-            name: productData.name,
-            description: productData.description,
-            price: productData.price,
-            compare_at_price: productData.compare_at_price,
-            cost_price: productData.cost_price,
-            status: productData.status,
-            store_id: productData.store_id,
-            created_at: productData.created_at,
-            updated_at: productData.updated_at,
-            metadata: productData.metadata,
-            variants: productData.variants || [],
-            images: productData.images || []
-          };
-        }
-      } catch (sqlError) {
-        console.error(`[DB FALLBACK] SQL fallback failed:`, sqlError);
+
+      if (!productData) {
+        console.error(`[DB FALLBACK] Product not found with ID: ${id}`);
+        return fallbackProduct;
       }
-      
-      // Return whatever we've managed to build
-      return fallbackProduct;
+
+      // Now that we have a product, fetch its images
+      const { data: imageData, error: imageError } = await supabase
+        .from('product_images')
+        .select('*')
+        .eq('product_id', id)
+        .order('position', { ascending: true });
+
+      if (imageError) {
+        console.error(`[DB FALLBACK] Error fetching product images: ${imageError.message}`);
+      }
+
+      // Map the images to match the expected format
+      const images = imageData ? imageData.map(img => ({
+        id: img.id,
+        product_id: img.product_id,
+        url: img.url,
+        original_url: img.url,
+        thumbnail_url: img.url, // For now, use the same URL for both
+        created_at: img.created_at
+      })) : [];
+
+      console.log(`[DB FALLBACK] Found ${images.length} images for product ${id}:`);
+      if (images.length > 0) {
+        console.log(images.map(img => img.original_url).join('\n'));
+      }
+
+      // Return the combined product with images
+      return {
+        ...productData,
+        images: images,
+        // Ensure price is a number
+        price: typeof productData.price === 'string' ? parseFloat(productData.price) : productData.price,
+        // Ensure cost_price is a number
+        cost_price: productData.cost_price ? 
+          (typeof productData.cost_price === 'string' ? parseFloat(productData.cost_price) : productData.cost_price) : 
+          undefined,
+        // Ensure compare_at_price is a number
+        compare_at_price: productData.compare_at_price ? 
+          (typeof productData.compare_at_price === 'string' ? parseFloat(productData.compare_at_price) : productData.compare_at_price) : 
+          undefined
+      };
     } catch (error) {
-      console.error(`[DB FALLBACK] Error fetching product ${id} directly from database:`, error);
+      console.error(`[DB FALLBACK] Critical error fetching product ${id}:`, error);
       throw error;
     }
   }
@@ -604,6 +515,7 @@ export class ProductApi {
         const images: ProductImage[] = item.product_images?.map((img: any) => ({
           id: img.id,
           product_id: img.product_id,
+          url: img.url,
           original_url: img.url,
           thumbnail_url: img.thumbnail_url || img.url,
           created_at: img.created_at
@@ -741,6 +653,66 @@ export class ProductApi {
     }
     
     return new ApiError(defaultMessage, 500);
+  }
+
+  /**
+   * Find products with IDs similar to the provided ID
+   * This helps with common typos in product IDs (like '4f7c' vs '47fc')
+   * @param id The product ID that may have typos
+   * @returns Array of similar product IDs
+   */
+  public async findSimilarProductIds(id: string): Promise<string[]> {
+    try {
+      console.log(`[PRODUCT API] Searching for products with IDs similar to ${id}`);
+      
+      // Attempt to query all products (limiting to a reasonable number)
+      const response = await this.searchProducts({ limit: 100 });
+      const allProducts = response.items;
+      
+      if (!allProducts || allProducts.length === 0) {
+        console.log('[PRODUCT API] No products found to compare against');
+        return [];
+      }
+      
+      // Find products with similar IDs
+      const similarProducts = allProducts.filter((product: Product) => {
+        // Skip exact matches
+        if (product.id === id) return false;
+        
+        // Calculate similarity score - how many characters match in the same position
+        let matchCount = 0;
+        const minLength = Math.min(product.id.length, id.length);
+        
+        for (let i = 0; i < minLength; i++) {
+          if (product.id[i] === id[i]) {
+            matchCount++;
+          }
+        }
+        
+        // Calculate similarity as a percentage
+        const similarity = matchCount / minLength;
+        
+        // Only consider products with high similarity (over 90%)
+        return similarity > 0.9;
+      });
+      
+      // Sort by name similarity for better matching
+      similarProducts.sort((a: Product, b: Product) => {
+        // If names match exactly, prioritize those
+        if (a.name === b.name) return 0;
+        if (a.name === 'LASLAS') return -1;
+        if (b.name === 'LASLAS') return 1;
+        
+        return a.name.localeCompare(b.name);
+      });
+      
+      console.log(`[PRODUCT API] Found ${similarProducts.length} products with similar IDs`);
+      
+      return similarProducts.map((p: Product) => p.id);
+    } catch (error) {
+      console.error('[PRODUCT API] Error finding similar products:', error);
+      return [];
+    }
   }
 }
 

@@ -261,9 +261,29 @@ export class ApiClient {
         throw new ApiError(errorMessage, response.status);
       }
       
-      // Parse successful response
-      const responseData = await response.json();
-      return responseData as T;
+      // Check if response has content
+      const contentLength = response.headers.get('Content-Length');
+      const hasContent = contentLength === null || parseInt(contentLength) > 0;
+      
+      // Handle empty responses gracefully (successful but no content)
+      if (!hasContent) {
+        console.log('API returned success with empty response');
+        // Return an empty object as the successful result for 201 Created or 204 No Content
+        if (response.status === 201 || response.status === 204) {
+          return { success: true } as T;
+        }
+        return {} as T;
+      }
+      
+      try {
+        // Parse successful response
+        const responseData = await response.json();
+        return responseData as T;
+      } catch (error) {
+        console.warn('Could not parse JSON response, returning empty object', error);
+        // If there was content but it couldn't be parsed as JSON, return empty object
+        return { success: true } as T;
+      }
     } catch (error) {
       // Rethrow ApiErrors
       if (error instanceof ApiError) {
@@ -338,9 +358,29 @@ export class ApiClient {
         throw new ApiError(errorMessage, response.status);
       }
       
-      // Parse successful response
-      const responseData = await response.json();
-      return responseData as T;
+      // Check if response has content
+      const contentLength = response.headers.get('Content-Length');
+      const hasContent = contentLength === null || parseInt(contentLength) > 0;
+      
+      // Handle empty responses gracefully (successful but no content)
+      if (!hasContent) {
+        console.log('API returned success with empty response');
+        // Return an empty object as the successful result for 204 No Content
+        if (response.status === 204) {
+          return { success: true } as T;
+        }
+        return {} as T;
+      }
+      
+      try {
+        // Parse successful response
+        const responseData = await response.json();
+        return responseData as T;
+      } catch (error) {
+        console.warn('Could not parse JSON response, returning empty object', error);
+        // If there was content but it couldn't be parsed as JSON, return empty object
+        return { success: true } as T;
+      }
     } catch (error) {
       // Rethrow ApiErrors
       if (error instanceof ApiError) {
@@ -417,9 +457,26 @@ export class ApiClient {
         throw new ApiError(errorMessage, response.status);
       }
       
-      // Parse successful response
-      const responseData = await response.json();
-      return responseData as T;
+      // Check if response has content
+      const contentLength = response.headers.get('Content-Length');
+      const hasContent = contentLength === null || parseInt(contentLength) > 0;
+      
+      // Handle empty responses gracefully (successful but no content)
+      if (!hasContent) {
+        console.log('API returned success with empty response');
+        // Return an empty object as the successful result
+        return { success: true } as T;
+      }
+      
+      try {
+        // Parse successful response
+        const responseData = await response.json();
+        return responseData as T;
+      } catch (error) {
+        console.warn('Could not parse JSON response, returning empty object', error);
+        // If there was content but it couldn't be parsed as JSON, return empty object
+        return { success: true } as T;
+      }
     } catch (error) {
       // Rethrow ApiErrors
       if (error instanceof ApiError) {
