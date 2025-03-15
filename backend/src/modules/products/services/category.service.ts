@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { TreeRepository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Category } from '../entities/category.entity';
 import { CreateCategoryDto, UpdateCategoryDto, MoveCategoryDto } from '../dtos/category.dto';
 import { CacheService } from '../../../common/cache/cache.service';
@@ -22,7 +22,7 @@ export class CategoryService {
 
   constructor(
     @InjectRepository(Category)
-    private readonly categoryRepository: TreeRepository<Category>,
+    private readonly categoryRepository: Repository<Category>,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -143,13 +143,76 @@ export class CategoryService {
         return this.convertDates(parsedTree);
       }
 
-      // Get tree from database
-      const tree = await this.categoryRepository.findTrees();
-      await this.cacheService.set(this.CACHE_KEY, JSON.stringify(tree), 3600); // Cache for 1 hour
-      return tree;
+      // Get all categories from database
+      const allCategories = await this.categoryRepository.find({
+        order: { position: 'ASC' }
+      });
+
+      // Build tree structure manually
+      const categoryMap = new Map<string, Category>();
+      const rootCategories: Category[] = [];
+
+      // First pass: create a map of all categories
+      allCategories.forEach(category => {
+        // Ensure children array exists
+        category.children = [];
+        // Add to map
+        categoryMap.set(category.id, category);
+      });
+
+      // Second pass: populate children and build root categories list
+      allCategories.forEach(category => {
+        if (category.parentId) {
+          // This is a child category
+          const parent = categoryMap.get(category.parentId);
+          if (parent) {
+            parent.children.push(category);
+          } else {
+            // Parent not found, treat as root
+            this.logger.warn(`Parent category ${category.parentId} not found for ${category.name}, treating as root`);
+            rootCategories.push(category);
+          }
+        } else {
+          // This is a root category
+          rootCategories.push(category);
+        }
+      });
+
+      // Recursively build path for each category
+      rootCategories.forEach(category => {
+        this.buildCategoryPath(category);
+      });
+
+      // Sort root categories by position
+      rootCategories.sort((a, b) => a.position - b.position);
+
+      // Cache the result
+      await this.cacheService.set(this.CACHE_KEY, JSON.stringify(rootCategories), 3600); // Cache for 1 hour
+      
+      return rootCategories;
     } catch (error) {
       this.logger.error(`Error getting category tree: ${error.message}`, error.stack);
       throw error;
+    }
+  }
+
+  /**
+   * Recursively build path for category and its children
+   * @private
+   */
+  private buildCategoryPath(category: Category, parentPath: string = ''): void {
+    // Set the path for this category
+    category.path = parentPath ? `${parentPath} > ${category.name}` : category.name;
+    
+    // Process children
+    if (category.children && category.children.length > 0) {
+      // Sort children by position
+      category.children.sort((a, b) => a.position - b.position);
+      
+      // Build path for each child
+      category.children.forEach(child => {
+        this.buildCategoryPath(child, category.path);
+      });
     }
   }
 
@@ -212,14 +275,14 @@ export class CategoryService {
   async getCategoryById(id: string): Promise<Category> {
     const category = await this.categoryRepository.findOne({
       where: { id },
+      relations: ['parent'],
     });
     if (!category) {
       throw new NotFoundException('Category not found');
     }
 
-    // Get ancestors
-    const ancestors = await this.categoryRepository.findAncestors(category);
-    category.path = ancestors.map(a => a.name).join(' > ');
+    // Build category path
+    category.path = await this.buildCategoryAncestorPath(category);
 
     return category;
   }
@@ -230,14 +293,16 @@ export class CategoryService {
    * @returns Category with ancestors
    */
   async getCategoryBySlug(slug: string): Promise<Category> {
-    const category = await this.categoryRepository.findOne({ where: { slug } });
+    const category = await this.categoryRepository.findOne({ 
+      where: { slug },
+      relations: ['parent'],
+    });
     if (!category) {
       throw new NotFoundException('Category not found');
     }
 
-    // Get ancestors
-    const ancestors = await this.categoryRepository.findAncestors(category);
-    category.path = ancestors.map(a => a.name).join(' > ');
+    // Build category path
+    category.path = await this.buildCategoryAncestorPath(category);
 
     return category;
   }
@@ -252,8 +317,8 @@ export class CategoryService {
 
       for (const category of categories) {
         // Get all descendant categories
-        const descendants = await this.categoryRepository.findDescendants(category);
-        const categoryIds = [category.id, ...descendants.map(d => d.id)];
+        const descendantIds = await this.findAllDescendantIds(category.id);
+        const categoryIds = [category.id, ...descendantIds];
 
         // Count products in category and its descendants
         const totalProducts = await this.categoryRepository
@@ -271,7 +336,63 @@ export class CategoryService {
       await this.cacheService.del(this.CACHE_KEY);
     } catch (error) {
       this.logger.error(`Error updating category product counts: ${error.message}`, error.stack);
-      throw new BadRequestException('Failed to update category product counts');
+      throw error;
     }
+  }
+
+  /**
+   * Build the full path for a category by traversing up its ancestors
+   * @param category The category to build the path for
+   * @returns The full path string (e.g. "Parent > Child > Grandchild")
+   */
+  private async buildCategoryAncestorPath(category: Category): Promise<string> {
+    const pathParts: string[] = [category.name];
+    let currentCategory = category;
+    
+    // Loop up through parents to build the full path
+    while (currentCategory.parentId) {
+      // Find the parent
+      const parent = await this.categoryRepository.findOne({ 
+        where: { id: currentCategory.parentId } 
+      });
+      
+      if (!parent) {
+        break;
+      }
+      
+      // Add to the beginning of the path
+      pathParts.unshift(parent.name);
+      currentCategory = parent;
+    }
+    
+    return pathParts.join(' > ');
+  }
+
+  /**
+   * Find all descendant category IDs (children, grandchildren, etc.)
+   * @param categoryId The parent category ID
+   * @returns Array of descendant category IDs
+   */
+  private async findAllDescendantIds(categoryId: string): Promise<string[]> {
+    // Get direct children first
+    const children = await this.categoryRepository.find({
+      where: { parentId: categoryId },
+      select: ['id']
+    });
+    
+    if (!children || children.length === 0) {
+      return [];
+    }
+    
+    const childIds = children.map(child => child.id);
+    const descendantIds: string[] = [...childIds];
+    
+    // Recursively get descendants for each child
+    for (const childId of childIds) {
+      const childDescendants = await this.findAllDescendantIds(childId);
+      descendantIds.push(...childDescendants);
+    }
+    
+    return descendantIds;
   }
 }

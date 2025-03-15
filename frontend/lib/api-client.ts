@@ -22,6 +22,64 @@ export class ApiError extends Error {
  * Manages authentication, error handling, and response parsing
  */
 export class ApiClient {
+  // Map to track failed endpoints to avoid repeated calls
+  private static failedEndpoints = new Map<string, { timestamp: number, retryCount: number }>();
+  private static readonly ERROR_COOLDOWN = 60 * 1000; // 1 minute cooldown before retrying
+  private static readonly MAX_RETRY_COUNT = 3; // Max number of retries before longer cooldown
+  private static readonly EXTENDED_ERROR_COOLDOWN = 15 * 60 * 1000; // 15 minutes for repeated failures
+  
+  /**
+   * Check if an endpoint is on cooldown due to previous errors
+   * @param endpoint The API endpoint to check
+   * @returns boolean indicating if endpoint is on cooldown
+   */
+  private static isEndpointOnCooldown(endpoint: string): boolean {
+    const failedEndpoint = ApiClient.failedEndpoints.get(endpoint);
+    
+    if (!failedEndpoint) {
+      return false;
+    }
+    
+    const now = Date.now();
+    const { timestamp, retryCount } = failedEndpoint;
+    
+    // Use longer cooldown for endpoints that have failed multiple times
+    const cooldownPeriod = retryCount >= ApiClient.MAX_RETRY_COUNT
+      ? ApiClient.EXTENDED_ERROR_COOLDOWN
+      : ApiClient.ERROR_COOLDOWN;
+    
+    if (now - timestamp < cooldownPeriod) {
+      // Still on cooldown
+      return true;
+    }
+    
+    // Cooldown expired, remove from map
+    ApiClient.failedEndpoints.delete(endpoint);
+    return false;
+  }
+  
+  /**
+   * Mark an endpoint as failed
+   * @param endpoint The API endpoint that failed
+   */
+  private static markEndpointAsFailed(endpoint: string): void {
+    const existingEntry = ApiClient.failedEndpoints.get(endpoint);
+    
+    if (existingEntry) {
+      // Increment retry count for existing entry
+      ApiClient.failedEndpoints.set(endpoint, {
+        timestamp: Date.now(),
+        retryCount: existingEntry.retryCount + 1
+      });
+    } else {
+      // Add new entry
+      ApiClient.failedEndpoints.set(endpoint, {
+        timestamp: Date.now(),
+        retryCount: 1
+      });
+    }
+  }
+  
   /**
    * Returns the authentication token from Supabase
    * This is a production-ready implementation without mock tokens
@@ -57,12 +115,18 @@ export class ApiClient {
     endpoint: string, 
     params?: Record<string, string>, 
     options?: { 
-      customAuthHeader?: boolean // If true, send the token directly without 'Bearer ' prefix
+      customAuthHeader?: boolean, // If true, send the token directly without 'Bearer ' prefix
+      bypassCooldown?: boolean // If true, bypass the endpoint cooldown check
     }
   ): Promise<T> {
     try {
       // Ensure endpoint starts with a slash if not already
       const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      
+      // Check if endpoint is on cooldown due to previous errors
+      if (!options?.bypassCooldown && ApiClient.isEndpointOnCooldown(normalizedEndpoint)) {
+        throw new ApiError(`Endpoint ${normalizedEndpoint} is temporarily unavailable`, 503);
+      }
       
       // Construct URL with query parameters
       let url = `${config.api.baseUrl}${normalizedEndpoint}`;
@@ -126,6 +190,9 @@ export class ApiClient {
         } catch (e) {
           console.error(`500 Internal Server Error at ${url}, could not parse details`);
         }
+        
+        // Mark endpoint as failed to prevent repeated calls
+        ApiClient.markEndpointAsFailed(normalizedEndpoint);
         
         throw new ApiError(errorMessage, response.status);
       }

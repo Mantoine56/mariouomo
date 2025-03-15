@@ -67,7 +67,7 @@ export default function CategoriesPage() {
     if (activeTab === 'tree' && categoryTree.length === 0) {
       loadCategoryTree();
     }
-  }, [activeTab]);
+  }, [activeTab, categoryTree.length]);
 
   /**
    * Load categories from API
@@ -78,7 +78,11 @@ export default function CategoriesPage() {
       const fetchedCategories = await categoryApi.getCategories();
       setCategories(fetchedCategories);
     } catch (error) {
-      console.error('Error loading categories:', error);
+      // Only log error to console in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error loading categories:', error);
+      }
+      
       toast({
         title: 'Error loading categories',
         description: 'Could not load categories. Please try again later.',
@@ -107,7 +111,11 @@ export default function CategoriesPage() {
       });
       setOpenCategories(initialOpenState);
     } catch (error) {
-      console.error('Error loading category tree:', error);
+      // Only log error to console in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error loading category tree:', error);
+      }
+      
       toast({
         title: 'Error loading category tree',
         description: 'Could not load category hierarchy. Please try again later.',

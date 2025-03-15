@@ -20,6 +20,8 @@ This document outlines the plan for implementing a full hierarchical category sy
   - [x] Verify category tree structure endpoint
   - [x] Test category CRUD operations
   - [x] Validate product-category assignment API
+  - [x] Fix database-entity mapping issues in the categories service
+  - [x] Make category endpoints publicly available
 
 ## Phase 2: Admin UI for Category Management
 
@@ -27,6 +29,7 @@ This document outlines the plan for implementing a full hierarchical category sy
   - [x] Create "/dashboard/categories" page 
   - [x] Implement categories list view with stats
   - [x] Add tree view showing hierarchical relationships
+  - [x] Fix console errors and ensure frontend uses backend API properly
   - [ ] Create drag-and-drop interface for organizing categories
   - [ ] Implement bulk operations (enable/disable, delete)
 
@@ -91,4 +94,5 @@ This document outlines the plan for implementing a full hierarchical category sy
 - **2023-04-17**: Successfully migrated existing product metadata categories to the categories table and linked products to their respective categories in the `product_categories` junction table.
 - **2023-04-17**: Verified backend API endpoints for category management through `verify-category-api.js` script.
 - **2023-04-18**: Created basic categories management page with list view and statistics.
-- **2023-04-18**: Implemented tree view for categories with collapsible hierarchy and improved the API to handle various endpoint patterns. 
+- **2023-04-18**: Implemented tree view for categories with collapsible hierarchy and improved the API to handle various endpoint patterns.
+- **2023-04-19**: Fixed backend API issues by updating the Category entity to properly map to database columns and made category endpoints publicly accessible to ensure consistent data access. 

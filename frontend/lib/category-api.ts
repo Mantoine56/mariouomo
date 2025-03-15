@@ -37,6 +37,7 @@ export class CategoryApi {
   private static categoryCache: { data: Category[], timestamp: number } | null = null;
   private static categoryTreeCache: { data: Category[], timestamp: number } | null = null;
   private static readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+  private static isBackendAvailable: boolean | null = null;
 
   /**
    * Constructor initializes the base URL
@@ -44,6 +45,75 @@ export class CategoryApi {
   constructor() {
     // Set the base URL to the categories endpoint
     this.baseUrl = '/categories';
+  }
+
+  /**
+   * Check if the backend API is available
+   * This avoids repeated failed API calls
+   */
+  private async checkBackendAvailability(): Promise<boolean> {
+    // If we've already checked and it's unavailable, don't try again
+    if (CategoryApi.isBackendAvailable === false) {
+      return false;
+    }
+    
+    try {
+      // Try to get auth token, if none is available we can't access API
+      const token = await ApiClient.getAuthToken();
+      if (!token) {
+        CategoryApi.isBackendAvailable = false;
+        return false;
+      }
+      
+      // If we haven't explicitly checked connection, do so now
+      if (CategoryApi.isBackendAvailable === null) {
+        const isAvailable = await ApiClient.isBackendAvailable();
+        CategoryApi.isBackendAvailable = isAvailable;
+        return isAvailable;
+      }
+      
+      return CategoryApi.isBackendAvailable;
+    } catch (e) {
+      CategoryApi.isBackendAvailable = false;
+      return false;
+    }
+  }
+
+  /**
+   * Get categories directly from Supabase database
+   * Used as fallback when API is unavailable
+   */
+  private async getCategoriesFromDatabase(): Promise<Category[]> {
+    // Fetch from database
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .order('position');
+    
+    if (error) {
+      console.error('Error fetching categories from Supabase:', error);
+      throw new Error(`Failed to fetch categories from database: ${error.message}`);
+    }
+    
+    if (!data || data.length === 0) {
+      console.error('No categories found in database');
+      throw new Error('No categories found in database');
+    }
+    
+    // Convert database fields to match Category interface
+    return data.map(dbCategory => ({
+      id: dbCategory.id,
+      name: dbCategory.name,
+      slug: dbCategory.slug,
+      description: dbCategory.description,
+      imageUrl: dbCategory.image_url,
+      position: dbCategory.position,
+      isVisible: dbCategory.is_visible,
+      childCount: dbCategory.child_count,
+      totalProducts: dbCategory.total_products,
+      path: '',
+      seoMetadata: dbCategory.seo_metadata
+    }));
   }
 
   /**
@@ -62,44 +132,29 @@ export class CategoryApi {
 
       let categories: Category[] = [];
       
-      try {
-        // First try to fetch from the API
-        categories = await ApiClient.get<Category[]>(`${this.baseUrl}/tree`);
-        categories = this.flattenCategoryTree(categories);
-      } catch (apiError: any) {
-        console.warn(`Error fetching from backend API: ${apiError?.message || 'Unknown error'}`);
-        
-        // If API fails, fallback to direct Supabase query
-        console.log('Falling back to direct Supabase query for categories');
-        const { data, error } = await supabase
-          .from('categories')
-          .select('*')
-          .order('position');
-        
-        if (error) {
-          console.error('Error fetching categories from Supabase:', error);
-          throw new Error(`Failed to fetch categories from database: ${error.message}`);
+      // Check if backend API is available
+      const isBackendAvailable = await this.checkBackendAvailability();
+      
+      if (isBackendAvailable) {
+        try {
+          // Try to fetch from the API
+          categories = await ApiClient.get<Category[]>(`${this.baseUrl}/tree`);
+          categories = this.flattenCategoryTree(categories);
+          
+          // If API call works, update our availability flag
+          CategoryApi.isBackendAvailable = true;
+        } catch (apiError: any) {
+          // If API fails with a 500, mark as unavailable for future calls
+          if (apiError instanceof Error && 'status' in apiError && apiError.status === 500) {
+            CategoryApi.isBackendAvailable = false;
+          }
+          
+          // Fall back to direct database query
+          categories = await this.getCategoriesFromDatabase();
         }
-        
-        if (!data || data.length === 0) {
-          console.error('No categories found in database');
-          throw new Error('No categories found in database');
-        }
-        
-        // Convert database fields to match Category interface
-        categories = data.map(dbCategory => ({
-          id: dbCategory.id,
-          name: dbCategory.name,
-          slug: dbCategory.slug,
-          description: dbCategory.description,
-          imageUrl: dbCategory.image_url,
-          position: dbCategory.position,
-          isVisible: dbCategory.is_visible,
-          childCount: dbCategory.child_count,
-          totalProducts: dbCategory.total_products,
-          path: '',
-          seoMetadata: dbCategory.seo_metadata
-        }));
+      } else {
+        // Backend API is not available, use database directly
+        categories = await this.getCategoriesFromDatabase();
       }
       
       // Update cache with categories
@@ -128,82 +183,93 @@ export class CategoryApi {
         return CategoryApi.categoryTreeCache.data;
       }
 
-      try {
-        // Try to fetch tree structure from backend API
-        const categoryTree = await ApiClient.get<Category[]>(`${this.baseUrl}/tree`);
-        
-        // Update cache
-        CategoryApi.categoryTreeCache = {
-          data: categoryTree,
-          timestamp: Date.now()
-        };
-        
-        return categoryTree;
-      } catch (apiError) {
-        console.warn(`Error fetching category tree from backend API: ${apiError}`);
-        
-        // Fall back to direct Supabase query with parent-child relationships
-        const { data, error } = await supabase
-          .from('categories')
-          .select('*')
-          .order('position');
-        
-        if (error) {
-          console.error('Error fetching categories from Supabase:', error);
-          throw new Error(`Failed to fetch categories from database: ${error.message}`);
-        }
-        
-        if (!data || data.length === 0) {
-          console.error('No categories found in database');
-          throw new Error('No categories found in database');
-        }
-        
-        // Convert database categories to Category interface
-        const dbCategories = data.map(dbCategory => ({
-          id: dbCategory.id,
-          name: dbCategory.name,
-          slug: dbCategory.slug,
-          description: dbCategory.description,
-          imageUrl: dbCategory.image_url,
-          position: dbCategory.position,
-          isVisible: dbCategory.is_visible,
-          childCount: dbCategory.child_count,
-          totalProducts: dbCategory.total_products,
-          path: '',
-          parentId: dbCategory.parentid,
-          seoMetadata: dbCategory.seo_metadata,
-          children: [] as Category[]
-        }));
-        
-        // Create tree structure based on parentId
-        const categoryMap = new Map<string, any>();
-        dbCategories.forEach(category => categoryMap.set(category.id, category));
-        
-        const rootCategories: Category[] = [];
-        
-        dbCategories.forEach(category => {
-          if (category.parentId) {
-            const parent = categoryMap.get(category.parentId);
-            if (parent) {
-              if (!parent.children) parent.children = [];
-              parent.children.push(category);
-            }
-          } else {
-            rootCategories.push(category);
-          }
+      // Check if backend API is available
+      const isBackendAvailable = await this.checkBackendAvailability();
+      
+      if (isBackendAvailable) {
+        try {
+          // Try to fetch tree structure from backend API
+          const categoryTree = await ApiClient.get<Category[]>(`${this.baseUrl}/tree`);
           
-          // Remove the temporary parentId field
-          delete category.parentId;
-        });
-        
-        // Update cache with the tree structure
-        CategoryApi.categoryTreeCache = {
-          data: rootCategories,
-          timestamp: Date.now()
-        };
-        
-        return rootCategories;
+          // Update cache
+          CategoryApi.categoryTreeCache = {
+            data: categoryTree,
+            timestamp: Date.now()
+          };
+          
+          // If API call works, update our availability flag
+          CategoryApi.isBackendAvailable = true;
+          
+          return categoryTree;
+        } catch (apiError: any) {
+          // If API fails with a 500, mark as unavailable for future calls
+          if (apiError instanceof Error && 'status' in apiError && apiError.status === 500) {
+            CategoryApi.isBackendAvailable = false;
+          }
+        }
       }
+      
+      // Fall back to direct Supabase query with parent-child relationships
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('position');
+      
+      if (error) {
+        console.error('Error fetching categories from Supabase:', error);
+        throw new Error(`Failed to fetch categories from database: ${error.message}`);
+      }
+      
+      if (!data || data.length === 0) {
+        console.error('No categories found in database');
+        throw new Error('No categories found in database');
+      }
+      
+      // Convert database categories to Category interface
+      const dbCategories = data.map(dbCategory => ({
+        id: dbCategory.id,
+        name: dbCategory.name,
+        slug: dbCategory.slug,
+        description: dbCategory.description,
+        imageUrl: dbCategory.image_url,
+        position: dbCategory.position,
+        isVisible: dbCategory.is_visible,
+        childCount: dbCategory.child_count,
+        totalProducts: dbCategory.total_products,
+        path: '',
+        parentId: dbCategory.parentid,
+        seoMetadata: dbCategory.seo_metadata,
+        children: [] as Category[]
+      }));
+      
+      // Create tree structure based on parentId
+      const categoryMap = new Map<string, any>();
+      dbCategories.forEach(category => categoryMap.set(category.id, category));
+      
+      const rootCategories: Category[] = [];
+      
+      dbCategories.forEach(category => {
+        if (category.parentId) {
+          const parent = categoryMap.get(category.parentId);
+          if (parent) {
+            if (!parent.children) parent.children = [];
+            parent.children.push(category);
+          }
+        } else {
+          rootCategories.push(category);
+        }
+        
+        // Remove the temporary parentId field
+        delete category.parentId;
+      });
+      
+      // Update cache with the tree structure
+      CategoryApi.categoryTreeCache = {
+        data: rootCategories,
+        timestamp: Date.now()
+      };
+      
+      return rootCategories;
     } catch (error: any) {
       throw new Error(`Failed to fetch category tree: ${error?.message || 'Unknown error'}`);
     }

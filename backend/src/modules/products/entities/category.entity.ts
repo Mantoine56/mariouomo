@@ -1,4 +1,4 @@
-import { Entity, Column, Tree, TreeChildren, TreeParent, ManyToMany } from 'typeorm';
+import { Entity, Column, ManyToMany, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from '../../../common/entities/base.entity';
 import { Product } from './product.entity';
@@ -8,14 +8,7 @@ import { Product } from './product.entity';
  * Each category can have multiple child categories and products.
  * Categories are organized in a tree structure for efficient navigation and management.
  */
-
-/**
- * Category entity representing product categories in a hierarchical tree structure.
- * Each category can have multiple child categories and products.
- * Categories are organized in a tree structure for efficient navigation and management.
- */
 @Entity('categories')
-@Tree('closure-table')
 export class Category extends BaseEntity {
   /**
    * Category name, displayed in the UI and used for navigation
@@ -77,27 +70,29 @@ export class Category extends BaseEntity {
   };
 
   /**
-   * Full path of the category in the tree
-   * Example: "Clothing > Men's > Shirts"
+   * Parent category ID
+   * Foreign key to the parent category
    */
-  @ApiProperty({ description: 'Category path in tree' })
-  path: string;
+  @ApiProperty({ description: 'Parent category ID' })
+  @Column({ name: 'parentid', nullable: true })
+  parentId?: string;
+
+  /**
+   * Parent category reference
+   * Virtual relation that maps to the parent category
+   */
+  @ApiProperty({ description: 'Parent category', type: () => Category })
+  @ManyToOne(() => Category, category => category.children)
+  @JoinColumn({ name: 'parentid' })
+  parent?: Category;
 
   /**
    * Child categories of this category
    * Forms the hierarchical tree structure
    */
   @ApiProperty({ description: 'Child categories', type: () => [Category] })
-  @TreeChildren()
+  @OneToMany(() => Category, category => category.parent)
   children: Category[];
-
-  /**
-   * Parent category of this category
-   * null for root categories
-   */
-  @ApiProperty({ description: 'Parent category', type: () => Category })
-  @TreeParent()
-  parent: Category;
 
   /**
    * Products associated with this category
@@ -122,4 +117,12 @@ export class Category extends BaseEntity {
   @ApiProperty({ description: 'Total number of products' })
   @Column({ name: 'total_products', default: 0 })
   totalProducts: number;
+
+  /**
+   * Full path of the category in the tree
+   * Example: "Clothing > Men's > Shirts"
+   * This is a virtual property not saved in the database
+   */
+  @ApiProperty({ description: 'Category path in tree' })
+  path?: string;
 }

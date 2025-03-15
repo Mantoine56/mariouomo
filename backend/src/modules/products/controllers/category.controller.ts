@@ -23,6 +23,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { Role } from '../../auth/enums/role.enum';
+import { Public } from '../../auth/decorators/public.decorator';
 
 /**
  * Controller for managing product categories
@@ -88,6 +89,7 @@ export class CategoryController {
    * Get category tree
    */
   @Get('tree')
+  @Public()
   @ApiOperation({ summary: 'Get category tree' })
   @ApiResponse({ status: 200, type: [CategoryTreeDto] })
   async getCategoryTree(): Promise<Category[]> {
@@ -108,6 +110,7 @@ export class CategoryController {
    * Get category by slug
    */
   @Get('by-slug/:slug')
+  @Public()
   @ApiOperation({ summary: 'Get category by slug' })
   @ApiResponse({ status: 200, type: Category })
   async getCategoryBySlug(@Param('slug') slug: string): Promise<Category> {
