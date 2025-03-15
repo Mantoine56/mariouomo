@@ -12,8 +12,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
-import { Loader2, Save, ArrowLeft, Image, TextQuote, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Save, ArrowLeft, Image as ImageIcon, TextQuote, Eye, EyeOff, X } from 'lucide-react';
 import { CategoryApi, Category } from '@/lib/category-api';
+import { ImageUpload, UploadedImage } from '@/components/ui/image-upload';
+import ImageWithFallback from '@/components/ui/image-with-fallback';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@/components/ui/visually-hidden';
 
 export default function CategoryEditPage() {
   // Get category ID from URL params
@@ -37,6 +41,8 @@ export default function CategoryEditPage() {
     }
   });
   const [availableParentCategories, setAvailableParentCategories] = useState<Category[]>([]);
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   
   const [activeTab, setActiveTab] = useState('details');
   const router = useRouter();
@@ -89,6 +95,19 @@ export default function CategoryEditPage() {
       // This would need to be implemented in the CategoryApi class
       const fetchedCategory = await categoryApi.getCategoryById(categoryId);
       setCategory(fetchedCategory);
+      
+      // Initialize uploaded images if the category has an image URL
+      if (fetchedCategory.imageUrl) {
+        setUploadedImages([{
+          id: `existing-${fetchedCategory.id}`,
+          url: fetchedCategory.imageUrl,
+          name: 'Category Image',
+          size: 0
+        }]);
+      } else {
+        // Ensure uploaded images is empty if no image URL
+        setUploadedImages([]);
+      }
     } catch (error) {
       console.error('Error loading category:', error);
       toast({
@@ -144,16 +163,29 @@ export default function CategoryEditPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Use the first uploaded image as the category image URL
+      let updatedCategory = { ...category };
+      if (uploadedImages.length > 0) {
+        updatedCategory.imageUrl = uploadedImages[0].url;
+      } else {
+        // Explicitly set to null rather than undefined to ensure it's included in API request
+        updatedCategory.imageUrl = null;
+      }
+      
+      // Debug log for image deletion
+      console.log('Saving category with image status:', { 
+        hasUploadedImages: uploadedImages.length > 0,
+        imageUrl: updatedCategory.imageUrl
+      });
+      
       if (isNewCategory) {
-        // This would need to be implemented in the CategoryApi class
-        await categoryApi.createCategory(category as Category);
+        await categoryApi.createCategory(updatedCategory as Category);
         toast({
           title: 'Category created',
           description: 'The category has been created successfully.',
         });
       } else {
-        // This would need to be implemented in the CategoryApi class
-        await categoryApi.updateCategory(categoryId, category);
+        await categoryApi.updateCategory(categoryId, updatedCategory);
         toast({
           title: 'Category updated',
           description: 'The category has been updated successfully.',
@@ -209,8 +241,41 @@ export default function CategoryEditPage() {
     }));
   };
 
-  // Placeholder for image upload functionality
-  // This would be integrated with the ImageUpload component
+  /**
+   * Handle image uploads
+   */
+  const handleImageChange = (images: UploadedImage[]) => {
+    // Categories only need one image, so we'll use the most recently added one
+    setUploadedImages(images.length > 0 ? [images[images.length - 1]] : []);
+  };
+
+  /**
+   * Handle deletion of the current image
+   */
+  const handleDeleteImage = () => {
+    // Clear uploaded images
+    setUploadedImages([]);
+    
+    // Also update the category state to ensure persistence
+    setCategory(prev => ({
+      ...prev,
+      imageUrl: undefined
+    }));
+    
+    toast({
+      title: 'Image removed',
+      description: 'The category image has been removed. Remember to save your changes.',
+    });
+  };
+
+  /**
+   * Open image lightbox
+   */
+  const openLightbox = () => {
+    if (uploadedImages.length > 0) {
+      setLightboxOpen(true);
+    }
+  };
 
   // Show loading state
   if (loading) {
@@ -251,7 +316,7 @@ export default function CategoryEditPage() {
             SEO Settings
           </TabsTrigger>
           <TabsTrigger value="image">
-            <Image className="h-4 w-4 mr-2" />
+            <ImageIcon className="h-4 w-4 mr-2" />
             Category Image
           </TabsTrigger>
         </TabsList>
@@ -462,24 +527,87 @@ export default function CategoryEditPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* This would be replaced with the actual ImageUpload component */}
-              <div className="border-2 border-dashed rounded-md p-6 flex flex-col items-center justify-center">
-                <Image className="h-12 w-12 text-gray-400 mb-2" />
-                <p className="text-center text-gray-500">
-                  Drag and drop an image here, or click to select a file
+              {/* Current category image preview */}
+              {uploadedImages.length > 0 && (
+                <div className="mb-6 border rounded-md p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-medium">Current Image</p>
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      onClick={handleDeleteImage}
+                    >
+                      Remove Image
+                    </Button>
+                  </div>
+                  <div 
+                    className="relative w-full h-48 overflow-hidden rounded-md border mb-3 cursor-pointer"
+                    onClick={openLightbox}
+                  >
+                    <ImageWithFallback
+                      src={uploadedImages[0].url}
+                      alt={category.name || 'Category image'}
+                      fill
+                      className="object-cover hover:opacity-90 transition-opacity"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30">
+                      <span className="bg-white text-black px-3 py-1 rounded-md text-sm font-medium">
+                        Click to enlarge
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Image upload component */}
+              <div className={uploadedImages.length > 0 ? 'border-t pt-4 mt-4' : ''}>
+                <p className="font-medium mb-2">
+                  {uploadedImages.length > 0 ? 'Replace Image' : 'Upload Image'}
                 </p>
-                <Button variant="outline" className="mt-4">
-                  Select Image
-                </Button>
+                <ImageUpload
+                  value={uploadedImages}
+                  onChange={handleImageChange}
+                  maxImages={1}
+                  bucket="product-images"
+                />
+                
+                <p className="text-sm text-gray-500 mt-2">
+                  Recommended size: 1200 x 800 pixels. Max file size: 2MB.
+                </p>
               </div>
-
-              <p className="text-sm text-gray-500">
-                Recommended size: 1200 x 800 pixels. Max file size: 2MB.
-              </p>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Image Lightbox */}
+      <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
+        <DialogContent className="max-w-4xl w-full p-1 bg-transparent border-none">
+          <VisuallyHidden>
+            <DialogTitle>Category Image Preview</DialogTitle>
+          </VisuallyHidden>
+          <div className="relative w-full h-full rounded-lg overflow-hidden bg-white">
+            <Button
+              variant="outline" 
+              size="icon"
+              className="absolute right-2 top-2 z-10"
+              onClick={() => setLightboxOpen(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            {uploadedImages.length > 0 && (
+              <div className="relative w-full h-[80vh]">
+                <ImageWithFallback
+                  src={uploadedImages[0].url}
+                  alt={category.name || 'Category image'}
+                  fill
+                  className="object-contain bg-white p-2"
+                />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

@@ -15,7 +15,7 @@ export interface Category {
   name: string;
   slug: string;
   description?: string;
-  imageUrl?: string;
+  imageUrl?: string | null;
   position: number;
   isVisible: boolean;
   childCount: number;
@@ -441,49 +441,52 @@ export class CategoryApi {
   private async createCategoryInDatabase(
     category: Omit<Category, 'id' | 'childCount' | 'totalProducts' | 'children'>
   ): Promise<Category> {
-    // Convert category data to match the database schema
-    const dbCategory = {
-      name: category.name,
-      slug: category.slug,
-      description: category.description,
-      image_url: category.imageUrl,
-      position: category.position,
-      is_visible: category.isVisible,
-      parentid: category.parentId,
-      seo_metadata: category.seoMetadata,
-      child_count: 0,
-      total_products: 0
-    };
-    
-    const { data, error } = await supabase
-      .from('categories')
-      .insert(dbCategory)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating category in Supabase:', error);
+    try {
+      // Prepare data for insertion
+      const categoryData = {
+        name: category.name,
+        slug: category.slug,
+        description: category.description || null,
+        image_url: category.imageUrl || null,
+        position: category.position,
+        is_visible: category.isVisible,
+        parentid: category.parentId || null,
+        seo_metadata: category.seoMetadata || {}
+      };
+
+      // Insert into database
+      const { data, error } = await supabase
+        .from('categories')
+        .insert(categoryData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating category in database:', error);
+        throw new Error(`Database error: ${error.message}`);
+      }
+
+      if (!data) {
+        throw new Error('Failed to retrieve created category');
+      }
+
+      // Convert to Category interface
+      return {
+        id: data.id,
+        name: data.name,
+        slug: data.slug,
+        description: data.description,
+        imageUrl: data.image_url,
+        position: data.position,
+        isVisible: data.is_visible,
+        childCount: 0,
+        totalProducts: 0,
+        parentId: data.parentid,
+        seoMetadata: data.seo_metadata
+      };
+    } catch (error: any) {
       throw new Error(`Failed to create category in database: ${error.message}`);
     }
-    
-    // Clear cache after creating
-    this.clearCache();
-    
-    // Convert database fields to match Category interface
-    return {
-      id: data.id,
-      name: data.name,
-      slug: data.slug,
-      description: data.description,
-      imageUrl: data.image_url,
-      position: data.position,
-      isVisible: data.is_visible,
-      childCount: data.child_count,
-      totalProducts: data.total_products,
-      path: '',
-      parentId: data.parentid,
-      seoMetadata: data.seo_metadata
-    };
   }
 
   /**
@@ -502,6 +505,7 @@ export class CategoryApi {
       if (category.name !== undefined) updateData.name = category.name;
       if (category.slug !== undefined) updateData.slug = category.slug;
       if (category.description !== undefined) updateData.description = category.description;
+      // Allow null values for imageUrl to support image deletion
       if (category.imageUrl !== undefined) updateData.imageUrl = category.imageUrl;
       if (category.position !== undefined) updateData.position = category.position;
       if (category.isVisible !== undefined) updateData.isVisible = category.isVisible;
@@ -544,46 +548,58 @@ export class CategoryApi {
    * @returns Promise resolving to the updated Category
    */
   private async updateCategoryInDatabase(id: string, category: Partial<Category>): Promise<Category> {
-    // Convert category data to match the database schema
-    const dbCategory: Record<string, any> = {};
-    if (category.name !== undefined) dbCategory.name = category.name;
-    if (category.slug !== undefined) dbCategory.slug = category.slug;
-    if (category.description !== undefined) dbCategory.description = category.description;
-    if (category.imageUrl !== undefined) dbCategory.image_url = category.imageUrl;
-    if (category.position !== undefined) dbCategory.position = category.position;
-    if (category.isVisible !== undefined) dbCategory.is_visible = category.isVisible;
-    if (category.parentId !== undefined) dbCategory.parentid = category.parentId;
-    if (category.seoMetadata !== undefined) dbCategory.seo_metadata = category.seoMetadata;
-    
-    const { data, error } = await supabase
-      .from('categories')
-      .update(dbCategory)
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating category in Supabase:', error);
+    try {
+      // Prepare data for update
+      const updateData: Record<string, any> = {};
+      
+      if (category.name !== undefined) updateData.name = category.name;
+      if (category.slug !== undefined) updateData.slug = category.slug;
+      if (category.description !== undefined) updateData.description = category.description;
+      if (category.imageUrl !== undefined) updateData.image_url = category.imageUrl; // This handles null values as well
+      if (category.position !== undefined) updateData.position = category.position;
+      if (category.isVisible !== undefined) updateData.is_visible = category.isVisible;
+      if (category.parentId !== undefined) updateData.parentid = category.parentId;
+      if (category.seoMetadata !== undefined) updateData.seo_metadata = category.seoMetadata;
+
+      // Console log to debug image deletion
+      console.log('Updating category in database:', { id, updateData });
+
+      // Update in database
+      const { data, error } = await supabase
+        .from('categories')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating category in database:', error);
+        throw new Error(`Database error: ${error.message}`);
+      }
+
+      if (!data) {
+        throw new Error('Failed to retrieve updated category');
+      }
+
+      // Log the retrieved category data
+      console.log('Updated category from database:', data);
+
+      // Convert to Category interface
+      return {
+        id: data.id,
+        name: data.name,
+        slug: data.slug,
+        description: data.description,
+        imageUrl: data.image_url,
+        position: data.position,
+        isVisible: data.is_visible,
+        childCount: data.child_count || 0,
+        totalProducts: data.total_products || 0,
+        parentId: data.parentid,
+        seoMetadata: data.seo_metadata
+      };
+    } catch (error: any) {
       throw new Error(`Failed to update category in database: ${error.message}`);
     }
-    
-    // Clear cache after updating
-    this.clearCache();
-    
-    // Convert database fields to match Category interface
-    return {
-      id: data.id,
-      name: data.name,
-      slug: data.slug,
-      description: data.description,
-      imageUrl: data.image_url,
-      position: data.position,
-      isVisible: data.is_visible,
-      childCount: data.child_count,
-      totalProducts: data.total_products,
-      path: '',
-      parentId: data.parentid,
-      seoMetadata: data.seo_metadata
-    };
   }
 } 

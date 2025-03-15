@@ -38,7 +38,7 @@ This document outlines the plan for implementing a full hierarchical category sy
   - [x] Create interface for editing existing categories
   - [x] Add SEO settings section (meta title, description, keywords)
   - [x] Implement parent category selection
-  - [ ] Implement category image upload
+  - [x] Implement category image upload
   - [ ] Add preview of category appearance
 
 - [ ] **Product Assignment Interface**
@@ -97,4 +97,5 @@ This document outlines the plan for implementing a full hierarchical category sy
 - **2023-04-18**: Created basic categories management page with list view and statistics.
 - **2023-04-18**: Implemented tree view for categories with collapsible hierarchy and improved the API to handle various endpoint patterns.
 - **2023-04-19**: Fixed backend API issues by updating the Category entity to properly map to database columns and made category endpoints publicly accessible to ensure consistent data access.
-- **2023-04-19**: Implemented Category Detail/Edit UI with form for adding new categories and editing existing ones, including SEO settings and parent category selection. 
+- **2023-04-19**: Implemented Category Detail/Edit UI with form for adding new categories and editing existing ones, including SEO settings and parent category selection.
+- **2023-04-20**: Added image upload functionality to the Category Edit UI, allowing administrators to upload and preview category images. 
