@@ -21,6 +21,7 @@ export interface Category {
   childCount: number;
   totalProducts: number;
   path?: string;
+  parentId?: string;
   seoMetadata?: {
     title?: string;
     description?: string;
@@ -304,5 +305,285 @@ export class CategoryApi {
     
     flatten(categoryTree);
     return result;
+  }
+
+  /**
+   * Get a category by ID
+   * @param id Category ID
+   * @returns Promise resolving to a single Category
+   */
+  public async getCategoryById(id: string): Promise<Category> {
+    try {
+      // Check if backend API is available
+      const isBackendAvailable = await this.checkBackendAvailability();
+      
+      if (isBackendAvailable) {
+        try {
+          // Try to fetch from API
+          const category = await ApiClient.get<Category>(`${this.baseUrl}/${id}`);
+          
+          // If API call works, update availability flag
+          CategoryApi.isBackendAvailable = true;
+          return category;
+        } catch (apiError: any) {
+          // If API fails with a 500, mark as unavailable for future calls
+          if (apiError instanceof Error && 'status' in apiError && apiError.status === 500) {
+            CategoryApi.isBackendAvailable = false;
+          }
+          
+          // Fall back to direct database query
+          const category = await this.getCategoryByIdFromDatabase(id);
+          return category;
+        }
+      } else {
+        // Backend API is not available, use database directly
+        return this.getCategoryByIdFromDatabase(id);
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to fetch category by ID: ${error?.message || 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get a category by ID directly from Supabase
+   * @param id Category ID
+   * @returns Promise resolving to a single Category
+   */
+  private async getCategoryByIdFromDatabase(id: string): Promise<Category> {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching category from Supabase:', error);
+      throw new Error(`Failed to fetch category from database: ${error.message}`);
+    }
+    
+    if (!data) {
+      throw new Error(`Category with ID ${id} not found`);
+    }
+    
+    // Convert database fields to match Category interface
+    return {
+      id: data.id,
+      name: data.name,
+      slug: data.slug,
+      description: data.description,
+      imageUrl: data.image_url,
+      position: data.position,
+      isVisible: data.is_visible,
+      childCount: data.child_count,
+      totalProducts: data.total_products,
+      path: '',
+      parentId: data.parentid,
+      seoMetadata: data.seo_metadata
+    };
+  }
+
+  /**
+   * Create a new category
+   * @param category Category data
+   * @returns Promise resolving to the created Category
+   */
+  public async createCategory(category: Omit<Category, 'id' | 'childCount' | 'totalProducts' | 'children'>): Promise<Category> {
+    try {
+      // Check if backend API is available
+      const isBackendAvailable = await this.checkBackendAvailability();
+      
+      // Prepare the data for API submission
+      const categoryData = {
+        name: category.name,
+        slug: category.slug,
+        description: category.description,
+        imageUrl: category.imageUrl,
+        position: category.position,
+        isVisible: category.isVisible,
+        parentId: category.parentId,
+        seoMetadata: category.seoMetadata
+      };
+      
+      if (isBackendAvailable) {
+        try {
+          // Try to create via API
+          const createdCategory = await ApiClient.post<Category>(this.baseUrl, categoryData);
+          
+          // Clear cache after creating
+          this.clearCache();
+          
+          // If API call works, update availability flag
+          CategoryApi.isBackendAvailable = true;
+          return createdCategory;
+        } catch (apiError: any) {
+          // If API fails with a 500, mark as unavailable for future calls
+          if (apiError instanceof Error && 'status' in apiError && apiError.status === 500) {
+            CategoryApi.isBackendAvailable = false;
+          }
+          
+          // Fall back to direct database creation
+          return this.createCategoryInDatabase(category);
+        }
+      } else {
+        // Backend API is not available, use database directly
+        return this.createCategoryInDatabase(category);
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to create category: ${error?.message || 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Create a new category directly in Supabase
+   * @param category Category data
+   * @returns Promise resolving to the created Category
+   */
+  private async createCategoryInDatabase(
+    category: Omit<Category, 'id' | 'childCount' | 'totalProducts' | 'children'>
+  ): Promise<Category> {
+    // Convert category data to match the database schema
+    const dbCategory = {
+      name: category.name,
+      slug: category.slug,
+      description: category.description,
+      image_url: category.imageUrl,
+      position: category.position,
+      is_visible: category.isVisible,
+      parentid: category.parentId,
+      seo_metadata: category.seoMetadata,
+      child_count: 0,
+      total_products: 0
+    };
+    
+    const { data, error } = await supabase
+      .from('categories')
+      .insert(dbCategory)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating category in Supabase:', error);
+      throw new Error(`Failed to create category in database: ${error.message}`);
+    }
+    
+    // Clear cache after creating
+    this.clearCache();
+    
+    // Convert database fields to match Category interface
+    return {
+      id: data.id,
+      name: data.name,
+      slug: data.slug,
+      description: data.description,
+      imageUrl: data.image_url,
+      position: data.position,
+      isVisible: data.is_visible,
+      childCount: data.child_count,
+      totalProducts: data.total_products,
+      path: '',
+      parentId: data.parentid,
+      seoMetadata: data.seo_metadata
+    };
+  }
+
+  /**
+   * Update an existing category
+   * @param id Category ID
+   * @param category Updated category data
+   * @returns Promise resolving to the updated Category
+   */
+  public async updateCategory(id: string, category: Partial<Category>): Promise<Category> {
+    try {
+      // Check if backend API is available
+      const isBackendAvailable = await this.checkBackendAvailability();
+      
+      // Prepare the data for API submission, only including fields that should be updated
+      const updateData: Record<string, any> = {};
+      if (category.name !== undefined) updateData.name = category.name;
+      if (category.slug !== undefined) updateData.slug = category.slug;
+      if (category.description !== undefined) updateData.description = category.description;
+      if (category.imageUrl !== undefined) updateData.imageUrl = category.imageUrl;
+      if (category.position !== undefined) updateData.position = category.position;
+      if (category.isVisible !== undefined) updateData.isVisible = category.isVisible;
+      if (category.parentId !== undefined) updateData.parentId = category.parentId;
+      if (category.seoMetadata !== undefined) updateData.seoMetadata = category.seoMetadata;
+      
+      if (isBackendAvailable) {
+        try {
+          // Try to update via API
+          const updatedCategory = await ApiClient.put<Category>(`${this.baseUrl}/${id}`, updateData);
+          
+          // Clear cache after updating
+          this.clearCache();
+          
+          // If API call works, update availability flag
+          CategoryApi.isBackendAvailable = true;
+          return updatedCategory;
+        } catch (apiError: any) {
+          // If API fails with a 500, mark as unavailable for future calls
+          if (apiError instanceof Error && 'status' in apiError && apiError.status === 500) {
+            CategoryApi.isBackendAvailable = false;
+          }
+          
+          // Fall back to direct database update
+          return this.updateCategoryInDatabase(id, category);
+        }
+      } else {
+        // Backend API is not available, use database directly
+        return this.updateCategoryInDatabase(id, category);
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to update category: ${error?.message || 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Update an existing category directly in Supabase
+   * @param id Category ID
+   * @param category Updated category data
+   * @returns Promise resolving to the updated Category
+   */
+  private async updateCategoryInDatabase(id: string, category: Partial<Category>): Promise<Category> {
+    // Convert category data to match the database schema
+    const dbCategory: Record<string, any> = {};
+    if (category.name !== undefined) dbCategory.name = category.name;
+    if (category.slug !== undefined) dbCategory.slug = category.slug;
+    if (category.description !== undefined) dbCategory.description = category.description;
+    if (category.imageUrl !== undefined) dbCategory.image_url = category.imageUrl;
+    if (category.position !== undefined) dbCategory.position = category.position;
+    if (category.isVisible !== undefined) dbCategory.is_visible = category.isVisible;
+    if (category.parentId !== undefined) dbCategory.parentid = category.parentId;
+    if (category.seoMetadata !== undefined) dbCategory.seo_metadata = category.seoMetadata;
+    
+    const { data, error } = await supabase
+      .from('categories')
+      .update(dbCategory)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating category in Supabase:', error);
+      throw new Error(`Failed to update category in database: ${error.message}`);
+    }
+    
+    // Clear cache after updating
+    this.clearCache();
+    
+    // Convert database fields to match Category interface
+    return {
+      id: data.id,
+      name: data.name,
+      slug: data.slug,
+      description: data.description,
+      imageUrl: data.image_url,
+      position: data.position,
+      isVisible: data.is_visible,
+      childCount: data.child_count,
+      totalProducts: data.total_products,
+      path: '',
+      parentId: data.parentid,
+      seoMetadata: data.seo_metadata
+    };
   }
 } 

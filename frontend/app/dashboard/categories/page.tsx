@@ -19,8 +19,11 @@ import {
   Package,
   ChevronRight,
   MoreHorizontal,
-  ChevronsUpDown
+  ChevronsUpDown,
+  Edit,
+  Trash2
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { CategoryApi, Category } from '@/lib/category-api';
 import { useToast } from '@/components/ui/use-toast';
 import { 
@@ -55,6 +58,7 @@ export default function CategoriesPage() {
   const [activeTab, setActiveTab] = useState('list');
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
+  const router = useRouter();
   const categoryApi = new CategoryApi();
 
   // Load categories when component mounts
@@ -124,6 +128,20 @@ export default function CategoriesPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * Navigate to edit page for a category
+   */
+  const handleEditCategory = (categoryId: string) => {
+    router.push(`/dashboard/categories/${categoryId}`);
+  };
+
+  /**
+   * Navigate to create new category page
+   */
+  const handleCreateCategory = () => {
+    router.push('/dashboard/categories/new');
   };
 
   /**
@@ -200,13 +218,19 @@ export default function CategoriesPage() {
             <span className="ml-auto text-sm text-gray-500">{category.totalProducts} products</span>
             
             <div className="flex items-center gap-1 ml-2">
-              <Button variant="outline" size="sm">Edit</Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleEditCategory(category.id)}
+              >
+                <Edit className="h-4 w-4" />
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => toggleVisibility(category.id, category.isVisible)}
               >
-                {category.isVisible ? 'Hide' : 'Show'}
+                {category.isVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </Button>
             </div>
           </div>
@@ -227,7 +251,7 @@ export default function CategoriesPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Categories</h1>
-        <Button className="ml-auto">
+        <Button className="ml-auto" onClick={handleCreateCategory}>
           <Plus className="mr-2 h-4 w-4" />
           Add Category
         </Button>
@@ -331,6 +355,7 @@ export default function CategoriesPage() {
                               <Button 
                                 variant="outline"
                                 size="sm"
+                                onClick={() => handleEditCategory(category.id)}
                               >
                                 Edit
                               </Button>
