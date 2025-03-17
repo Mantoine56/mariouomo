@@ -16,6 +16,11 @@ const nextConfig = {
         protocol: 'https',
         hostname: '**.supabase.in',
         port: ''
+      },
+      {
+        protocol: 'https',
+        hostname: 'placehold.co',
+        port: ''
       }
     ],
     // Make sure local images from the public directory work correctly

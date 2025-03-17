@@ -12,12 +12,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
-import { Loader2, Save, ArrowLeft, Image as ImageIcon, TextQuote, Eye, EyeOff, X } from 'lucide-react';
+import { Loader2, Save, ArrowLeft, Image as ImageIcon, TextQuote, Eye, EyeOff, X, Package, Boxes } from 'lucide-react';
 import { CategoryApi, Category } from '@/lib/category-api';
 import { ImageUpload, UploadedImage } from '@/components/ui/image-upload';
 import ImageWithFallback from '@/components/ui/image-with-fallback';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@/components/ui/visually-hidden';
+import CategoryPreview from '@/components/dashboard/CategoryPreview';
+import { CategoryProductsManager } from './category-products-manager';
 
 export default function CategoryEditPage() {
   // Get category ID from URL params
@@ -319,6 +321,14 @@ export default function CategoryEditPage() {
             <ImageIcon className="h-4 w-4 mr-2" />
             Category Image
           </TabsTrigger>
+          <TabsTrigger value="preview">
+            <Eye className="h-4 w-4 mr-2" />
+            Preview
+          </TabsTrigger>
+          <TabsTrigger value="products">
+            <Boxes className="h-4 w-4 mr-2" />
+            Products
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="details" className="mt-4">
@@ -577,6 +587,17 @@ export default function CategoryEditPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="preview" className="mt-4">
+          <CategoryPreview category={category} />
+        </TabsContent>
+
+        <TabsContent value="products" className="space-y-4">
+          <CategoryProductsManager 
+            categoryId={params.id.toString()} 
+            categoryName={category.name} 
+          />
         </TabsContent>
       </Tabs>
 

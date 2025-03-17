@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -10,6 +11,8 @@ import { Category } from '../entities/category.entity';
 import { CreateCategoryDto, UpdateCategoryDto, MoveCategoryDto } from '../dtos/category.dto';
 import { CacheService } from '../../../common/cache/cache.service';
 import { slugify } from '../../../common/utils/string.utils';
+import { Connection } from 'typeorm';
+import { PaginationQueryDto, PaginatedResponseDto } from '../../../common/dtos/pagination.dto';
 
 /**
  * Service for managing product categories
@@ -24,6 +27,7 @@ export class CategoryService {
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
     private readonly cacheService: CacheService,
+    private readonly connection: Connection,
   ) {}
 
   /**
@@ -394,5 +398,258 @@ export class CategoryService {
     }
     
     return descendantIds;
+  }
+
+  /**
+   * Get products for a specific category
+   * @param categoryId The category ID
+   * @param options Pagination and filter options
+   * @returns Paginated list of products
+   */
+  async getCategoryProducts(
+    categoryId: string,
+    options: PaginationQueryDto & { query?: string } = {}
+  ): Promise<PaginatedResponseDto<any>> {
+    // Set default pagination values
+    const page = options.page || 1;
+    const limit = options.limit || 10;
+    const offset = (page - 1) * limit;
+    const sortBy = options.sortBy || 'name';
+    const sortDirection = options.sortDirection || 'ASC';
+    
+    try {
+      // Check if category exists
+      const category = await this.getCategoryById(categoryId);
+      if (!category) {
+        throw new NotFoundException(`Category with ID ${categoryId} not found`);
+      }
+      
+      // Create query builder for product-categories relationship
+      const queryBuilder = this.connection.createQueryBuilder()
+        .select('p.id', 'id')
+        .addSelect('p.name', 'name')
+        .addSelect('p.description', 'description')
+        .addSelect('p.price', 'price')
+        .addSelect('p.status', 'status')
+        .addSelect('p.metadata', 'metadata')
+        .from('product_categories', 'pc')
+        .innerJoin('products', 'p', 'p.id = pc.product_id')
+        .where('pc.category_id = :categoryId', { categoryId })
+        .andWhere('p.deleted_at IS NULL');
+      
+      // Apply search filter if provided
+      if (options.query) {
+        queryBuilder.andWhere('p.name ILIKE :query', { query: `%${options.query}%` });
+      }
+      
+      // Apply sorting
+      queryBuilder.orderBy(`p.${sortBy}`, sortDirection);
+      
+      // Add pagination
+      queryBuilder
+        .offset(offset)
+        .limit(limit);
+      
+      // Execute the query to get products
+      const products = await queryBuilder.getRawMany();
+      
+      // Get total count for pagination
+      const countQueryBuilder = this.connection.createQueryBuilder()
+        .select('COUNT(DISTINCT p.id)', 'count')
+        .from('product_categories', 'pc')
+        .innerJoin('products', 'p', 'p.id = pc.product_id')
+        .where('pc.category_id = :categoryId', { categoryId })
+        .andWhere('p.deleted_at IS NULL');
+      
+      // Apply the same search filter to count query
+      if (options.query) {
+        countQueryBuilder.andWhere('p.name ILIKE :query', { query: `%${options.query}%` });
+      }
+      
+      const { count } = await countQueryBuilder.getRawOne();
+      const totalCount = parseInt(count, 10);
+      
+      // Get product images for all products
+      const productIds = products.map(p => p.id);
+      
+      let productImages = [];
+      if (productIds.length > 0) {
+        productImages = await this.connection.createQueryBuilder()
+          .select('pi.id', 'id')
+          .addSelect('pi.product_id', 'productId')
+          .addSelect('pi.url', 'url')
+          .addSelect('pi.alt_text', 'altText')
+          .addSelect('pi.position', 'position')
+          .from('product_images', 'pi')
+          .where('pi.product_id IN (:...productIds)', { productIds })
+          .orderBy('pi.position', 'ASC')
+          .getRawMany();
+      }
+      
+      // Create a map of product IDs to their images
+      const imagesByProduct = productImages.reduce((acc, img) => {
+        if (!acc[img.productId]) {
+          acc[img.productId] = [];
+        }
+        acc[img.productId].push({
+          id: img.id,
+          url: img.url,
+          altText: img.altText,
+          position: img.position
+        });
+        return acc;
+      }, {});
+      
+      // Format the response with mapped images
+      const mappedProducts = products.map(product => {
+        const productImages = imagesByProduct[product.id] || [];
+        return {
+          id: product.id,
+          name: product.name,
+          description: product.description,
+          price: product.price,
+          status: product.status,
+          metadata: product.metadata,
+          images: productImages,
+          // Add convenient fields using metadata or defaults
+          sku: product.metadata?.sku || product.id.substring(0, 8),
+          stock_quantity: product.metadata?.stock_quantity || 0,
+          is_published: product.status === 'active',
+          image_url: productImages.length > 0 ? productImages[0].url : null
+        };
+      });
+      
+      // Return paginated response matching PaginatedResponseDto structure
+      return {
+        items: mappedProducts,
+        total: totalCount,
+        page,
+        limit,
+        totalPages: Math.ceil(totalCount / limit),
+        hasNextPage: offset + limit < totalCount,
+        hasPreviousPage: page > 1
+      };
+    } catch (error) {
+      this.logger.error(`Error fetching products for category ${categoryId}:`, error.stack);
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(`Failed to fetch products for category: ${error.message}`);
+    }
+  }
+
+  /**
+   * Add products to a category
+   * @param categoryId The category ID
+   * @param productIds Array of product IDs to add to the category
+   */
+  async addProductsToCategory(categoryId: string, productIds: string[]): Promise<void> {
+    if (!productIds.length) {
+      return; // Nothing to do
+    }
+    
+    try {
+      // Check if category exists
+      const category = await this.getCategoryById(categoryId);
+      if (!category) {
+        throw new NotFoundException(`Category with ID ${categoryId} not found`);
+      }
+      
+      // Check if products exist
+      const productsCount = await this.connection
+        .createQueryBuilder()
+        .select('COUNT(id)')
+        .from('products', 'p')
+        .where('p.id IN (:...productIds)', { productIds })
+        .andWhere('p.deleted_at IS NULL')
+        .getRawOne();
+      
+      if (productsCount.count !== productIds.length) {
+        throw new BadRequestException('Some product IDs are invalid');
+      }
+      
+      // Get existing relations to avoid duplicates
+      const existingRelations = await this.connection
+        .createQueryBuilder()
+        .select('product_id')
+        .from('product_categories', 'pc')
+        .where('pc.category_id = :categoryId', { categoryId })
+        .andWhere('pc.product_id IN (:...productIds)', { productIds })
+        .getRawMany();
+      
+      const existingProductIds = new Set(existingRelations.map(r => r.product_id));
+      const newProductIds = productIds.filter(id => !existingProductIds.has(id));
+      
+      if (newProductIds.length === 0) {
+        return; // All products are already in the category
+      }
+      
+      // Insert new relations
+      await this.connection
+        .createQueryBuilder()
+        .insert()
+        .into('product_categories')
+        .values(newProductIds.map(productId => ({
+          category_id: categoryId,
+          product_id: productId
+        })))
+        .execute();
+      
+      // Update product counts
+      await this.updateCategoryProductCounts();
+      
+      // Clear cache if used
+      const cacheKey = `category:${categoryId}:products`;
+      await this.cacheService.del(cacheKey);
+      
+    } catch (error) {
+      this.logger.error(`Error adding products to category ${categoryId}:`, error.stack);
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(`Failed to add products to category: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Remove products from a category
+   * @param categoryId The category ID
+   * @param productIds Array of product IDs to remove from the category
+   */
+  async removeProductsFromCategory(categoryId: string, productIds: string[]): Promise<void> {
+    if (!productIds.length) {
+      return; // Nothing to do
+    }
+    
+    try {
+      // Check if category exists
+      const category = await this.getCategoryById(categoryId);
+      if (!category) {
+        throw new NotFoundException(`Category with ID ${categoryId} not found`);
+      }
+      
+      // Delete the relations
+      await this.connection
+        .createQueryBuilder()
+        .delete()
+        .from('product_categories')
+        .where('category_id = :categoryId', { categoryId })
+        .andWhere('product_id IN (:...productIds)', { productIds })
+        .execute();
+      
+      // Update product counts
+      await this.updateCategoryProductCounts();
+      
+      // Clear cache if used
+      const cacheKey = `category:${categoryId}:products`;
+      await this.cacheService.del(cacheKey);
+      
+    } catch (error) {
+      this.logger.error(`Error removing products from category ${categoryId}:`, error.stack);
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(`Failed to remove products from category: ${error.message}`);
+    }
   }
 }

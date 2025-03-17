@@ -8,6 +8,34 @@ import { ApiClient } from './api-client';
 import { supabase } from './supabase';
 
 /**
+ * Product image interface for database
+ */
+interface ProductImageDB {
+  id?: string;
+  product_id: string;
+  url: string;
+  position: number;
+}
+
+/**
+ * Product interface for the category products
+ */
+interface CategoryProduct {
+  id: string;
+  name: string;
+  price: number | null;
+  image_url: string | null;
+  sku: string;
+  stock_quantity: number;
+  is_published: boolean;
+  images?: {
+    id: string;
+    url: string;
+    position: number;
+  }[];
+}
+
+/**
  * Category interface - matches backend Category entity structure
  */
 export interface Category {
@@ -600,6 +628,393 @@ export class CategoryApi {
       };
     } catch (error: any) {
       throw new Error(`Failed to update category in database: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get products in a category
+   * @param categoryId Category ID
+   * @param options Optional parameters for pagination and filtering
+   * @returns Promise resolving to a paginated list of products
+   */
+  public async getCategoryProducts(
+    categoryId: string,
+    options: {
+      page?: number;
+      limit?: number;
+      query?: string;
+      sortBy?: string;
+      sortDirection?: 'ASC' | 'DESC';
+    } = {}
+  ): Promise<any> {
+    console.log(`Fetching products for category ${categoryId}`);
+    
+    try {
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (options.page) params.append('page', options.page.toString());
+      if (options.limit) params.append('limit', options.limit.toString());
+      if (options.query) params.append('query', options.query);
+      if (options.sortBy) params.append('sortBy', options.sortBy);
+      if (options.sortDirection) params.append('sortDirection', options.sortDirection);
+      
+      // Make API request
+      const response = await ApiClient.get<any>(`${this.baseUrl}/${categoryId}/products?${params.toString()}`);
+      return response;
+    } catch (error: any) {
+      console.error(`[API] Error fetching category products:`, error);
+      
+      // Check for specific error types
+      if (error && error.status === 0) {
+        console.log('Network error detected, falling back to database');
+        return this.getCategoryProductsFromDatabase(categoryId, options);
+      }
+      
+      if (error && error.status === 404) {
+        console.log('API endpoint not found, falling back to database');
+        return this.getCategoryProductsFromDatabase(categoryId, options);
+      }
+      
+      throw error;
+    }
+  }
+  
+  /**
+   * Get products in a category directly from the database
+   * @param categoryId Category ID
+   * @param options Optional parameters for pagination and filtering
+   * @returns Promise resolving to a paginated list of products
+   */
+  private async getCategoryProductsFromDatabase(
+    categoryId: string,
+    options: {
+      page?: number;
+      limit?: number;
+      query?: string;
+      sortBy?: string;
+      sortDirection?: 'ASC' | 'DESC';
+    } = {}
+  ): Promise<any> {
+    try {
+      console.log(`Fetching products for category ${categoryId} from database directly`);
+      
+      // Set up pagination parameters
+      const page = options.page || 1;
+      const limit = options.limit || 10;
+      const offset = (page - 1) * limit;
+      
+      // Step 1: First, get the product IDs for this category from the junction table
+      const { data: productRelations, error: relationsError } = await supabase
+        .from('product_categories')
+        .select('product_id')
+        .eq('category_id', categoryId);
+      
+      if (relationsError) {
+        console.error('Error fetching product relations:', relationsError);
+        throw new Error(`Failed to fetch product relations: ${relationsError.message}`);
+      }
+      
+      // If no product relationships exist, return empty result
+      if (!productRelations || productRelations.length === 0) {
+        console.log(`No products found for category ${categoryId}`);
+        return {
+          items: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPreviousPage: page > 1
+        };
+      }
+      
+      // Extract the product IDs
+      const productIds = productRelations.map(rel => rel.product_id);
+      console.log(`Found ${productIds.length} product IDs for category ${categoryId}`);
+      
+      // Step 2: Fetch products by their IDs
+      let productsQuery = supabase
+        .from('products')
+        .select('id, name, price, metadata, description, status', { count: 'exact' });
+      
+      // Apply search filter if provided
+      if (options.query) {
+        productsQuery = productsQuery.ilike('name', `%${options.query}%`);
+      }
+      
+      // Filter by the extracted product IDs
+      productsQuery = productsQuery.in('id', productIds);
+      
+      // Apply sorting if provided
+      if (options.sortBy && options.sortDirection) {
+        productsQuery = productsQuery.order(options.sortBy, { ascending: options.sortDirection === 'ASC' });
+      } else {
+        // Default sorting by name
+        productsQuery = productsQuery.order('name', { ascending: true });
+      }
+      
+      // Apply pagination
+      productsQuery = productsQuery.range(offset, offset + limit - 1);
+      
+      // Execute the query
+      const { data: products, error: productsError, count } = await productsQuery;
+      
+      if (productsError) {
+        console.error('Error fetching products:', productsError);
+        throw new Error(`Failed to fetch products: ${productsError.message}`);
+      }
+      
+      // Step 3: Now fetch the product images
+      let productImagesQuery = supabase
+        .from('product_images')
+        .select('product_id, url, position')
+        .in('product_id', productIds)
+        .order('position');
+      
+      const { data: productImages, error: imagesError } = await productImagesQuery;
+      
+      if (imagesError) {
+        console.warn('Error fetching product images:', imagesError);
+        // Continue without images rather than failing completely
+      }
+      
+      // Create a map of product IDs to their images
+      const productImagesMap = new Map<string, ProductImageDB[]>();
+      if (productImages && productImages.length > 0) {
+        productImages.forEach((img: ProductImageDB) => {
+          if (!productImagesMap.has(img.product_id)) {
+            productImagesMap.set(img.product_id, []);
+          }
+          productImagesMap.get(img.product_id)?.push(img);
+        });
+      }
+      
+      // Step 4: Map products to the expected format
+      const mappedProducts = products?.map(product => {
+        // Get images for this product, or use empty array if none
+        const images = productImagesMap.get(product.id) || [];
+        const primaryImageUrl = images.length > 0 ? images[0].url : null;
+        
+        return {
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          // Use first image as primary image, or null if no images
+          image_url: primaryImageUrl,
+          sku: product.metadata?.sku || product.id.substring(0, 8),
+          stock_quantity: product.metadata?.stock_quantity || 0,
+          is_published: product.status === 'active',
+          // Include all images for reference
+          images: images.map(img => ({
+            id: img.id || '',
+            url: img.url,
+            position: img.position
+          }))
+        } as CategoryProduct;
+      }) || [];
+      
+      console.log(`Successfully fetched ${mappedProducts.length} products for category ${categoryId}`);
+      
+      return {
+        items: mappedProducts,
+        total: count || 0,
+        page,
+        limit,
+        totalPages: Math.ceil((count || 0) / limit),
+        hasNextPage: (count || 0) > offset + limit,
+        hasPreviousPage: page > 1
+      };
+    } catch (error: any) {
+      console.error('Error in getCategoryProductsFromDatabase:', error);
+      throw new Error(`Failed to fetch category products from database: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Add products to a category
+   * @param categoryId Category ID
+   * @param productIds Array of product IDs to add
+   * @returns Promise resolving to success status
+   */
+  public async addProductsToCategory(
+    categoryId: string,
+    productIds: string[]
+  ): Promise<boolean> {
+    try {
+      console.log(`Adding ${productIds.length} products to category ${categoryId}`);
+      
+      if (!productIds.length) {
+        return true; // Nothing to do
+      }
+      
+      // Check if backend API is available
+      const isBackendAvailable = await this.checkBackendAvailability();
+      
+      if (isBackendAvailable) {
+        try {
+          // Try to add via API
+          await ApiClient.post<any>(
+            `${this.baseUrl}/${categoryId}/products`, 
+            { productIds }
+          );
+          
+          // Clear cache after update
+          this.clearCache();
+          
+          // If API call works, update availability flag
+          CategoryApi.isBackendAvailable = true;
+          return true;
+        } catch (apiError: any) {
+          // If API fails with a 500, mark as unavailable for future calls
+          if (apiError instanceof Error && 'status' in apiError && apiError.status === 500) {
+            CategoryApi.isBackendAvailable = false;
+          }
+          
+          // Fall back to direct database update
+          return this.addProductsToCategoryInDatabase(categoryId, productIds);
+        }
+      } else {
+        // Backend API is not available, use database directly
+        return this.addProductsToCategoryInDatabase(categoryId, productIds);
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to add products to category: ${error?.message || 'Unknown error'}`);
+    }
+  }
+  
+  /**
+   * Add products to a category directly in the database
+   * @param categoryId Category ID
+   * @param productIds Array of product IDs to add
+   * @returns Promise resolving to success status
+   */
+  private async addProductsToCategoryInDatabase(
+    categoryId: string,
+    productIds: string[]
+  ): Promise<boolean> {
+    try {
+      // First, get existing product-category relationships to avoid duplicates
+      const { data: existingRelations, error: fetchError } = await supabase
+        .from('product_categories')
+        .select('product_id')
+        .eq('category_id', categoryId)
+        .in('product_id', productIds);
+      
+      if (fetchError) {
+        throw fetchError;
+      }
+      
+      // Filter out product IDs that are already in the category
+      const existingProductIds = new Set(existingRelations?.map(r => r.product_id) || []);
+      const newProductIds = productIds.filter(id => !existingProductIds.has(id));
+      
+      if (newProductIds.length === 0) {
+        return true; // All products are already in the category
+      }
+      
+      // Prepare the data to insert
+      const relationships = newProductIds.map(productId => ({
+        category_id: categoryId,
+        product_id: productId
+      }));
+      
+      // Insert the new relationships
+      const { error: insertError } = await supabase
+        .from('product_categories')
+        .insert(relationships);
+      
+      if (insertError) {
+        throw insertError;
+      }
+      
+      // Clear cache after update
+      this.clearCache();
+      
+      return true;
+    } catch (error: any) {
+      throw new Error(`Failed to add products to category in database: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Remove products from a category
+   * @param categoryId Category ID
+   * @param productIds Array of product IDs to remove
+   * @returns Promise resolving to success status
+   */
+  public async removeProductsFromCategory(
+    categoryId: string,
+    productIds: string[]
+  ): Promise<boolean> {
+    try {
+      console.log(`Removing ${productIds.length} products from category ${categoryId}`);
+      
+      if (!productIds.length) {
+        return true; // Nothing to do
+      }
+      
+      // Check if backend API is available
+      const isBackendAvailable = await this.checkBackendAvailability();
+      
+      if (isBackendAvailable) {
+        try {
+          // Try to remove via API
+          await ApiClient.delete<any>(
+            `${this.baseUrl}/${categoryId}/products?productIds=${productIds.join(',')}`
+          );
+          
+          // Clear cache after update
+          this.clearCache();
+          
+          // If API call works, update availability flag
+          CategoryApi.isBackendAvailable = true;
+          return true;
+        } catch (apiError: any) {
+          // If API fails with a 500, mark as unavailable for future calls
+          if (apiError instanceof Error && 'status' in apiError && apiError.status === 500) {
+            CategoryApi.isBackendAvailable = false;
+          }
+          
+          // Fall back to direct database update
+          return this.removeProductsFromCategoryInDatabase(categoryId, productIds);
+        }
+      } else {
+        // Backend API is not available, use database directly
+        return this.removeProductsFromCategoryInDatabase(categoryId, productIds);
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to remove products from category: ${error?.message || 'Unknown error'}`);
+    }
+  }
+  
+  /**
+   * Remove products from a category directly in the database
+   * @param categoryId Category ID
+   * @param productIds Array of product IDs to remove
+   * @returns Promise resolving to success status
+   */
+  private async removeProductsFromCategoryInDatabase(
+    categoryId: string,
+    productIds: string[]
+  ): Promise<boolean> {
+    try {
+      // Delete the relationships
+      const { error } = await supabase
+        .from('product_categories')
+        .delete()
+        .eq('category_id', categoryId)
+        .in('product_id', productIds);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Clear cache after update
+      this.clearCache();
+      
+      return true;
+    } catch (error: any) {
+      throw new Error(`Failed to remove products from category in database: ${error.message}`);
     }
   }
 } 

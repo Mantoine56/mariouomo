@@ -30,7 +30,7 @@ This document outlines the plan for implementing a full hierarchical category sy
   - [x] Implement categories list view with stats
   - [x] Add tree view showing hierarchical relationships
   - [x] Fix console errors and ensure frontend uses backend API properly
-  - [ ] Create drag-and-drop interface for organizing categories
+  - [ ] Create drag-and-drop interface for organizing categories (in progress, having issues)
   - [ ] Implement bulk operations (enable/disable, delete)
 
 - [x] **Category Detail/Edit UI**
@@ -39,11 +39,13 @@ This document outlines the plan for implementing a full hierarchical category sy
   - [x] Add SEO settings section (meta title, description, keywords)
   - [x] Implement parent category selection
   - [x] Implement category image upload
-  - [ ] Add preview of category appearance
+  - [x] Add Lightbox for image preview
+  - [x] Fix image deletion functionality
+  - [x] Add preview of category appearance on storefront
 
 - [ ] **Product Assignment Interface**
-  - [ ] Create view for products in a category
-  - [ ] Add bulk assign/remove products functionality
+  - [x] Create view for products in a category
+  - [x] Add bulk assign/remove products functionality
   - [ ] Implement filtering for product assignment
 
 ## Phase 3: Product Form Integration
@@ -86,7 +88,7 @@ This document outlines the plan for implementing a full hierarchical category sy
 ## Timeline Estimates
 
 - Phase 1: 2-3 days (migration and backend verification) - ✅ Completed
-- Phase 2: 3-5 days (admin UI implementation) - 🔄 In Progress
+- Phase 2: 3-5 days (admin UI implementation) - 🔄 In Progress (80% Complete)
 - Phase 3: 2-3 days (product form integration)
 - Phase 4: 1-2 days (optimization and testing) 
 
@@ -98,4 +100,21 @@ This document outlines the plan for implementing a full hierarchical category sy
 - **2023-04-18**: Implemented tree view for categories with collapsible hierarchy and improved the API to handle various endpoint patterns.
 - **2023-04-19**: Fixed backend API issues by updating the Category entity to properly map to database columns and made category endpoints publicly accessible to ensure consistent data access.
 - **2023-04-19**: Implemented Category Detail/Edit UI with form for adding new categories and editing existing ones, including SEO settings and parent category selection.
-- **2023-04-20**: Added image upload functionality to the Category Edit UI, allowing administrators to upload and preview category images. 
+- **2023-04-20**: Added image upload functionality to the Category Edit UI, allowing administrators to upload and preview category images.
+- **2023-04-21**: Enhanced image functionality with Lightbox preview capability and fixed image deletion issue. Also improved accessibility with screen reader support.
+- **2023-04-22**: Added interactive category storefront preview to the edit page, allowing administrators to see how categories will appear to customers.
+- **2023-04-23**: Implemented product management interface for categories with consistent pagination, allowing bulk assignment and removal of products.
+
+## Next Steps
+
+1. **Implement Product Assignment Filtering**  
+   Add filtering capabilities to the product assignment interface to make it easier to find products for large catalogs.
+
+2. **Continue Drag-and-Drop Interface Debugging**  
+   Address issues with the drag-and-drop interface for organizing categories, focusing on persistence and proper parent-child relationship handling.
+
+3. **Implement Bulk Operations**  
+   Add functionality for bulk enabling/disabling and deleting categories to improve administrative efficiency.
+
+4. **Begin Product Form Integration**  
+   Start updating the product form to use the new category system, allowing for multiple category selection. 

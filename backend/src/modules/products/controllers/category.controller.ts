@@ -24,6 +24,7 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { Role } from '../../auth/enums/role.enum';
 import { Public } from '../../auth/decorators/public.decorator';
+import { PaginationQueryDto } from '../../../common/dtos/pagination.dto';
 
 /**
  * Controller for managing product categories
@@ -126,5 +127,53 @@ export class CategoryController {
   @ApiResponse({ status: 200 })
   async updateCategoryProductCounts(): Promise<void> {
     await this.categoryService.updateCategoryProductCounts();
+  }
+
+  /**
+   * Get products for a specific category
+   */
+  @Get(':id/products')
+  @ApiOperation({ summary: 'Get products for a specific category' })
+  @ApiResponse({ status: 200, description: 'Returns paginated products for the category' })
+  async getCategoryProducts(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() paginationDto: PaginationQueryDto,
+    @Query('query') query?: string,
+  ): Promise<any> {
+    return this.categoryService.getCategoryProducts(id, {
+      ...paginationDto,
+      query,
+    });
+  }
+
+  /**
+   * Add products to a category
+   */
+  @Post(':id/products')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Add products to a category' })
+  @ApiResponse({ status: 200, description: 'Products successfully added to category' })
+  async addProductsToCategory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: { productIds: string[] },
+  ): Promise<{ success: boolean }> {
+    await this.categoryService.addProductsToCategory(id, payload.productIds);
+    return { success: true };
+  }
+
+  /**
+   * Remove products from a category
+   */
+  @Delete(':id/products')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Remove products from a category' })
+  @ApiResponse({ status: 200, description: 'Products successfully removed from category' })
+  async removeProductsFromCategory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('productIds') productIdsString: string,
+  ): Promise<{ success: boolean }> {
+    const productIds = productIdsString.split(',');
+    await this.categoryService.removeProductsFromCategory(id, productIds);
+    return { success: true };
   }
 }

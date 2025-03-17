@@ -56,4 +56,38 @@ export function formatNumber(value: number, decimals: number = 0): string {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(value);
+}
+
+/**
+ * Format a price number to a currency string
+ * @param price - The price to format
+ * @param currency - The currency code (default: USD)
+ * @param locale - The locale to use for formatting (default: en-US)
+ * @returns Formatted price string
+ */
+export function formatPrice(
+  price: number | string,
+  currency: string = 'USD',
+  locale: string = 'en-US'
+): string {
+  // Parse the price as a number
+  const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
+  
+  // Handle invalid inputs
+  if (isNaN(numericPrice)) {
+    return '$0.00';
+  }
+  
+  // Format using Intl.NumberFormat
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numericPrice);
+  } catch (error) {
+    // Fallback for older browsers or invalid locale/currency
+    return `$${numericPrice.toFixed(2)}`;
+  }
 } 
