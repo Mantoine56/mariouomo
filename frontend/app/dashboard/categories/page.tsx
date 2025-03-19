@@ -21,7 +21,13 @@ import {
   MoreHorizontal,
   ChevronsUpDown,
   Edit,
-  Trash2
+  Trash2,
+  Search,
+  Filter,
+  FilterX,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { CategoryApi, Category } from '@/lib/category-api';
@@ -50,13 +56,28 @@ import {
 } from "@/components/ui/collapsible";
 import { cn } from '@/lib/utils';
 
+// Sorting types
+type SortField = 'name' | 'slug' | 'totalProducts' | 'isVisible' | 'position';
+type SortDirection = 'asc' | 'desc';
+
 export default function CategoriesPage() {
   // Initialize state
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
   const [categoryTree, setCategoryTree] = useState<Category[]>([]);
   const [activeTab, setActiveTab] = useState('list');
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
+  
+  // Filtering state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [visibilityFilter, setVisibilityFilter] = useState<string>('all');
+  const [productCountFilter, setProductCountFilter] = useState<string>('all');
+  
+  // Sorting state
+  const [sortField, setSortField] = useState<SortField>('position');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  
   const { toast } = useToast();
   const router = useRouter();
   const categoryApi = new CategoryApi();
@@ -86,6 +107,105 @@ export default function CategoriesPage() {
       loadCategoryTree();
     }
   }, [activeTab, categoryTree.length]);
+
+  /**
+   * Filter and sort categories based on search query, filters, and sorting
+   */
+  useEffect(() => {
+    if (!categories.length) {
+      setFilteredCategories([]);
+      return;
+    }
+    
+    let result = [...categories];
+    
+    // Apply search filter
+    if (searchQuery) {
+      const lowercaseQuery = searchQuery.toLowerCase();
+      result = result.filter(category => 
+        category.name.toLowerCase().includes(lowercaseQuery) || 
+        category.slug.toLowerCase().includes(lowercaseQuery)
+      );
+    }
+    
+    // Apply visibility filter
+    if (visibilityFilter !== 'all') {
+      const isVisible = visibilityFilter === 'visible';
+      result = result.filter(category => category.isVisible === isVisible);
+    }
+    
+    // Apply product count filter
+    if (productCountFilter !== 'all') {
+      switch (productCountFilter) {
+        case 'with-products':
+          result = result.filter(category => category.totalProducts > 0);
+          break;
+        case 'empty':
+          result = result.filter(category => category.totalProducts === 0);
+          break;
+        case 'many-products':
+          result = result.filter(category => category.totalProducts >= 10);
+          break;
+      }
+    }
+    
+    // Apply sorting
+    result.sort((a, b) => {
+      // Convert fields for proper comparison
+      const aValue = a[sortField as keyof Category];
+      const bValue = b[sortField as keyof Category];
+      
+      // Handle different types of values
+      let comparison = 0;
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        comparison = aValue.localeCompare(bValue);
+      } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+        comparison = aValue - bValue;
+      } else if (typeof aValue === 'boolean' && typeof bValue === 'boolean') {
+        comparison = aValue === bValue ? 0 : aValue ? 1 : -1;
+      }
+      
+      // Apply sort direction
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+    
+    setFilteredCategories(result);
+  }, [categories, searchQuery, visibilityFilter, productCountFilter, sortField, sortDirection]);
+  
+  /**
+   * Handle sorting when a table header is clicked
+   */
+  const handleSort = (field: SortField) => {
+    // If clicking on the currently sorted field, toggle direction
+    if (field === sortField) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // If clicking on a different field, sort ascending by that field
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+  
+  /**
+   * Render sort indicator for a table header
+   */
+  const renderSortIndicator = (field: SortField) => {
+    if (field !== sortField) {
+      return <ArrowUpDown className="ml-2 h-4 w-4" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="ml-2 h-4 w-4" /> 
+      : <ArrowDown className="ml-2 h-4 w-4" />;
+  };
+  
+  /**
+   * Reset all filters
+   */
+  const resetFilters = () => {
+    setSearchQuery('');
+    setVisibilityFilter('all');
+    setProductCountFilter('all');
+  };
 
   /**
    * Load categories from API
@@ -332,6 +452,64 @@ export default function CategoriesPage() {
           <CardDescription>View and manage your product categories</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Filters section */}
+          <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Search input */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="search"
+                className="block w-full p-2 pl-10 text-sm border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Search categories..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            
+            {/* Visibility filter */}
+            <div className="relative">
+              <select
+                className="block w-full p-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500"
+                value={visibilityFilter}
+                onChange={(e) => setVisibilityFilter(e.target.value)}
+              >
+                <option value="all">All Visibility</option>
+                <option value="visible">Visible Only</option>
+                <option value="hidden">Hidden Only</option>
+              </select>
+            </div>
+            
+            {/* Product count filter */}
+            <div className="relative">
+              <select
+                className="block w-full p-2 text-sm border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500"
+                value={productCountFilter}
+                onChange={(e) => setProductCountFilter(e.target.value)}
+              >
+                <option value="all">All Categories</option>
+                <option value="with-products">With Products</option>
+                <option value="empty">Empty Categories</option>
+                <option value="many-products">10+ Products</option>
+              </select>
+            </div>
+            
+            {/* Reset filters button */}
+            <div className="flex items-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resetFilters}
+                className="flex items-center"
+                disabled={!searchQuery && visibilityFilter === 'all' && productCountFilter === 'all'}
+              >
+                <FilterX className="mr-2 h-4 w-4" />
+                Reset Filters
+              </Button>
+            </div>
+          </div>
+          
           <Tabs defaultValue="list" value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger value="list">
@@ -351,66 +529,142 @@ export default function CategoriesPage() {
                   <span>Loading categories...</span>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Slug</TableHead>
-                      <TableHead>Products</TableHead>
-                      <TableHead>Visibility</TableHead>
-                      <TableHead>Position</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {categories.length === 0 ? (
+                <div>
+                  {/* Show filtered count */}
+                  {(searchQuery || visibilityFilter !== 'all' || productCountFilter !== 'all') && (
+                    <div className="mb-2 text-sm text-muted-foreground">
+                      <p>
+                        Showing {filteredCategories.length} of {categories.length} categories
+                        {searchQuery ? ` matching "${searchQuery}"` : ''}
+                      </p>
+                    </div>
+                  )}
+                  
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8">
-                          No categories found. Create your first category to get started.
-                        </TableCell>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-gray-50"
+                          onClick={() => handleSort('name')}
+                        >
+                          <div className="flex items-center">
+                            Name
+                            {renderSortIndicator('name')}
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-gray-50"
+                          onClick={() => handleSort('slug')}
+                        >
+                          <div className="flex items-center">
+                            Slug
+                            {renderSortIndicator('slug')}
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-gray-50"
+                          onClick={() => handleSort('totalProducts')}
+                        >
+                          <div className="flex items-center">
+                            Products
+                            {renderSortIndicator('totalProducts')}
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-gray-50"
+                          onClick={() => handleSort('isVisible')}
+                        >
+                          <div className="flex items-center">
+                            Visibility
+                            {renderSortIndicator('isVisible')}
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-gray-50"
+                          onClick={() => handleSort('position')}
+                        >
+                          <div className="flex items-center">
+                            Position
+                            {renderSortIndicator('position')}
+                          </div>
+                        </TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
-                    ) : (
-                      categories.map((category) => (
-                        <TableRow key={category.id}>
-                          <TableCell className="font-medium">{category.name}</TableCell>
-                          <TableCell>{category.slug}</TableCell>
-                          <TableCell>{category.totalProducts}</TableCell>
-                          <TableCell>
-                            <Badge variant={category.isVisible ? 'success' : 'secondary'}>
-                              {category.isVisible ? 'Visible' : 'Hidden'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{category.position}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => toggleVisibility(category.id, category.isVisible)}
-                              >
-                                {category.isVisible ? 'Hide' : 'Show'}
-                              </Button>
-                              <Button 
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleEditCategory(category.id)}
-                              >
-                                Edit
-                              </Button>
-                              <Button 
-                                variant="destructive" 
-                                size="sm"
-                                onClick={() => deleteCategory(category.id)}
-                              >
-                                Delete
-                              </Button>
-                            </div>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredCategories.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="h-24 text-center">
+                            {categories.length === 0 ? (
+                              <div>
+                                <p className="text-muted-foreground">No categories found</p>
+                                <Button
+                                  variant="link"
+                                  onClick={handleCreateCategory}
+                                  className="mt-2"
+                                >
+                                  Create your first category
+                                </Button>
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="text-muted-foreground">No categories match your filters</p>
+                                <Button
+                                  variant="link"
+                                  onClick={resetFilters}
+                                  className="mt-2"
+                                >
+                                  Reset filters
+                                </Button>
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        filteredCategories.map(category => (
+                          <TableRow key={category.id}>
+                            <TableCell className="font-medium">{category.name}</TableCell>
+                            <TableCell>{category.slug}</TableCell>
+                            <TableCell>{category.totalProducts}</TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={category.isVisible ? 'success' : 'secondary'}
+                              >
+                                {category.isVisible ? 'Visible' : 'Hidden'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{category.position}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleEditCategory(category.id)}
+                                >
+                                  Edit
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => toggleVisibility(category.id, category.isVisible)}
+                                >
+                                  {category.isVisible ? 'Hide' : 'Show'}
+                                </Button>
+                                <Button 
+                                  variant="destructive" 
+                                  size="sm"
+                                  onClick={() => deleteCategory(category.id)}
+                                >
+                                  Delete
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </TabsContent>
 

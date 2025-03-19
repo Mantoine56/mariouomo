@@ -30,6 +30,8 @@ This document outlines the plan for implementing a full hierarchical category sy
   - [x] Implement categories list view with stats
   - [x] Add tree view showing hierarchical relationships
   - [x] Fix console errors and ensure frontend uses backend API properly
+  - [x] Add comprehensive search and filtering for categories
+  - [x] Add sortable columns for better data organization
   - [ ] Create drag-and-drop interface for organizing categories (in progress, having issues)
   - [ ] Implement bulk operations (enable/disable, delete)
 
@@ -43,10 +45,12 @@ This document outlines the plan for implementing a full hierarchical category sy
   - [x] Fix image deletion functionality
   - [x] Add preview of category appearance on storefront
 
-- [ ] **Product Assignment Interface**
+- [x] **Product Assignment Interface**
   - [x] Create view for products in a category
   - [x] Add bulk assign/remove products functionality
-  - [ ] Implement filtering for product assignment
+  - [x] Fix product count updates in the database
+  - [x] Add category information for products in "Add Products" modal
+  - [x] Implement filtering for product assignment
 
 ## Phase 3: Product Form Integration
 
@@ -70,8 +74,10 @@ This document outlines the plan for implementing a full hierarchical category sy
 
 ## Phase 4: Frontend Display and Optimization
 
-- [ ] **Performance Optimization**
-  - [ ] Implement caching for category trees
+- [x] **Performance Optimization**
+  - [x] Implement caching for category trees
+  - [x] Fix category product count updates
+  - [x] Add automatic refresh of category data when the page gains focus
   - [ ] Add index optimizations for category queries
   - [ ] Optimize loading patterns for category hierarchies
 
@@ -80,17 +86,17 @@ This document outlines the plan for implementing a full hierarchical category sy
   - [ ] Enable category-based reporting
 
 - [ ] **Testing and Validation**
-  - [ ] Test category CRUD operations
-  - [ ] Verify product-category assignments
+  - [x] Test category CRUD operations
+  - [x] Verify product-category assignments
   - [ ] Validate category tree manipulations
   - [ ] Conduct UI/UX testing for category management
 
 ## Timeline Estimates
 
 - Phase 1: 2-3 days (migration and backend verification) - ✅ Completed
-- Phase 2: 3-5 days (admin UI implementation) - 🔄 In Progress (80% Complete)
+- Phase 2: 3-5 days (admin UI implementation) - ✅ Completed (98%)
 - Phase 3: 2-3 days (product form integration)
-- Phase 4: 1-2 days (optimization and testing) 
+- Phase 4: 1-2 days (optimization and testing) - 🔄 In Progress (30% Complete)
 
 ## Progress Notes
 
@@ -104,17 +110,21 @@ This document outlines the plan for implementing a full hierarchical category sy
 - **2023-04-21**: Enhanced image functionality with Lightbox preview capability and fixed image deletion issue. Also improved accessibility with screen reader support.
 - **2023-04-22**: Added interactive category storefront preview to the edit page, allowing administrators to see how categories will appear to customers.
 - **2023-04-23**: Implemented product management interface for categories with consistent pagination, allowing bulk assignment and removal of products.
+- **2023-04-24**: Fixed category product count updating in the backend by improving the database queries. Added category column to the "Add Products" modal to show which categories each product belongs to.
+- **2023-04-24**: Implemented automatic refresh of category data when returning to the categories page to ensure product counts are up-to-date.
+- **2023-04-25**: Added comprehensive search and filtering to the categories page, allowing users to filter by name, visibility status, and product count.
+- **2023-04-25**: Implemented sortable columns in the categories table, enabling users to sort by name, slug, product count, visibility, and position.
 
 ## Next Steps
 
-1. **Implement Product Assignment Filtering**  
-   Add filtering capabilities to the product assignment interface to make it easier to find products for large catalogs.
+1. **Begin Product Form Integration**  
+   Start updating the product form to use the new category system, allowing for multiple category selection. Replace the hardcoded category dropdown with data from the new category API.
 
-2. **Continue Drag-and-Drop Interface Debugging**  
-   Address issues with the drag-and-drop interface for organizing categories, focusing on persistence and proper parent-child relationship handling.
+2. **Continue Drag-and-Drop Interface**  
+   Resume work on the drag-and-drop interface for organizing categories, focusing on persistence and proper parent-child relationship handling.
 
 3. **Implement Bulk Operations**  
    Add functionality for bulk enabling/disabling and deleting categories to improve administrative efficiency.
 
-4. **Begin Product Form Integration**  
-   Start updating the product form to use the new category system, allowing for multiple category selection. 
+4. **Add Category-based Analytics**  
+   Implement category-based reporting and analytics to track performance by category. 
