@@ -26,6 +26,7 @@ import { CreateInventoryDto } from '../dtos/create-inventory.dto';
 import { UpdateInventoryDto } from '../dtos/update-inventory.dto';
 import { AdjustInventoryDto } from '../dtos/adjust-inventory.dto';
 import { InventoryItem } from '../entities/inventory-item.entity';
+import { Public } from '../../auth/decorators/public.decorator';
 
 /**
  * Controller handling inventory-related endpoints
@@ -191,10 +192,9 @@ export class InventoryController {
 
   /**
    * Gets inventory items for a specific product
-   * Requires ADMIN or MERCHANT role
+   * This endpoint is public to allow frontend to display stock info without login
    */
   @Get('product/:productId')
-  @Roles(Role.ADMIN, Role.MERCHANT)
   @ApiOperation({ summary: 'Get inventory items for a product' })
   @ApiResponse({
     status: HttpStatus.OK,

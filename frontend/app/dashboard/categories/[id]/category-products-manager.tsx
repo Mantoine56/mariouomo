@@ -17,6 +17,7 @@ import { Loader2, Search, Plus, Trash, Filter } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { CategoryApi } from '@/lib/category-api';
 import { ProductApi, ProductSortField, SortDirection } from '@/lib/product-api';
+import { useRouter } from 'next/navigation';
 import { 
   DropdownMenu,
   DropdownMenuTrigger,
@@ -29,6 +30,7 @@ import { Pagination } from '@/components/ui/pagination';
 import ImageWithFallback from '@/components/ui/image-with-fallback';
 import { Badge } from '@/components/ui/badge';
 import { ColumnDef } from '@tanstack/react-table';
+import { supabase } from '@/lib/supabase';
 
 const categoryApi = new CategoryApi();
 const productApi = new ProductApi();
@@ -57,6 +59,7 @@ interface Props {
  */
 export function CategoryProductsManager({ categoryId }: Props) {
   const { toast } = useToast();
+  const router = useRouter();
   
   // State for products in the category
   const [products, setProducts] = useState<Product[]>([]);
@@ -97,21 +100,84 @@ export function CategoryProductsManager({ categoryId }: Props) {
         sortDirection: 'ASC', // Default ascending order
       });
       
-      // Update state with the loaded products
-      setProducts(response.items || []);
-      setTotalProducts(response.total || 0);
-      setTotalPages(response.totalPages || 1);
-      
-      // Log the number of products loaded for debugging
-      console.log(`Loaded ${response.items?.length || 0} products for category ${categoryId}`);
-      
-      // If no products are loaded, show a message
+      // Early return if no products
       if (!response.items || response.items.length === 0) {
+        setProducts([]);
+        setTotalProducts(0);
+        setTotalPages(1);
+        setLoading(false);
+        
         toast({
           title: "Info",
           description: "No products found in this category",
         });
+        return;
       }
+      
+      // Extract product IDs for batch processing
+      const productIds = response.items.map((item: any) => item.id);
+      
+      // Create a map to store product stock quantities
+      const productStockMap: Record<string, number> = {};
+      
+      try {
+        // Use direct database query for better performance - since we don't have a stored procedure
+        const { data: inventoryData, error } = await supabase
+          .from('inventory_items')
+          .select(`
+            quantity,
+            product_variants!inner(product_id)
+          `)
+          .in('product_variants.product_id', productIds);
+        
+        if (error) {
+          console.error('Error fetching inventory data:', error);
+        } else if (inventoryData) {
+          // Process the inventory data to map stock quantities to product IDs
+          inventoryData.forEach((item: any) => {
+            const productId = item.product_variants.product_id;
+            const quantity = item.quantity || 0;
+            
+            if (!productStockMap[productId]) {
+              productStockMap[productId] = 0;
+            }
+            
+            productStockMap[productId] += quantity;
+          });
+        }
+      } catch (inventoryError) {
+        console.error('Failed to fetch inventory data:', inventoryError);
+      }
+      
+      // Map products with prices and stock information
+      const productsWithData = response.items.map((product: any) => {
+        // Convert price to number and ensure it's formatted correctly
+        const price = typeof product.price === 'string' 
+          ? parseFloat(product.price) 
+          : (typeof product.price === 'number' ? product.price : 0);
+        
+        // Get stock from our map or default to 0
+        const stock = productStockMap[product.id] || 0;
+        
+        return {
+          id: product.id,
+          name: product.name,
+          price: price,
+          image_url: product.images?.[0]?.url || product.image_url,
+          sku: product.sku || product.id.substring(0, 8), // Use part of ID if no SKU available
+          stock_quantity: stock,
+          is_published: product.status === 'active' // Map status to is_published
+        };
+      });
+      
+      // Update state with the loaded products including inventory and price data
+      setProducts(productsWithData);
+      setTotalProducts(response.total || 0);
+      setTotalPages(response.totalPages || 1);
+      
+      // Log the number of products loaded for debugging
+      console.log(`Loaded ${productsWithData.length} products for category ${categoryId}`);
+      
     } catch (error) {
       console.error('Failed to load category products:', error);
       toast({
@@ -145,25 +211,81 @@ export function CategoryProductsManager({ categoryId }: Props) {
       // Get IDs of products that are already in this category
       const currentProductIds = products.map(p => p.id);
       
-      // Filter out products that are already in the category and map to local Product interface
-      const availableItems = (response.items?.filter(
+      // Filter out products that are already in the category
+      const availableApiProducts = response.items?.filter(
         (product: any) => !currentProductIds.includes(product.id)
-      ) || []).map((product: any) => ({
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        image_url: product.images?.[0]?.url,
-        sku: product.sku || product.id.substring(0, 8), // Use part of ID if no SKU available
-        stock_quantity: product.stock_quantity || 0, // Default to 0 if missing
-        is_published: product.status === 'active' // Map status to is_published
-      }));
+      ) || [];
+      
+      if (availableApiProducts.length === 0) {
+        setAvailableProducts([]);
+        setAvailableProductsTotalPages(response.totalPages || 1);
+        setAvailableProductsTotalCount(response.total || 0);
+        setAvailableProductsLoading(false);
+        return;
+      }
+      
+      // Extract product IDs for batch inventory lookup
+      const productIds = availableApiProducts.map((product: any) => product.id);
+      
+      // Create a map to store product stock quantities
+      const productStockMap: Record<string, number> = {};
+      
+      try {
+        // Use direct database query for inventory data
+        const { data: inventoryData, error } = await supabase
+          .from('inventory_items')
+          .select(`
+            quantity,
+            product_variants!inner(product_id)
+          `)
+          .in('product_variants.product_id', productIds);
+        
+        if (error) {
+          console.error('Error fetching inventory data for available products:', error);
+        } else if (inventoryData) {
+          // Process the inventory data to map stock quantities to product IDs
+          inventoryData.forEach((item: any) => {
+            const productId = item.product_variants.product_id;
+            const quantity = item.quantity || 0;
+            
+            if (!productStockMap[productId]) {
+              productStockMap[productId] = 0;
+            }
+            
+            productStockMap[productId] += quantity;
+          });
+        }
+      } catch (inventoryError) {
+        console.error('Failed to fetch inventory data for available products:', inventoryError);
+      }
+      
+      // Map the available products with accurate price and stock information
+      const availableItemsWithData = availableApiProducts.map((product: any) => {
+        // Convert price to number and ensure it's formatted correctly
+        const price = typeof product.price === 'string' 
+          ? parseFloat(product.price) 
+          : (typeof product.price === 'number' ? product.price : 0);
+        
+        // Get stock from our map or default to 0
+        const stock = productStockMap[product.id] || 0;
+        
+        return {
+          id: product.id,
+          name: product.name,
+          price: price,
+          image_url: product.images?.[0]?.url,
+          sku: product.sku || product.id.substring(0, 8), // Use part of ID if no SKU available
+          stock_quantity: stock,
+          is_published: product.status === 'active' // Map status to is_published
+        };
+      });
       
       // Update state with available products
-      setAvailableProducts(availableItems);
+      setAvailableProducts(availableItemsWithData);
       setAvailableProductsTotalPages(response.totalPages || 1);
       setAvailableProductsTotalCount(response.total || 0);
       
-      console.log(`Loaded ${availableItems.length} available products (filtered from ${response.items?.length || 0} total)`);
+      console.log(`Loaded ${availableItemsWithData.length} available products (filtered from ${response.items?.length || 0} total)`);
     } catch (error) {
       console.error('Failed to load available products:', error);
       toast({
@@ -326,49 +448,43 @@ export function CategoryProductsManager({ categoryId }: Props) {
   // Define columns for the DataTable
   const columns: ColumnDef<Product>[] = [
     {
-      id: 'select',
-      header: ({ table }) => (
-        <Checkbox
-          checked={selectedProducts.size === products.length && products.length > 0}
-          onCheckedChange={selectAllProducts}
-          aria-label="Select all products"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={selectedProducts.has(row.original.id)}
-          onCheckedChange={() => toggleProductSelection(row.original.id)}
-          aria-label={`Select ${row.original.name}`}
-        />
-      ),
-      enableSorting: false,
-    },
-    {
       id: 'image',
       header: 'Image',
       cell: ({ row }) => (
-        row.original.image_url ? (
-          <div className="relative h-10 w-10 rounded-md overflow-hidden">
-            <ImageWithFallback
-              src={row.original.image_url}
-              alt={row.original.name}
-              fallbackSrc="/images/placeholder-product.png"
-              fill
-              className="object-cover"
-            />
-          </div>
-        ) : (
-          <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center">
-            <span className="text-xs text-muted-foreground">No img</span>
-          </div>
-        )
+        <div 
+          className="cursor-pointer"
+          onClick={() => router.push(`/dashboard/products/${row.original.id}`)}
+        >
+          {row.original.image_url ? (
+            <div className="relative h-10 w-10 rounded-md overflow-hidden">
+              <ImageWithFallback
+                src={row.original.image_url}
+                alt={row.original.name}
+                fallbackSrc="/images/placeholder-product.png"
+                fill
+                className="object-cover"
+              />
+            </div>
+          ) : (
+            <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center">
+              <span className="text-xs text-muted-foreground">No img</span>
+            </div>
+          )}
+        </div>
       ),
       enableSorting: false,
     },
     {
       accessorKey: 'name',
       header: 'Name',
-      cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+      cell: ({ row }) => (
+        <span 
+          className="font-medium text-primary hover:underline cursor-pointer"
+          onClick={() => router.push(`/dashboard/products/${row.original.id}`)}
+        >
+          {row.original.name}
+        </span>
+      ),
     },
     {
       accessorKey: 'sku',
@@ -582,23 +698,45 @@ export function CategoryProductsManager({ categoryId }: Props) {
                             />
                           </TableCell>
                           <TableCell>
-                            {product.image_url ? (
-                              <div className="relative h-10 w-10 rounded-md overflow-hidden">
-                                <ImageWithFallback
-                                  src={product.image_url}
-                                  alt={product.name}
-                                  fallbackSrc="/images/placeholder-product.png"
-                                  fill
-                                  className="object-cover"
-                                />
-                              </div>
-                            ) : (
-                              <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center">
-                                <span className="text-xs text-muted-foreground">No img</span>
-                              </div>
-                            )}
+                            <div 
+                              className="cursor-pointer"
+                              onClick={() => {
+                                // Close the modal first
+                                setIsAddingProducts(false);
+                                // Navigate to product detail
+                                router.push(`/dashboard/products/${product.id}`);
+                              }}
+                            >
+                              {product.image_url ? (
+                                <div className="relative h-10 w-10 rounded-md overflow-hidden">
+                                  <ImageWithFallback
+                                    src={product.image_url}
+                                    alt={product.name}
+                                    fallbackSrc="/images/placeholder-product.png"
+                                    fill
+                                    className="object-cover"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center">
+                                  <span className="text-xs text-muted-foreground">No img</span>
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
-                          <TableCell className="font-medium">{product.name}</TableCell>
+                          <TableCell>
+                            <span 
+                              className="font-medium text-primary hover:underline cursor-pointer"
+                              onClick={() => {
+                                // Close the modal first
+                                setIsAddingProducts(false);
+                                // Navigate to product detail
+                                router.push(`/dashboard/products/${product.id}`);
+                              }}
+                            >
+                              {product.name}
+                            </span>
+                          </TableCell>
                           <TableCell>{product.sku}</TableCell>
                           <TableCell className="text-right">
                             ${typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'}

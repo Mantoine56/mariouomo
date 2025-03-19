@@ -831,21 +831,9 @@ export class ProductApi {
         return [];
       }
       
-      // Fetch inventory data for all variants of this product using our new endpoint
-      let inventoryItems: InventoryItem[] = [];
-      try {
-        inventoryItems = await ApiClient.get<InventoryItem[]>(`/inventory/product/${productId}`);
-        console.log(`[ProductApi] Fetched ${inventoryItems.length} inventory items for product ${productId}`);
-      } catch (err) {
-        console.error(`[ProductApi] Error fetching inventory from API, using fallback:`, err);
-        
-        // If the API call fails, try to get inventory data directly from the database
-        const variantIds = product.variants.map(variant => variant.id);
-        const inventoryByVariant = await this.getInventoryFromDatabase(variantIds);
-        
-        // Flatten the inventory items
-        inventoryItems = Object.values(inventoryByVariant).flat();
-      }
+      // Fetch inventory data for all variants of this product using our improved method
+      const inventoryItems = await this.getInventoryItems(productId);
+      console.log(`[ProductApi] Processed ${inventoryItems.length} inventory items for product ${productId}`);
       
       // Group inventory items by variant_id
       const inventoryByVariantId: Record<string, InventoryItem[]> = {};
@@ -942,6 +930,82 @@ export class ProductApi {
     }
   }
   
+  /**
+   * Get all inventory items for a product
+   * @param productId Product UUID
+   * @returns Promise resolving to an array of inventory items
+   */
+  public async getInventoryItems(productId: string): Promise<InventoryItem[]> {
+    try {
+      console.log(`[ProductApi] Fetching inventory items for product ${productId}`);
+      
+      // Use the correct API endpoint that was fixed on the backend
+      // Note: this endpoint is now public and doesn't require authentication
+      const response = await ApiClient.get<InventoryItem[]>(`/inventory/product/${productId}`, {}, {
+        bypassCooldown: true // Allow retrying even if previous requests failed
+      });
+      
+      console.log(`[ProductApi] Successfully fetched ${response.length} inventory items`);
+      return response;
+    } catch (error) {
+      console.error('[ProductApi] Error fetching inventory items:', error);
+      
+      // Return empty array if API fails to avoid breaking the UI
+      return [];
+    }
+  }
+
+  /**
+   * Clears product cache to ensure fresh data on next fetch
+   * @param productId - The product ID to clear cache for
+   */
+  async clearProductCache(productId?: string): Promise<void> {
+    if (productId) {
+      // Clear specific product cache
+      console.log(`Clearing cache for product ${productId}`);
+      const cacheKey = `product_${productId}`;
+      ProductApi.productCache.delete(cacheKey);
+    } else {
+      // Clear all product caches
+      console.log('Clearing all product caches');
+      ProductApi.productCache.clear();
+    }
+  }
+
+  /**
+   * Creates an inventory record for a new product
+   * This is used when a basic product is created before variants
+   * @param productId - The product ID
+   * @param variantId - The variant ID (default variant)
+   * @param quantity - Initial quantity
+   * @returns Created inventory item
+   */
+  async createInitialInventory(productId: string, variantId: string, quantity: number): Promise<any> {
+    try {
+      console.log(`Creating initial inventory record for product ${productId}, variant ${variantId} with quantity ${quantity}`);
+      
+      const inventoryData = {
+        variant_id: variantId,
+        location: 'Default',
+        quantity: quantity,
+        reserved_quantity: 0,
+        reorder_point: 5, // Default reorder point
+        reorder_quantity: 10 // Default reorder quantity
+      };
+      
+      const response = await ApiClient.post<any>(`/inventory`, inventoryData);
+      console.log('Inventory record created:', response.data);
+      
+      // Clear the product cache to ensure fresh data
+      await this.clearProductCache(productId);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error creating inventory record:', error);
+      throw error;
+    }
+  }
+
   /**
    * Fallback method to get inventory data directly from the database
    * This is used when the API endpoint fails
@@ -1184,75 +1248,6 @@ export class ProductApi {
     } catch (error) {
       console.error('[ProductApi] Error creating inventory item:', error);
       throw this.handleError(error, 'Failed to create inventory item');
-    }
-  }
-
-  /**
-   * Get all inventory items for a product
-   * @param productId Product UUID
-   * @returns Promise resolving to an array of inventory items
-   */
-  public async getInventoryItems(productId: string): Promise<InventoryItem[]> {
-    try {
-      console.log(`[ProductApi] Fetching inventory items for product ${productId}`);
-      
-      const response = await ApiClient.get<InventoryItem[]>(`/inventory/product/${productId}`);
-      return response;
-    } catch (error) {
-      console.error('[ProductApi] Error fetching inventory items:', error);
-      // Return empty array instead of throwing
-      return [];
-    }
-  }
-
-  /**
-   * Clears product cache to ensure fresh data on next fetch
-   * @param productId - The product ID to clear cache for
-   */
-  async clearProductCache(productId?: string): Promise<void> {
-    if (productId) {
-      // Clear specific product cache
-      console.log(`Clearing cache for product ${productId}`);
-      const cacheKey = `product_${productId}`;
-      ProductApi.productCache.delete(cacheKey);
-    } else {
-      // Clear all product caches
-      console.log('Clearing all product caches');
-      ProductApi.productCache.clear();
-    }
-  }
-
-  /**
-   * Creates an inventory record for a new product
-   * This is used when a basic product is created before variants
-   * @param productId - The product ID
-   * @param variantId - The variant ID (default variant)
-   * @param quantity - Initial quantity
-   * @returns Created inventory item
-   */
-  async createInitialInventory(productId: string, variantId: string, quantity: number): Promise<any> {
-    try {
-      console.log(`Creating initial inventory record for product ${productId}, variant ${variantId} with quantity ${quantity}`);
-      
-      const inventoryData = {
-        variant_id: variantId,
-        location: 'Default',
-        quantity: quantity,
-        reserved_quantity: 0,
-        reorder_point: 5, // Default reorder point
-        reorder_quantity: 10 // Default reorder quantity
-      };
-      
-      const response = await ApiClient.post<any>(`/inventory`, inventoryData);
-      console.log('Inventory record created:', response.data);
-      
-      // Clear the product cache to ensure fresh data
-      await this.clearProductCache(productId);
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error creating inventory record:', error);
-      throw error;
     }
   }
 }
