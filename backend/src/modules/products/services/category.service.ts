@@ -317,27 +317,38 @@ export class CategoryService {
    */
   async updateCategoryProductCounts(): Promise<void> {
     try {
+      // Get all categories 
       const categories = await this.categoryRepository.find();
-
+      
       for (const category of categories) {
-        // Get all descendant categories
-        const descendantIds = await this.findAllDescendantIds(category.id);
-        const categoryIds = [category.id, ...descendantIds];
-
-        // Count products in category and its descendants
-        const totalProducts = await this.categoryRepository
-          .createQueryBuilder('category')
-          .leftJoin('category.products', 'product')
-          .where('category.id IN (:...categoryIds)', { categoryIds })
-          .getCount();
-
-        // Update category
-        category.totalProducts = totalProducts;
-        await this.categoryRepository.save(category);
+        // Direct query to count products in this category
+        const result = await this.connection
+          .createQueryBuilder()
+          .select('COUNT(DISTINCT product_id)', 'count')
+          .from('product_categories', 'pc')
+          .where('pc.category_id = :categoryId', { categoryId: category.id })
+          .getRawOne();
+        
+        // Update category total_products count
+        const productCount = parseInt(result.count, 10) || 0;
+        
+        // Log for debugging
+        this.logger.log(`Updating category ${category.name} (${category.id}) product count: ${productCount}`);
+        
+        // Update database directly for efficiency
+        await this.categoryRepository.update(category.id, { 
+          totalProducts: productCount,
+          updated_at: new Date()
+        });
       }
 
       // Invalidate cache
       await this.cacheService.del(this.CACHE_KEY);
+      
+      // Clear individual category caches
+      // Since we don't have a keys method, directly delete known cache patterns
+      await this.cacheService.del('category:*:products');
+      
     } catch (error) {
       this.logger.error(`Error updating category product counts: ${error.message}`, error.stack);
       throw error;

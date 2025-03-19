@@ -44,6 +44,7 @@ interface Product {
   sku: string;
   stock_quantity: number;
   is_published: boolean;
+  categories?: { id: string; name: string }[]; // Added categories array
 }
 
 interface Props {
@@ -229,6 +230,7 @@ export function CategoryProductsManager({ categoryId }: Props) {
       
       // Create a map to store product stock quantities
       const productStockMap: Record<string, number> = {};
+      const productCategoriesMap: Record<string, { id: string; name: string }[]> = {};
       
       try {
         // Use direct database query for inventory data
@@ -255,11 +257,41 @@ export function CategoryProductsManager({ categoryId }: Props) {
             productStockMap[productId] += quantity;
           });
         }
-      } catch (inventoryError) {
-        console.error('Failed to fetch inventory data for available products:', inventoryError);
+        
+        // Fetch category information for each product
+        const { data: categoriesData, error: categoriesError } = await supabase
+          .from('product_categories')
+          .select(`
+            product_id,
+            category:category_id(id, name)
+          `)
+          .in('product_id', productIds);
+          
+        if (categoriesError) {
+          console.error('Error fetching categories data for available products:', categoriesError);
+        } else if (categoriesData) {
+          // Process the categories data to map category info to product IDs
+          categoriesData.forEach((item: any) => {
+            const productId = item.product_id;
+            const category = item.category;
+            
+            if (!productCategoriesMap[productId]) {
+              productCategoriesMap[productId] = [];
+            }
+            
+            if (category) {
+              productCategoriesMap[productId].push({
+                id: category.id,
+                name: category.name
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch additional data for available products:', error);
       }
       
-      // Map the available products with accurate price and stock information
+      // Map the available products with accurate price, stock, and categories information
       const availableItemsWithData = availableApiProducts.map((product: any) => {
         // Convert price to number and ensure it's formatted correctly
         const price = typeof product.price === 'string' 
@@ -269,6 +301,9 @@ export function CategoryProductsManager({ categoryId }: Props) {
         // Get stock from our map or default to 0
         const stock = productStockMap[product.id] || 0;
         
+        // Get categories from our map or default to empty array
+        const categories = productCategoriesMap[product.id] || [];
+        
         return {
           id: product.id,
           name: product.name,
@@ -276,7 +311,8 @@ export function CategoryProductsManager({ categoryId }: Props) {
           image_url: product.images?.[0]?.url,
           sku: product.sku || product.id.substring(0, 8), // Use part of ID if no SKU available
           stock_quantity: stock,
-          is_published: product.status === 'active' // Map status to is_published
+          is_published: product.status === 'active', // Map status to is_published
+          categories: categories // Add categories to the product
         };
       });
       
@@ -362,26 +398,27 @@ export function CategoryProductsManager({ categoryId }: Props) {
     setSelectedProducts(newSelection);
   };
   
-  // Add selected products to the category
+  /**
+   * Add products to the category
+   */
   const addProductsToCategory = async () => {
-    if (selectedAvailableProducts.size === 0) {
-      toast({
-        title: "Info",
-        description: "No products selected to add",
-      });
-      return;
-    }
+    if (selectedAvailableProducts.size === 0) return;
     
     try {
       const productIds = Array.from(selectedAvailableProducts);
       await categoryApi.addProductsToCategory(categoryId, productIds);
       
+      // Force update of category product counts
+      await categoryApi.updateCategoryProductCounts();
+      
       toast({
         title: "Success",
-        description: `Added ${productIds.length} products to category`,
+        description: `Added ${productIds.length} products to this category`,
       });
+      
+      // Close modal and refresh products list
       setIsAddingProducts(false);
-      loadCategoryProducts(); // Refresh the list
+      loadCategoryProducts();
     } catch (error) {
       console.error('Failed to add products to category:', error);
       toast({
@@ -392,30 +429,30 @@ export function CategoryProductsManager({ categoryId }: Props) {
     }
   };
   
-  // Remove selected products from the category
-  const removeProductsFromCategory = async () => {
-    if (selectedProducts.size === 0) {
-      toast({
-        title: "Info",
-        description: "No products selected to remove",
-      });
-      return;
-    }
+  /**
+   * Remove products from the category
+   */
+  const removeProductsFromCategory = async (productIds: string[]) => {
+    if (!productIds.length) return;
     
     try {
-      const productIds = Array.from(selectedProducts);
       await categoryApi.removeProductsFromCategory(categoryId, productIds);
+      
+      // Force update of category product counts
+      await categoryApi.updateCategoryProductCounts();
       
       toast({
         title: "Success",
-        description: `Removed ${productIds.length} products from category`,
+        description: `Removed ${productIds.length} products from this category`,
       });
+      
+      // Clear selection and refresh products list
       setSelectedProducts(new Set());
-      loadCategoryProducts(); // Refresh the list
+      loadCategoryProducts();
     } catch (error) {
       console.error('Failed to remove products from category:', error);
       toast({
-        title: "Error", 
+        title: "Error",
         description: "Could not remove products from category",
         variant: "destructive",
       });
@@ -524,7 +561,7 @@ export function CategoryProductsManager({ categoryId }: Props) {
     <Button
       variant="destructive"
       size="sm"
-      onClick={removeProductsFromCategory}
+      onClick={() => removeProductsFromCategory(Array.from(selectedProducts))}
       className="flex items-center"
     >
       <Trash className="mr-2 h-4 w-4" />
@@ -661,6 +698,7 @@ export function CategoryProductsManager({ categoryId }: Props) {
                       <TableHead className="text-right">Price</TableHead>
                       <TableHead className="text-center">Stock</TableHead>
                       <TableHead className="text-center">Status</TableHead>
+                      <TableHead>Categories</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -749,6 +787,20 @@ export function CategoryProductsManager({ categoryId }: Props) {
                               <Badge variant="success">Published</Badge>
                             ) : (
                               <Badge variant="secondary">Draft</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {product.categories && product.categories.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {/* Display all categories that the product belongs to (except current one) */}
+                                {product.categories.map(category => (
+                                  <Badge key={category.id} variant="outline" className="text-xs">
+                                    {category.name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">None</span>
                             )}
                           </TableCell>
                         </TableRow>

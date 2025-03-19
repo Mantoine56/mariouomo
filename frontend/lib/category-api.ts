@@ -1017,4 +1017,38 @@ export class CategoryApi {
       throw new Error(`Failed to remove products from category in database: ${error.message}`);
     }
   }
+
+  /**
+   * Check if the backend API is available
+   * This avoids repeated failed API calls and can be called from outside the class
+   */
+  public async isBackendAvailable(): Promise<boolean> {
+    return this.checkBackendAvailability();
+  }
+
+  /**
+   * Update category product counts via API
+   * This triggers a recalculation of product counts for all categories
+   */
+  public async updateCategoryProductCounts(): Promise<boolean> {
+    try {
+      // Check if backend is available first
+      const isAvailable = await this.checkBackendAvailability();
+      if (!isAvailable) {
+        console.error('Cannot update category product counts: Backend API is not available');
+        return false;
+      }
+
+      // Call the API endpoint to update counts
+      await ApiClient.post<void>(`${this.baseUrl}/update-counts`, {});
+      
+      // Clear cache after update
+      this.clearCache();
+      
+      return true;
+    } catch (error: any) {
+      console.error('Failed to update category product counts:', error?.message || 'Unknown error');
+      return false;
+    }
+  }
 } 

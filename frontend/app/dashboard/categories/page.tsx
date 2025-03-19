@@ -61,9 +61,23 @@ export default function CategoriesPage() {
   const router = useRouter();
   const categoryApi = new CategoryApi();
 
-  // Load categories when component mounts
+  // Load categories when component mounts and also when the focus returns to the window
   useEffect(() => {
     loadCategories();
+    
+    // Refresh category data when user comes back to this page
+    const handleFocus = () => {
+      console.log("Window focused, refreshing category data");
+      loadCategories();
+    };
+    
+    // Add focus event listener
+    window.addEventListener('focus', handleFocus);
+    
+    // Cleanup listener on unmount
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   // Load category tree when tree tab is selected
@@ -79,6 +93,10 @@ export default function CategoriesPage() {
   const loadCategories = async () => {
     setLoading(true);
     try {
+      // Force update of product counts first
+      await updateCategoryProductCounts();
+      
+      // Then fetch categories with updated counts
       const fetchedCategories = await categoryApi.getCategories();
       setCategories(fetchedCategories);
     } catch (error) {
@@ -94,6 +112,26 @@ export default function CategoriesPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Update category product counts in the database
+   */
+  const updateCategoryProductCounts = async (): Promise<void> => {
+    try {
+      // Check if backend API is available
+      const isBackendAvailable = await categoryApi.isBackendAvailable();
+      
+      if (isBackendAvailable) {
+        console.log("Updating category product counts via API");
+        await categoryApi.updateCategoryProductCounts();
+      } else {
+        console.log("Backend API not available, skipping product count update");
+      }
+    } catch (error) {
+      console.error("Error updating category product counts:", error);
+      // Don't show a toast here - we don't want to alarm the user for background operations
     }
   };
 
