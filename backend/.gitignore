@@ -1,0 +1,82 @@
+# Compiled output
+/dist
+/node_modules
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+error.log
+newrelic_agent.log
+
+# OS
+.DS_Store
+
+# Tests
+/coverage
+/.nyc_output
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug
+debug-logs/
+
+# Build
+/build
+
+# Temporary files
+/tmp
+/temp
+
+# Custom
+/public/uploads
+/uploads
+.cursor/
+
+# TypeORM
+/typeorm.config.js
+
+# Database
+*.sqlite
+*.db
+
+# Prisma
+/prisma/.env
+/prisma/migrations
+
+# Cache
+.cache/
+
+# Next.js
+.next/
+out/
+
+# Misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local 
